@@ -1,0 +1,68 @@
+plugins {
+  id 'java-library'
+  id 'com.diffplug.spotless' version '8.1.0'
+}
+
+group = 'cat.tabbie'
+version = '0.1.0'
+
+repositories {
+  mavenCentral()
+}
+
+java {
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(21)
+  }
+
+  withSourcesJar()
+  withJavadocJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+  options.encoding = 'UTF-8'
+}
+
+tasks.withType(Javadoc).configureEach {
+  options.encoding = 'UTF-8'
+}
+
+dependencies {
+  compileOnly('org.projectlombok:lombok:1.18.42')
+  annotationProcessor('org.projectlombok:lombok:1.18.42')
+
+  testImplementation(platform('org.junit:junit-bom:5.10.2'))
+  testImplementation('org.junit.jupiter:junit-jupiter')
+  testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+
+  testCompileOnly('org.projectlombok:lombok:1.18.42')
+  testAnnotationProcessor('org.projectlombok:lombok:1.18.42')
+}
+
+tasks.withType(Test).configureEach {
+  useJUnitPlatform()
+}
+
+spotless {
+  java {
+    target 'src/**/*.java'
+    targetExclude 'src/**/external/**/*.java'
+
+    toggleOffOn()
+    removeUnusedImports()
+    importOrder('com', 'org', 'java', '', '#').wildcardsLast()
+    setEncoding('UTF-8')
+    leadingTabsToSpaces(2)
+    trimTrailingWhitespace()
+    endWithNewline()
+  }
+
+  groovyGradle {
+    target '*.gradle'
+
+    greclipse()
+    leadingTabsToSpaces(2)
+    trimTrailingWhitespace()
+    endWithNewline()
+  }
+}
