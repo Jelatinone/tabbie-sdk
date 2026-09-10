@@ -1,9 +1,18 @@
 package cat.tabbie.sdk;
 
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 import lombok.NonNull;
 
+/**
+ * 
+ * <h1>Identity</h1>
+ * 
+ * <p>
+ * A stable UUID reference to a given resource.
+ * </p>
+ */
 public sealed interface Identity {
 
 	@NonNull
@@ -12,6 +21,10 @@ public sealed interface Identity {
 	public static UUID identity(String canonical) {
 		return UUID.nameUUIDFromBytes(canonical.getBytes(StandardCharsets.UTF_8));
 	}
+
+	// TODO: Identity is useful because we can reference an actual instance of a
+	// UUID with context of what the UUID is at all times and pass it around safely,
+	// but implementing it this way is very verbose and boilerplate heavy.
 
 	public record AddonIdentity(@NonNull UUID id) implements Identity {
 		public static AddonIdentity create(@NonNull UUID id) {

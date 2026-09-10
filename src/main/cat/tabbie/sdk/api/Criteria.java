@@ -3,6 +3,17 @@ package cat.tabbie.sdk.api;
 import java.time.Duration;
 import java.util.Optional;
 
+/**
+ * 
+ * <h1>Criteria</h1>
+ * 
+ * @param <Identifier> Direct reference to an item
+ * 
+ *                     <p>
+ *                     Selection criteria for that a given {@link Query query}
+ *                     may be applied to.
+ *                     </p>
+ */
 public interface Criteria<Identifier> {
 
 	Optional<Identifier> identifier();

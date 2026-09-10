@@ -1,6 +1,7 @@
 package cat.tabbie.sdk.addon;
 
-import java.net.URI;
+import cat.tabbie.sdk.Identity.AddonIdentity;
+import cat.tabbie.sdk.Identity.ArtifactIdentity;
 
 public record Artifact(
 		ArtifactIdentity artifactId,

@@ -1,5 +1,16 @@
 package cat.tabbie.sdk.api;
 
+/**
+ * 
+ * <h1>Query</h1>
+ * 
+ * @param <Criterion> selection criteria
+ * 
+ *                    <p>
+ *                    A request across any kind
+ *                    of network based on selection criteria for an item.
+ *                    </p>
+ */
 public sealed interface Query<Criterion> {
 
 	Criterion criteria();
