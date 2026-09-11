@@ -10,5 +10,6 @@ package cat.tabbie.sdk.minecraft;
  * </p>
  */
 public enum Distribution {
-	// TODO: What editions are immediately supported?
+
+	// TODO:
 }

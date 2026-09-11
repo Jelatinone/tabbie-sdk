@@ -1,16 +1,30 @@
 package cat.tabbie.sdk.addon;
 
-import cat.tabbie.sdk.Identity.AddonIdentity;
-import cat.tabbie.sdk.Identity.ProviderIdentity;
+import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.api.Criteria;
 import cat.tabbie.sdk.api.Queryable;
 import lombok.NonNull;
 
-public interface Provider<Criterion extends Criteria<AddonIdentity>> extends Queryable<Criterion, Addon> {
+/**
+ * 
+ * <h1>Provider</h1>
+ * 
+ * @param <Criterion>
+ */
+public interface Provider<Criterion extends Criteria<Identity<Addon>>> extends Queryable<Criterion, Addon> {
 
+	/**
+	 * 
+	 * @return
+	 */
 	@NonNull
-	ProviderIdentity providerId();
+	Identity<Provider<Criterion>> providerId();
 
+	/**
+	 * 
+	 * @return
+	 */
 	@NonNull
 	String providerName();
+
 }

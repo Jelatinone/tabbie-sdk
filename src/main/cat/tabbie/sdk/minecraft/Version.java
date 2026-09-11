@@ -11,7 +11,13 @@ package cat.tabbie.sdk.minecraft;
  * moment it is launched.
  * </p>
  */
-public enum Version {
-	// TODO: Needs all versions of minecraft, probably compile-time syntactically
-	// split by edition (Java, Bedrock) too.
+public sealed interface Version {
+
+	public enum Java implements Version {
+		// TODO: All Java Versions
+	}
+
+	public enum Bedrock implements Version {
+		// TODO: All Bedrock Versions
+	}
 }
