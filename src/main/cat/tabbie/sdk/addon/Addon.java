@@ -55,4 +55,5 @@ public interface Addon {
 
 			@NonNull Set<Label> descriptors) {
 	}
+
 }
