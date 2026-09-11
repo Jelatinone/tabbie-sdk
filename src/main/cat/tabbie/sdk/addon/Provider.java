@@ -11,7 +11,8 @@ import lombok.NonNull;
  * 
  * @param <Criterion>
  */
-public interface Provider<Criterion extends Criteria<Identity<Addon>>> extends Queryable<Criterion, Addon> {
+public interface Provider<Criterion extends Criteria<Identity<Addon>>>
+		extends Queryable<Criterion, Addon> {
 
 	/**
 	 * 

@@ -1,9 +1,10 @@
 package cat.tabbie.sdk.minecraft;
 
+import lombok.NonNull;
+
 public record Label(
 
-		Version version,
-		Distribution distribution,
-		Environment environment) {
-
+		@NonNull Version version,
+		@NonNull Distribution distribution,
+		@NonNull Environment environment) {
 }

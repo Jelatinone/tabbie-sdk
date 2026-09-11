@@ -1,26 +1,59 @@
 package cat.tabbie.sdk;
 
-import javax.print.attribute.standard.Destination;
-
-public sealed interface Image<State> {
-
-	// TODO: This whole interface still needs work, an Image is meant to be a
-	// representation of the changes that occurred; and an operation should be able
-	// to run both forwards and backward based on the set<images> it has. We bound
-	// the interface by records so we aren't just arbitrarily running code. This
-	// will also help track changes in the history graph, we'll be able to show the
-	// exact changes. We should take into reference how Git works for the entire
-	// Task system. The type argument is also ambiguous and needs binding. Could
+public sealed interface Image<State extends Image.Alteration> {
 
 	State before();
 
 	State after();
 
-	record Placement(
-			Destination destination) implements Image<File> {
+	sealed interface Alteration {
 	}
 
-	record Configure(
-			Configuration change) implements Image<Void> {
+	sealed interface File extends Alteration {
+
+		record Absent() implements File {
+		}
+
+		record Present() implements File {
+		}
+	}
+
+	sealed interface Text extends Alteration {
+
+		record Absent() implements Text {
+		}
+
+		record Present() implements Text {
+		}
+	}
+}
+
+record Place() implements Image<Image.File> {
+
+	@Override
+	public File before() {
+		// TODO Auto-generated method stub
+		throw new UnsupportedOperationException("Unimplemented method 'before'");
+	}
+
+	@Override
+	public File after() {
+		// TODO Auto-generated method stub
+		throw new UnsupportedOperationException("Unimplemented method 'after'");
+	}
+}
+
+record Configure() implements Image<Image.Text> {
+
+	@Override
+	public Text before() {
+		// TODO Auto-generated method stub
+		throw new UnsupportedOperationException("Unimplemented method 'before'");
+	}
+
+	@Override
+	public Text after() {
+		// TODO Auto-generated method stub
+		throw new UnsupportedOperationException("Unimplemented method 'after'");
 	}
 }

@@ -22,6 +22,7 @@ public interface Addon {
 	 * 
 	 * @return
 	 */
+	@NonNull
 	Identity<Provider<?>> providerId();
 
 	/**
@@ -42,18 +43,34 @@ public interface Addon {
 	 * 
 	 * @return
 	 */
-	Set<Make> make();
+	Set<Make> addonMakes();
+
+	/**
+	 * 
+	 * @return
+	 */
+	Set<Tag> addonTags();
 
 	record Make(
 			@NonNull Identity<Addon> addonId,
-
 			@NonNull Identity<Make> makeId,
 
 			@NonNull String makeName,
 			@NonNull Instant makeDate,
 			long makeNumber,
 
-			@NonNull Set<Label> descriptors) {
+			@NonNull Set<Label> makeLabels) {
+
+		public Make {
+			if (makeNumber < 1L) {
+				throw new IllegalArgumentException("revisionNumber must be positive!");
+			}
+		}
+	}
+
+	record Tag(
+			@NonNull Identity<Tag> tagId,
+			@NonNull String tagName) {
 	}
 
 }
