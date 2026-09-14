@@ -57,6 +57,35 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
         .toList();
   }
 
+  public static void validateFragments(List<Chunk.Fragment> fragments) {
+    int end = 0;
+    boolean unterminated = false;
+    for (Chunk.Fragment fragment : fragments) {
+      if (fragment.range().start() < end) {
+        throw new IllegalArgumentException("Text fragments must be ordered and non-overlapping.");
+      }
+      if (unterminated && (fragment.range().start() > end || !fragment.lines().isEmpty())) {
+        throw new IllegalArgumentException("Text cannot follow an unterminated final line.");
+      }
+      end = fragment.range().end();
+      if (!fragment.lines().isEmpty()) {
+        unterminated = fragment.lines().get(fragment.lines().size() - 1).ending() == Change.Sequence.NONE;
+      }
+    }
+  }
+
+  public static void validateChunks(List<Chunk> chunks) {
+    int beforeEnd = 0;
+    int afterEnd = 0;
+    for (Chunk hunk : chunks) {
+      int beforeGap = hunk.before().range().count - beforeEnd;
+      int afterGap = hunk.after().range().count - afterEnd;
+      if (beforeGap < 0 || afterGap < 0 || beforeGap != afterGap) {
+        throw new IllegalArgumentException("Hunks must be ordered with matching unchanged gaps.");
+      }
+    }
+  }
+
   private static Fragment fragment(@NonNull Range range, @NonNull List<Change> changes,
       @NonNull Change.Revision excluded) {
     return new Fragment(

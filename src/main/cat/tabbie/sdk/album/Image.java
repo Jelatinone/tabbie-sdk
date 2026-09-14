@@ -33,6 +33,12 @@ public sealed interface Image<State extends Image.Alteration> {
   State after();
 
   /**
+   * 
+   * @return
+   */
+  Image<State> reverse();
+
+  /**
    *
    * <h1>Alteration</h1>
    *
@@ -45,30 +51,24 @@ public sealed interface Image<State extends Image.Alteration> {
   sealed interface Alteration {
   }
 
-  sealed interface Creation extends Alteration {
+  sealed interface File extends Alteration {
 
-    record Absent() implements Creation {
+    record Absent() implements File {
     }
 
-    record Present(@NonNull Snapshot.Reference reference) implements Creation {
-    }
-  }
-
-  sealed interface Deletion extends Alteration {
-
-    record Absent(@NonNull Snapshot.Reference reference) implements Deletion {
-    }
-
-    record Present() implements Deletion {
+    record Present(@NonNull Reference reference) implements File {
     }
   }
 
-  sealed interface Modification extends Alteration {
+  sealed interface Text extends Alteration {
 
-    record Absent() implements Modification {
+    record Absent() implements Text {
     }
 
-    record Present(List<Chunk.Fragment> fragments, Snapshot.Metadata metadata) implements Modification {
+    record Present(@NonNull List<Chunk.Fragment> fragments) implements Text {
+      public Present {
+        Chunk.validate(fragments);
+      }
     }
   }
 }
@@ -77,21 +77,18 @@ public sealed interface Image<State extends Image.Alteration> {
  *
  * <h1>Arrange</h1>
  */
-record Arrange() implements Image<Image.Creation> {
+record Installation(@NonNull File before, @NonNull File after, @NonNull Path path) implements Image<Image.File> {
+  public Installation {
+    if (before instanceof File.Absent && after instanceof File.Absent
+        || before instanceof File.Present && after instanceof File.Present) {
+      throw new IllegalArgumentException("Files may not both be present or absent!");
+    }
 
-  @Override
-  public Creation before() {
-    throw new UnsupportedOperationException("Unimplemented method 'before'");
   }
 
   @Override
-  public Creation after() {
-    throw new UnsupportedOperationException("Unimplemented method 'after'");
-  }
-
-  @Override
-  public Path path() {
-    throw new UnsupportedOperationException("Unimplemented method 'path'");
+  public Installation reverse() {
+    return new Installation(after, before, path);
   }
 }
 
@@ -99,20 +96,14 @@ record Arrange() implements Image<Image.Creation> {
  *
  * <h1>Configure</h1>
  */
-record Configure() implements Image<Image.Modification> {
+record Configuration(@NonNull Text before, @NonNull Text after, @NonNull Path path) implements Image<Image.Text> {
 
-  @Override
-  public Modification before() {
-    throw new UnsupportedOperationException("Unimplemented method 'before'");
+  public Configuration {
+
   }
 
   @Override
-  public Modification after() {
-    throw new UnsupportedOperationException("Unimplemented method 'after'");
-  }
-
-  @Override
-  public Path path() {
-    throw new UnsupportedOperationException("Unimplemented method 'path'");
+  public Image<Text> reverse() {
+    return new Configuration(after, before, path);
   }
 }
