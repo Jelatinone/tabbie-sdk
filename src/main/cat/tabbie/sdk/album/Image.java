@@ -1,4 +1,6 @@
-package cat.tabbie.sdk;
+package cat.tabbie.sdk.album;
+
+import java.nio.file.Path;
 
 /**
  *
@@ -8,6 +10,12 @@ package cat.tabbie.sdk;
  *
  */
 public sealed interface Image<State extends Image.Alteration> {
+
+  /**
+   * 
+   * @return
+   */
+  Path path();
 
   /**
    *
@@ -87,6 +95,11 @@ record Arrange() implements Image<Image.Creation> {
   public Creation after() {
     throw new UnsupportedOperationException("Unimplemented method 'after'");
   }
+
+  @Override
+  public Path path() {
+    throw new UnsupportedOperationException("Unimplemented method 'path'");
+  }
 }
 
 /**
@@ -103,5 +116,10 @@ record Configure() implements Image<Image.Modification> {
   @Override
   public Modification after() {
     throw new UnsupportedOperationException("Unimplemented method 'after'");
+  }
+
+  @Override
+  public Path path() {
+    throw new UnsupportedOperationException("Unimplemented method 'path'");
   }
 }
