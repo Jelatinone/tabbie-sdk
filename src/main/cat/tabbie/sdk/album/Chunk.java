@@ -2,8 +2,6 @@ package cat.tabbie.sdk.album;
 
 import java.util.List;
 import java.util.regex.Pattern;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import cat.tabbie.sdk.album.Chunk.Change.Revision;
 
@@ -13,7 +11,6 @@ import lombok.NonNull;
 
 public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @NonNull Range afterRange) {
 
-  private static final Integer DEFAULT_CONTEXT_LINES = 3;
   private static final Pattern LINE_PATTERN = Pattern.compile("([^\\r\\n]*)(\\r\\n|\\r|\\n|\\z)");
 
   public Chunk {
@@ -32,9 +29,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
     StringBuilder result = new StringBuilder();
     changes.stream()
         .map(Change::line)
-        .forEach((line) -> {
-          result.append(line.text()).append(line.ending);
-        });
+        .forEach((line) -> result.append(line.text()).append(line.ending));
     return result.toString();
   }
 
@@ -60,61 +55,6 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
               default -> Change.Sequence.NONE;
             }))
         .toList();
-  }
-
-  public static List<Chunk> diff(@NonNull String before, @NonNull String after) {
-    return diff(before, after, DEFAULT_CONTEXT_LINES);
-  }
-
-  public static List<Chunk> diff(@NonNull String before, @NonNull String after, int contextLines) {
-    if (contextLines < 0L) {
-      throw new IllegalArgumentException("Context line count must be non-negative.");
-    }
-    if (before.equals(after)) {
-      return List.of();
-    }
-
-    List<Change.Line> beforeLines = lines(before);
-    List<Change.Line> afterLines = lines(after);
-
-    int beforeSize = beforeLines.size();
-    int afterSize = afterLines.size();
-    int commonSize = Math.min(beforeSize, afterSize);
-
-    int prefix = (int) IntStream.range(0, commonSize)
-        .takeWhile(index -> beforeLines.get(index).equals(afterLines.get(index)))
-        .count();
-
-    int suffix = (int) IntStream.range(0, commonSize - prefix)
-        .takeWhile(index -> beforeLines.get(beforeSize - index - 1)
-            .equals(afterLines.get(afterSize - index - 1)))
-        .count();
-
-    int start = prefix - Math.min(prefix, contextLines);
-    int trailing = Math.min(suffix, contextLines);
-    int beforeEnd = beforeSize - suffix;
-    int afterEnd = afterSize - suffix;
-
-    List<Change> changes = Stream.of(
-        changes(beforeLines, start, prefix, Change.Revision.CONTEXT),
-        changes(beforeLines, prefix, beforeEnd, Change.Revision.DELETION),
-        changes(afterLines, prefix, afterEnd, Change.Revision.INSERTION),
-        changes(beforeLines, beforeEnd, beforeEnd + trailing, Change.Revision.CONTEXT))
-        .flatMap(stream -> stream)
-        .toList();
-
-    return List.of(new Chunk(changes,
-        new Range(start, beforeEnd + trailing - start),
-        new Range(start, afterEnd + trailing - start)));
-  }
-
-  private static Stream<Change> changes(
-      List<Change.Line> lines,
-      int start,
-      int end,
-      Change.Revision kind) {
-    return lines.subList((int) start, (int) end).stream()
-        .map(line -> new Change(line, kind));
   }
 
   private static Fragment fragment(@NonNull Range range, @NonNull List<Change> changes,
