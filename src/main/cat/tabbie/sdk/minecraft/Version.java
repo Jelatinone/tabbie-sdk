@@ -23,113 +23,95 @@ import lombok.NonNull;
  * </p>
  */
 public sealed interface Version
-		permits Version.Java, Version.Bedrock {
+    permits Version.Java, Version.Bedrock {
 
-	/**
-	 * The canonical identifier for this version.
-	 *
-	 * <p>
-	 * Examples include {@code 1.20.1}, {@code 26.2}, or {@code 1.21.80}.
-	 * </p>
-	 * 
-	 * @return canonical identifier
-	 */
-	@NonNull
-	String id();
+  /**
+   * The canonical identifier for this version.
+   *
+   * <p>
+   * Examples include {@code 1.20.1}, {@code 26.2}, or {@code 1.21.80}.
+   * </p>
+   *
+   * @return canonical identifier
+   */
+  @NonNull
+  String id();
 
-	/**
-	 * The general release classification of this version.
-	 * 
-	 * @return release classification
-	 */
-	@NonNull
-	Release type();
+  /**
+   * The time at which this version was released, if known.
+   *
+   * @return time of release
+   */
+  @NonNull
+  Instant releaseDate();
 
-	/**
-	 * The time at which this version was released, if known.
-	 * 
-	 * @return time of release
-	 */
-	@NonNull
-	Instant released();
+  /**
+   * Determines whether the supplied external version string refers to this
+   * version.
+   *
+   * <p>
+   * This is intended for adapting version identifiers supplied by external
+   * providers into a canonical version model.
+   * </p>
+   *
+   * @return Whether this value refer to a version
+   */
+  default boolean matches(@NonNull String value) {
+    return normalize(value).equals(normalize(id()));
+  }
 
-	/**
-	 * Determines whether the supplied external version string refers to this
-	 * version.
-	 *
-	 * <p>
-	 * This is intended for adapting version identifiers supplied by external
-	 * providers into a canonical version model.
-	 * </p>
-	 * 
-	 * @return Whether this value refer to a version
-	 */
-	default boolean matches(@NonNull String value) {
-		return normalize(value).equals(normalize(id()));
-	}
+  record Java(
+      @NonNull String id,
+      @NonNull Java.Release releaseType,
+      @NonNull Instant releaseDate) implements Version {
 
-	enum Release {
+    enum Release {
 
-		RELEASE,
+      RELEASE,
 
-		SNAPSHOT,
+      PRE_RELEASE,
 
-		PRE_RELEASE,
+      RELEASE_CANDIDATE,
 
-		RELEASE_CANDIDATE,
+      SNAPSHOT,
 
-		ALPHA,
+      BETA,
 
-		BETA,
+      ALPHA,
 
-		PREVIEW,
+      UNKNOWN
+    }
+  }
 
-		UNKNOWN
-	}
+  record Bedrock(
+      @NonNull String id,
+      @NonNull Bedrock.Release releaseType,
+      @NonNull Instant releaseDate) implements Version {
 
-	/**
-	 * Minecraft: Java Edition version.
-	 */
-	record Java(
+    enum Release {
 
-			@NonNull String id,
-			@NonNull Release type,
-			@NonNull Instant released) implements Version {
+      RELEASE,
 
-		public Java {
-			id = id.trim();
+      PREVIEW,
 
-			if (id.isEmpty()) {
-				throw new IllegalArgumentException("Version id cannot be empty.");
-			}
-		}
-	}
+      BETA,
 
-	record Bedrock(
+      ALPHA,
 
-			@NonNull String id,
-			@NonNull Release type,
-			@NonNull Instant released) implements Version {
+      UNKNOWN
+    }
+  }
 
-		public Bedrock {
-			id = id.trim();
-
-			if (id.isEmpty()) {
-				throw new IllegalArgumentException("Version id cannot be empty.");
-			}
-		}
-	}
-
-	private static String normalize(@NonNull String value) {
-		return value
-				.trim()
-				.toLowerCase(Locale.ROOT)
-				.replace("minecraft:", "")
-				.replace("minecraft", "")
-				.replace("java edition", "")
-				.replace("java", "")
-				.replace("bedrock edition", "")
-				.replace("bedrock", "")
-				.trim();
-	}
+  private static String normalize(@NonNull String value) {
+    return value
+        .trim()
+        .toLowerCase(Locale.ROOT)
+        .replace("minecraft:", "")
+        .replace("minecraft", "")
+        .replace("java edition", "")
+        .replace("java", "")
+        .replace("bedrock edition", "")
+        .replace("bedrock", "")
+        .trim();
+  }
 }

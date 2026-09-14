@@ -6,6 +6,15 @@ plugins {
 group = 'cat.tabbie'
 version = '0.1.0'
 
+sourceSets {
+  main {
+    java.srcDirs = ['src/main']
+  }
+  test {
+    java.srcDirs = ['src/test']
+  }
+}
+
 repositories {
   mavenCentral()
 }
@@ -14,9 +23,6 @@ java {
   toolchain {
     languageVersion = JavaLanguageVersion.of(25)
   }
-
-  withSourcesJar()
-  withJavadocJar()
 }
 
 tasks.withType(JavaCompile).configureEach {

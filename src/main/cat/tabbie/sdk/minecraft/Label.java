@@ -4,7 +4,7 @@ import lombok.NonNull;
 
 public record Label(
 
-		@NonNull Version version,
-		@NonNull Distribution distribution,
-		@NonNull Environment environment) {
+    @NonNull Version version,
+    @NonNull Distribution distribution,
+    @NonNull Environment environment) {
 }

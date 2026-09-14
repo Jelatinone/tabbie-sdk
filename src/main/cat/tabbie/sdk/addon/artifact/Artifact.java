@@ -8,45 +8,45 @@ import lombok.NonNull;
 
 public sealed interface Artifact permits Mod {
 
-	/**
-	 * 
-	 * @return
-	 */
-	@NonNull
-	Identity<Artifact> artifactId();
+  /**
+   *
+   * @return
+   */
+  @NonNull
+  Identity<Artifact> artifactId();
 
-	/**
-	 * 
-	 * @return
-	 */
-	@NonNull
-	String artifactName();
+  /**
+   *
+   * @return
+   */
+  @NonNull
+  String artifactName();
 
-	/**
-	 * 
-	 * @return
-	 */
-	long artifactSize();
+  /**
+   *
+   * @return
+   */
+  long artifactSize();
 
-	/**
-	 * 
-	 * @return
-	 */
-	@NonNull
-	Set<Identity<Artifact>> artifactDependsOn();
+  /**
+   *
+   * @return
+   */
+  @NonNull
+  Set<Identity<Artifact>> depends();
 
-	/**
-	 * 
-	 * @return
-	 */
-	@NonNull
-	Set<Identity<Artifact>> artifactConflictsOn();
+  /**
+   *
+   * @return
+   */
+  @NonNull
+  Set<Identity<Artifact>> conflicts();
 
-	/**
-	 * 
-	 * @return
-	 */
-	@NonNull
-	Set<Image<?>> artifactImages();
+  /**
+   *
+   * @return
+   */
+  @NonNull
+  Set<Image<?>> images();
 
 }

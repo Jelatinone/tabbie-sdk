@@ -1,6 +1,7 @@
 package cat.tabbie.sdk.minecraft;
 
 /**
+ *
  * <h1>Distribution</h1>
  *
  * <p>
@@ -11,21 +12,17 @@ package cat.tabbie.sdk.minecraft;
  */
 public enum Distribution {
 
-	JAVA,
-	BEDROCK,
+  JAVA_NATIVE,
+  BEDROCK_NATIVE,
 
-	FABRIC,
-	QUILT,
-	FORGE,
-	NEOFORGE,
+  FABRIC,
+  QUILT,
+  FORGE,
+  NEOFORGE,
 
-	BUKKIT,
-	SPIGOT,
-	PAPER,
-	PURPUR,
-	FOLIA,
-
-	BUNGEECORD,
-	WATERFALL,
-	VELOCITY
+  BUKKIT,
+  SPIGOT,
+  PAPER,
+  PURPUR,
+  FOLIA,
 }

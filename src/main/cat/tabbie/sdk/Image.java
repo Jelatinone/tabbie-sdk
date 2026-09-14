@@ -1,59 +1,107 @@
 package cat.tabbie.sdk;
 
+/**
+ *
+ * <h1>Image</h1>
+ *
+ * @param <State> Description of the underlying filesystem state
+ *
+ */
 public sealed interface Image<State extends Image.Alteration> {
 
-	State before();
+  /**
+   *
+   * @return
+   */
+  State before();
 
-	State after();
+  /**
+   *
+   * @return
+   */
+  State after();
 
-	sealed interface Alteration {
-	}
+  /**
+   *
+   * <h1>Alteration</h1>
+   *
+   * <p>
+   * Describes a change to the underlying filesystem to a file's contents or
+   * existence.
+   * </p>
+   *
+   */
+  sealed interface Alteration {
+  }
 
-	sealed interface File extends Alteration {
+  /**
+   *
+   * <h1>Creation</h1>
+   *
+   * <p>
+   * Describes an alteration to the underlying filesystem that resulted in the
+   * creation of a
+   * </p>
+   *
+   */
+  sealed interface Creation extends Alteration {
 
-		record Absent() implements File {
-		}
+    record Absent() implements Creation {
+    }
 
-		record Present() implements File {
-		}
-	}
+    record Present() implements Creation {
+    }
+  }
 
-	sealed interface Text extends Alteration {
+  sealed interface Deletion extends Alteration {
 
-		record Absent() implements Text {
-		}
+    record Absent() implements Deletion {
+    }
 
-		record Present() implements Text {
-		}
-	}
+    record Present() implements Deletion {
+    }
+  }
+
+  sealed interface Modification extends Alteration {
+
+    record Absent() implements Modification {
+    }
+
+    record Present() implements Modification {
+    }
+  }
 }
 
-record Place() implements Image<Image.File> {
+/**
+ *
+ * <h1>Arrange</h1>
+ */
+record Arrange() implements Image<Image.Creation> {
 
-	@Override
-	public File before() {
-		// TODO Auto-generated method stub
-		throw new UnsupportedOperationException("Unimplemented method 'before'");
-	}
+  @Override
+  public Creation before() {
+    throw new UnsupportedOperationException("Unimplemented method 'before'");
+  }
 
-	@Override
-	public File after() {
-		// TODO Auto-generated method stub
-		throw new UnsupportedOperationException("Unimplemented method 'after'");
-	}
+  @Override
+  public Creation after() {
+    throw new UnsupportedOperationException("Unimplemented method 'after'");
+  }
 }
 
-record Configure() implements Image<Image.Text> {
+/**
+ *
+ * <h1>Configure</h1>
+ */
+record Configure() implements Image<Image.Modification> {
 
-	@Override
-	public Text before() {
-		// TODO Auto-generated method stub
-		throw new UnsupportedOperationException("Unimplemented method 'before'");
-	}
+  @Override
+  public Modification before() {
+    throw new UnsupportedOperationException("Unimplemented method 'before'");
+  }
 
-	@Override
-	public Text after() {
-		// TODO Auto-generated method stub
-		throw new UnsupportedOperationException("Unimplemented method 'after'");
-	}
+  @Override
+  public Modification after() {
+    throw new UnsupportedOperationException("Unimplemented method 'after'");
+  }
 }
