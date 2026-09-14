@@ -1,6 +1,9 @@
 package cat.tabbie.sdk.album;
 
 import java.nio.file.Path;
+import java.util.List;
+
+import lombok.NonNull;
 
 /**
  *
@@ -42,28 +45,18 @@ public sealed interface Image<State extends Image.Alteration> {
   sealed interface Alteration {
   }
 
-  /**
-   *
-   * <h1>Creation</h1>
-   *
-   * <p>
-   * Describes an alteration to the underlying filesystem that resulted in the
-   * creation of a
-   * </p>
-   *
-   */
   sealed interface Creation extends Alteration {
 
     record Absent() implements Creation {
     }
 
-    record Present() implements Creation {
+    record Present(@NonNull Snapshot.Reference reference) implements Creation {
     }
   }
 
   sealed interface Deletion extends Alteration {
 
-    record Absent() implements Deletion {
+    record Absent(@NonNull Snapshot.Reference reference) implements Deletion {
     }
 
     record Present() implements Deletion {
@@ -75,7 +68,7 @@ public sealed interface Image<State extends Image.Alteration> {
     record Absent() implements Modification {
     }
 
-    record Present() implements Modification {
+    record Present(List<Chunk.Fragment> fragments, Snapshot.Metadata metadata) implements Modification {
     }
   }
 }
