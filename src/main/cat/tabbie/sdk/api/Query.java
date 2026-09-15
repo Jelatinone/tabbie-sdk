@@ -31,7 +31,7 @@ public sealed interface Query<Criterion> {
     }
 
     public Several {
-      if (limit < 1) {
+      if (limit != null && limit < 1) {
         throw new IllegalArgumentException("limit must be positive");
       }
     }
