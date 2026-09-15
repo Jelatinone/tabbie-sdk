@@ -4,9 +4,10 @@ import java.util.Set;
 
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.album.Image;
+import cat.tabbie.sdk.album.Store;
 import lombok.NonNull;
 
-public sealed interface Artifact permits Mod {
+public sealed interface Artifact extends Store permits Mod {
 
   /**
    *
