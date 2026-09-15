@@ -67,7 +67,7 @@ public sealed interface Image<State extends Image.Alteration> {
 
     record Present(@NonNull List<Chunk.Fragment> fragments) implements Text {
       public Present {
-        Chunk.validate(fragments);
+        Chunk.validateFragments(fragments);
       }
     }
   }
