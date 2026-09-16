@@ -9,21 +9,25 @@ import lombok.NonNull;
  *
  * <h1>Provider</h1>
  *
- * @param <Criterion>
+ * Catalog discovery capability, independent of transport or storage. Providers
+ * may describe remote, local, cached, or generated content.
+ *
+ * @param <Criterion> provider-specific addon selection criteria
  */
-public interface Provider<Criterion extends Criteria<Identity<Addon>>>
-    extends Queryable<Criterion, Addon> {
+public interface Provider<Criterion extends Criteria<Identity<Addon>>> extends Queryable<Criterion, Addon> {
 
   /**
+   * Stable provider identity, also used by its catalog addons
    *
-   * @return
+   * @return provider identity
    */
   @NonNull
   Identity<Provider<Criterion>> providerId();
 
   /**
+   * Human-readable canonical provider name
    *
-   * @return
+   * @return provider name
    */
   @NonNull
   String providerName();

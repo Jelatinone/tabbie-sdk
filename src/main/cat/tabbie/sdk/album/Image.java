@@ -20,174 +20,174 @@ import lombok.NonNull;
  */
 public sealed interface Image<State extends Image.Alteration> {
 
-	/**
-	 * Target path location, retained as supplied by the caller
-	 *
-	 * @return target path
-	 */
-	Path path();
+  /**
+   * Target path location, retained as supplied by the caller
+   *
+   * @return target path
+   */
+  Path path();
 
-	/**
-	 * Expected content or existence before the change
-	 *
-	 * @return expected content before
-	 */
-	State before();
+  /**
+   * Expected content or existence before the change
+   *
+   * @return expected content before
+   */
+  State before();
 
-	/**
-	 * Described content or existence after the change
-	 *
-	 * @return described content after
-	 */
-	State after();
+  /**
+   * Described content or existence after the change
+   *
+   * @return described content after
+   */
+  State after();
 
-	/**
-	 * Image with its before and after states exchanged
-	 *
-	 * @return image reversed
-	 */
-	Image<State> reverse();
+  /**
+   * Image with its before and after states exchanged
+   *
+   * @return image reversed
+   */
+  Image<State> reverse();
 
-	/**
-	 * Describes creation of a file from retained content, including zero bytes.
-	 *
-	 * @param path  target path
-	 * @param after file reference
-	 *
-	 * @return Resulting image
-	 */
-	static Image<File> create(@NonNull Path path, @NonNull Reference after) {
-		return new Installation(new File.Absent(), new File.Present(after), path);
-	}
+  /**
+   * Describes creation of a file from retained content, including zero bytes.
+   *
+   * @param path  target path
+   * @param after file reference
+   *
+   * @return Resulting image
+   */
+  static Image<File> create(@NonNull Path path, @NonNull Reference after) {
+    return new Installation(new File.Absent(), new File.Present(after), path);
+  }
 
-	/**
-	 * Describes creation of the complete supplied text; empty text is present.
-	 *
-	 * @param path  target path
-	 * @param after file reference after
-	 * @return resulting image
-	 */
-	static Image<Text> create(@NonNull Path path, @NonNull String after) {
-		return configure(path, new Text.Absent(), new Text.Present(
-				Chunk.diff("", after).stream().map(Chunk::after).toList()));
-	}
+  /**
+   * Describes creation of the complete supplied text; empty text is present.
+   *
+   * @param path  target path
+   * @param after file reference after
+   * @return resulting image
+   */
+  static Image<Text> create(@NonNull Path path, @NonNull String after) {
+    return configure(path, new Text.Absent(), new Text.Present(
+        Chunk.diff("", after).stream().map(Chunk::after).toList()));
+  }
 
-	/**
-	 * Describes deletion of a file whose complete content matches the reference.
-	 *
-	 * @param path  target path
-	 * @param after file reference
-	 *
-	 * @return resulting image
-	 */
-	static Image<File> delete(@NonNull Path path, @NonNull Reference before) {
-		return new Installation(new File.Present(before), new File.Absent(), path);
-	}
+  /**
+   * Describes deletion of a file whose complete content matches the reference.
+   *
+   * @param path  target path
+   * @param after file reference
+   *
+   * @return resulting image
+   */
+  static Image<File> delete(@NonNull Path path, @NonNull Reference before) {
+    return new Installation(new File.Present(before), new File.Absent(), path);
+  }
 
-	/**
-	 * Describes deletion of the complete supplied text, including an empty file.
-	 *
-	 * @param path   target path
-	 * @param before file reference before
-	 *
-	 * @return resulting image
-	 */
-	static Image<Text> delete(@NonNull Path path, @NonNull String before) {
-		return configure(path, new Text.Present(
-				Chunk.diff(before, "").stream().map(Chunk::before).toList()), new Text.Absent());
-	}
+  /**
+   * Describes deletion of the complete supplied text, including an empty file.
+   *
+   * @param path   target path
+   * @param before file reference before
+   *
+   * @return resulting image
+   */
+  static Image<Text> delete(@NonNull Path path, @NonNull String before) {
+    return configure(path, new Text.Present(
+        Chunk.diff(before, "").stream().map(Chunk::before).toList()), new Text.Absent());
+  }
 
-	/**
-	 * Describes a text change using explicit existence and fragment states.
-	 *
-	 * @param path   target path
-	 * @param before file reference before
-	 * @param after  file reference after
-	 *
-	 * @return resulting image
-	 */
-	static Image<Text> configure(@NonNull Path path, @NonNull Text before, @NonNull Text after) {
-		return new Configuration(before, after, path);
-	}
+  /**
+   * Describes a text change using explicit existence and fragment states.
+   *
+   * @param path   target path
+   * @param before file reference before
+   * @param after  file reference after
+   *
+   * @return resulting image
+   */
+  static Image<Text> configure(@NonNull Path path, @NonNull Text before, @NonNull Text after) {
+    return new Configuration(before, after, path);
+  }
 
-	/**
-	 * Describes changes to an existing file. Each chunk contributes a fragment on
-	 * each side; the chunks' insertion/deletion ordering is not retained.
-	 *
-	 * @param path   target path
-	 * @param chunks changed chunks
-	 *
-	 * @return resulting image
-	 */
-	static Image<Text> configure(@NonNull Path path, @NonNull List<Chunk> chunks) {
-		return new Configuration(chunks, path);
-	}
+  /**
+   * Describes changes to an existing file. Each chunk contributes a fragment on
+   * each side; the chunks' insertion/deletion ordering is not retained.
+   *
+   * @param path   target path
+   * @param chunks changed chunks
+   *
+   * @return resulting image
+   */
+  static Image<Text> configure(@NonNull Path path, @NonNull List<Chunk> chunks) {
+    return new Configuration(chunks, path);
+  }
 
-	/** Describes text differences with three surrounding context lines. */
-	/**
-	 * Describes text differences with three surrounding context lines.
-	 *
-	 * @param path   target path
-	 * @param before file reference before
-	 * @param after  file reference after
-	 *
-	 * @return resulting image
-	 */
-	static Image<Text> configure(@NonNull Path path, @NonNull String before, @NonNull String after) {
-		return configure(path, Chunk.diff(before, after));
-	}
+  /** Describes text differences with three surrounding context lines. */
+  /**
+   * Describes text differences with three surrounding context lines.
+   *
+   * @param path   target path
+   * @param before file reference before
+   * @param after  file reference after
+   *
+   * @return resulting image
+   */
+  static Image<Text> configure(@NonNull Path path, @NonNull String before, @NonNull String after) {
+    return configure(path, Chunk.diff(before, after));
+  }
 
-	/**
-	 * Retains only the differing regions and their context, not complete content
-	 * expectations. Equal inputs produce empty fragment lists: the file must
-	 * exist, but no particular content is described.
-	 *
-	 * @param path         target path
-	 * @param before       file reference before
-	 * @param after        file reference after
-	 * @param contextLines number of context lines to keep
-	 *
-	 * @return resulting image
-	 */
-	static Image<Text> configure(@NonNull Path path, @NonNull String before, @NonNull String after,
-			int contextLines) {
-		return configure(path, Chunk.diff(before, after, contextLines));
-	}
+  /**
+   * Retains only the differing regions and their context, not complete content
+   * expectations. Equal inputs produce empty fragment lists: the file must
+   * exist, but no particular content is described.
+   *
+   * @param path         target path
+   * @param before       file reference before
+   * @param after        file reference after
+   * @param contextLines number of context lines to keep
+   *
+   * @return resulting image
+   */
+  static Image<Text> configure(@NonNull Path path, @NonNull String before, @NonNull String after,
+      int contextLines) {
+    return configure(path, Chunk.diff(before, after, contextLines));
+  }
 
-	/**
-	 *
-	 * <h1>Alteration</h1>
-	 *
-	 * <p>
-	 * Describes the underlying filesystem state of a file's contents or existence.
-	 * </p>
-	 *
-	 */
-	sealed interface Alteration {
-	}
+  /**
+   *
+   * <h1>Alteration</h1>
+   *
+   * <p>
+   * Describes the underlying filesystem state of a file's contents or existence.
+   * </p>
+   *
+   */
+  sealed interface Alteration {
+  }
 
-	sealed interface File extends Alteration {
+  sealed interface File extends Alteration {
 
-		record Absent() implements File {
-		}
+    record Absent() implements File {
+    }
 
-		record Present(@NonNull Reference reference) implements File {
-		}
-	}
+    record Present(@NonNull Reference reference) implements File {
+    }
+  }
 
-	sealed interface Text extends Alteration {
+  sealed interface Text extends Alteration {
 
-		record Absent() implements Text {
-		}
+    record Absent() implements Text {
+    }
 
-		record Present(@NonNull List<Chunk.Fragment> fragments) implements Text {
+    record Present(@NonNull List<Chunk.Fragment> fragments) implements Text {
 
-			public Present {
-				fragments = List.copyOf(fragments);
-				Chunk.validateFragments(fragments);
-			}
-		}
-	}
+      public Present {
+        fragments = List.copyOf(fragments);
+        Chunk.validateFragments(fragments);
+      }
+    }
+  }
 }
 
 /**
@@ -199,19 +199,19 @@ public sealed interface Image<State extends Image.Alteration> {
  * </p>
  */
 record Installation(@NonNull File before, @NonNull File after, @NonNull Path path) implements Image<Image.File> {
-	public Installation {
-		if (before instanceof File.Absent && after instanceof File.Absent) {
-			throw new IllegalArgumentException("Files may not both be absent!");
-		}
-		if (before instanceof File.Present && after instanceof File.Present) {
-			throw new IllegalArgumentException("Files may not both be present!");
-		}
-	}
+  public Installation {
+    if (before instanceof File.Absent && after instanceof File.Absent) {
+      throw new IllegalArgumentException("Files may not both be absent!");
+    }
+    if (before instanceof File.Present && after instanceof File.Present) {
+      throw new IllegalArgumentException("Files may not both be present!");
+    }
+  }
 
-	@Override
-	public Installation reverse() {
-		return new Installation(after, before, path);
-	}
+  @Override
+  public Installation reverse() {
+    return new Installation(after, before, path);
+  }
 }
 
 /**
@@ -228,44 +228,44 @@ record Installation(@NonNull File before, @NonNull File after, @NonNull Path pat
  */
 record Configuration(@NonNull Text before, @NonNull Text after, @NonNull Path path) implements Image<Image.Text> {
 
-	public Configuration(@NonNull List<Chunk> chunks, @NonNull Path path) {
-		this(new Text.Present(chunks.stream().map(Chunk::before).toList()),
-				new Text.Present(chunks.stream().map(Chunk::after).toList()), path);
-	}
+  public Configuration(@NonNull List<Chunk> chunks, @NonNull Path path) {
+    this(new Text.Present(chunks.stream().map(Chunk::before).toList()),
+        new Text.Present(chunks.stream().map(Chunk::after).toList()), path);
+  }
 
-	public Configuration {
-		validate(before, after);
-	}
+  public Configuration {
+    validate(before, after);
+  }
 
-	@Override
-	public Image<Text> reverse() {
-		return new Configuration(after, before, path);
-	}
+  @Override
+  public Image<Text> reverse() {
+    return new Configuration(after, before, path);
+  }
 
-	/**
-	 * Validate text before and after
-	 *
-	 * @param before text before
-	 * @param after  text after
-	 *
-	 * @throws IllegalArgumentException when text states are both absent or gaps
-	 *                                  have occurred
-	 */
-	private static void validate(Text before, Text after) {
-		if (before instanceof Text.Absent && after instanceof Text.Absent) {
-			throw new IllegalArgumentException("Text states may not both be absent.");
-		}
-		if (before instanceof Text.Present oldText && after instanceof Text.Present newText) {
-			Chunk.validateFragments(oldText.fragments(), newText.fragments());
-			return;
-		}
-		Text.Present present = before instanceof Text.Present text ? text : (Text.Present) after;
-		int end = 0;
-		for (Chunk.Fragment fragment : present.fragments()) {
-			if (fragment.range().start() != end) {
-				throw new IllegalArgumentException("Creation/deletion must describe complete text without gaps.");
-			}
-			end = fragment.range().end();
-		}
-	}
+  /**
+   * Validate text before and after
+   *
+   * @param before text before
+   * @param after  text after
+   *
+   * @throws IllegalArgumentException when text states are both absent or gaps
+   *                                  have occurred
+   */
+  private static void validate(Text before, Text after) {
+    if (before instanceof Text.Absent && after instanceof Text.Absent) {
+      throw new IllegalArgumentException("Text states may not both be absent.");
+    }
+    if (before instanceof Text.Present oldText && after instanceof Text.Present newText) {
+      Chunk.validateFragments(oldText.fragments(), newText.fragments());
+      return;
+    }
+    Text.Present present = before instanceof Text.Present text ? text : (Text.Present) after;
+    int end = 0;
+    for (Chunk.Fragment fragment : present.fragments()) {
+      if (fragment.range().start() != end) {
+        throw new IllegalArgumentException("Creation/deletion must describe complete text without gaps.");
+      }
+      end = fragment.range().end();
+    }
+  }
 }

@@ -45,7 +45,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
   }
 
   /**
-   * Contigous original text, excluding any inserted lines
+   * Contiguous original text, excluding any inserted lines
    *
    * @return original text
    */
@@ -54,7 +54,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
   }
 
   /**
-   * Contigous resulting text, excluding deleted lines
+   * Contiguous resulting text, excluding deleted lines
    *
    * @return resulting text
    */

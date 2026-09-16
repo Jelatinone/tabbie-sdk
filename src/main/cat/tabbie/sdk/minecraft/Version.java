@@ -2,6 +2,8 @@ package cat.tabbie.sdk.minecraft;
 
 import java.time.Instant;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import lombok.NonNull;
 
@@ -23,95 +25,136 @@ import lombok.NonNull;
  * </p>
  */
 public sealed interface Version
-    permits Version.Java, Version.Bedrock {
+		permits Version.Java, Version.Bedrock {
 
-  /**
-   * The canonical identifier for this version.
-   *
-   * <p>
-   * Examples include {@code 1.20.1}, {@code 26.2}, or {@code 1.21.80}.
-   * </p>
-   *
-   * @return canonical identifier
-   */
-  @NonNull
-  String id();
+	static final Pattern VERSION_PATTERN = Pattern.compile(
+			"(?i)^(?:minecraft(?:\\s*:\\s*|\\s+))?(?:(java|bedrock)(?:\\s+edition)?(?:\\s*:\\s*|\\s+))?(.+)$");
 
-  /**
-   * The time at which this version was released, if known.
-   *
-   * @return time of release
-   */
-  @NonNull
-  Instant releaseDate();
+	/**
+	 * The canonical identifier for this version. Examples include {@code 1.20.1},
+	 * {@code 26.2}, or {@code 1.21.80}.
+	 *
+	 * @return canonical identifier
+	 */
+	@NonNull
+	String id();
 
-  /**
-   * Determines whether the supplied external version string refers to this
-   * version.
-   *
-   * <p>
-   * This is intended for adapting version identifiers supplied by external
-   * providers into a canonical version model.
-   * </p>
-   *
-   * @return Whether this value refer to a version
-   */
-  default boolean matches(@NonNull String value) {
-    return normalize(value).equals(normalize(id()));
-  }
+	/**
+	 * The time at which this version was released, if known.
+	 *
+	 * @return time of release
+	 */
+	@NonNull
+	Instant releaseDate();
 
-  record Java(
-      @NonNull String id,
-      @NonNull Java.Release releaseType,
-      @NonNull Instant releaseDate) implements Version {
+	/**
+	 * Matches an external identifier with optional Minecraft and edition prefixes.
+	 * Explicitly naming the other edition never matches. Only leading qualifiers
+	 * are removed; arbitrary identifier substrings remain meaningful.
+	 *
+	 * @param id external identifier
+	 * @return whether the identifier names this version
+	 */
+	default boolean match(@NonNull String id) {
+		Matcher matcher = VERSION_PATTERN.matcher(id.strip());
+		if (!matcher.matches()) {
+			return false;
+		}
+		String edition = matcher.group(1);
+		return (edition == null || edition.equalsIgnoreCase(this instanceof Java ? "java" : "bedrock"))
+				&& matcher.group(2).strip().equalsIgnoreCase(id());
+	}
 
-    enum Release {
+	/**
+	 *
+	 * A discovered Java Edition version.
+	 *
+	 * @param id          canonical identifier
+	 * @param releaseType edition-specific release classification
+	 * @param releaseDate known release instant
+	 */
+	record Java(
+			@NonNull String id,
+			@NonNull Java.Release releaseType,
+			@NonNull Instant releaseDate) implements Version {
 
-      RELEASE,
+		public Java {
+			id = normalize(id);
+		}
 
-      PRE_RELEASE,
+		public enum Release {
 
-      RELEASE_CANDIDATE,
+			RELEASE,
 
-      SNAPSHOT,
+			PRE_RELEASE,
 
-      BETA,
+			RELEASE_CANDIDATE,
 
-      ALPHA,
+			SNAPSHOT,
 
-      UNKNOWN
-    }
-  }
+			BETA,
 
-  record Bedrock(
-      @NonNull String id,
-      @NonNull Bedrock.Release releaseType,
-      @NonNull Instant releaseDate) implements Version {
+			ALPHA,
 
-    enum Release {
+			UNKNOWN
+		}
 
-      RELEASE,
+		/**
+		 * Whether a version is applicable to this version kind
+		 * 
+		 * @param version version target
+		 * @return whether a version is applicable
+		 */
+		public static boolean applicable(Version version) {
+			return version instanceof Java;
+		}
+	}
 
-      PREVIEW,
+	/**
+	 * A discovered Bedrock Edition version.
+	 *
+	 * @param id          canonical identifier
+	 * @param releaseType edition-specific release classification
+	 * @param releaseDate known release instant
+	 */
+	record Bedrock(
+			@NonNull String id,
+			@NonNull Bedrock.Release releaseType,
+			@NonNull Instant releaseDate) implements Version {
 
-      BETA,
+		public Bedrock {
+			id = normalize(id);
+		}
 
-      ALPHA,
+		public enum Release {
 
-      UNKNOWN
-    }
-  }
+			RELEASE,
 
-  private static String normalize(@NonNull String value) {
-    return value
-        .trim()
-        .toLowerCase(Locale.ROOT)
-        .replace("minecraft:", "")
-        .replace("minecraft", "")
-        .replace("java edition", "")
-        .replace("java", "")
-        .replace("bedrock edition", "")
-        .replace("bedrock", "")
-        .trim();
-  }
+			PREVIEW,
+
+			BETA,
+
+			ALPHA,
+
+			UNKNOWN
+		}
+
+		/**
+		 * Whether a version is applicable to this version kind
+		 * 
+		 * @param version version target
+		 * @return whether a version is applicable
+		 */
+		public static boolean applicable(Version version) {
+			return version instanceof Bedrock;
+		}
+	}
+
+	private static String normalize(@NonNull String id) {
+		String result = id.strip().toLowerCase(Locale.ROOT);
+		if (result.isEmpty() || result.chars().anyMatch(Character::isWhitespace) || result.indexOf(':') >= 0) {
+			throw new IllegalArgumentException("Version identifiers must be non-blank and unqualified.");
+		}
+		return result;
+	}
 }

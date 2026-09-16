@@ -3,33 +3,63 @@ package cat.tabbie.sdk.api;
 import java.time.Duration;
 import java.util.Optional;
 
+import lombok.NonNull;
+
 /**
- *
  * <h1>Criteria</h1>
  *
- * @param <Identifier> Direct reference to an item
+ * Selection inputs interpreted by a provider. A duration's meaning, such as a
+ * time window, belongs to the concrete provider; this interface does not impose
+ * timeout or caching behavior.
  *
- *                     <p>
- *                     Selection criteria for that a given {@link Query query}
- *                     may be applied to.
- *                     </p>
+ * @param <Identifier> direct item identity type
  */
 public interface Criteria<Identifier> {
 
+  /**
+   * Optional direct item identity
+   *
+   * @return item identity
+   */
   Optional<Identifier> identifier();
 
+  /**
+   * optional provider query duration (TTL)
+   *
+   * @return query duration
+   */
   Optional<Duration> duration();
 
-  static <Identifier> Criteria<Identifier> identifier(Identifier id) {
+  /**
+   * Selects an item by identity.
+   *
+   * @param <Identifier> identity type
+   * @param id           item identity
+   * @return criteria containing only the identity
+   */
+  static <Identifier> Criteria<Identifier> identifier(@NonNull Identifier id) {
     return new Implicit<>(Optional.of(id), Optional.empty());
   }
 
-  static <Identifier> Criteria<Identifier> duration(Duration duration) {
-    return new Implicit<Identifier>(Optional.empty(), Optional.of(duration));
+  /**
+   * Supplies a duration for a provider to interpret.
+   *
+   * @param <Identifier> identity type
+   * @param duration     provider-defined duration
+   * @return criteria containing only the duration
+   */
+  static <Identifier> Criteria<Identifier> duration(@NonNull Duration duration) {
+    return new Implicit<>(Optional.empty(), Optional.of(duration));
   }
 }
 
-record Implicit<Identifier>(
-    Optional<Identifier> identifier,
-    Optional<Duration> duration) implements Criteria<Identifier> {
+/**
+ * Default immutable criteria value.
+ *
+ * @param <Identifier> identity type
+ * @param identifier   optional direct selection
+ * @param duration     optional provider-defined duration
+ */
+record Implicit<Identifier>(@NonNull Optional<Identifier> identifier,
+    @NonNull Optional<Duration> duration) implements Criteria<Identifier> {
 }

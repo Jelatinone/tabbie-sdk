@@ -5,49 +5,68 @@ import java.util.Set;
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.album.Image;
 import cat.tabbie.sdk.album.Store;
+import cat.tabbie.sdk.minecraft.Compatibility;
+import cat.tabbie.sdk.minecraft.Label;
 import lombok.NonNull;
 
-public sealed interface Artifact extends Store permits Mod {
+public interface Artifact extends Store {
 
-  /**
-   *
-   * @return
-   */
-  @NonNull
-  Identity<Artifact> artifactId();
+	/**
+	 * Stable artifact identity
+	 *
+	 * @return artifact identity
+	 */
+	@NonNull
+	Identity<Artifact> artifactId();
 
-  /**
-   *
-   * @return
-   */
-  @NonNull
-  String artifactName();
+	/**
+	 * Human-readable canonical artifact name
+	 * 
+	 * @return artifact name
+	 */
+	@NonNull
+	String artifactName();
 
-  /**
-   *
-   * @return
-   */
-  long artifactSize();
+	/**
+	 * Declared own payload size as bytes, excluding dependencies or other stored
+	 * content beyond what would produced by related {@link Image.File file}
+	 * operations.
+	 * 
+	 * @return payload size
+	 */
+	long artifactSize();
 
-  /**
-   *
-   * @return
-   */
-  @NonNull
-  Set<Identity<Artifact>> depends();
+	/**
+	 * Artifact identities that must be installed alongside this artifact
+	 * 
+	 * @return depending artifact identities
+	 */
+	@NonNull
+	Set<Identity<Artifact>> depends();
 
-  /**
-   *
-   * @return
-   */
-  @NonNull
-  Set<Identity<Artifact>> conflicts();
+	/**
+	 * Artifact identities that may not be installed alongside this artifact
+	 * 
+	 * @return conflicting artifact identities
+	 */
+	@NonNull
+	Set<Identity<Artifact>> conflicts();
 
-  /**
-   *
-   * @return
-   */
-  @NonNull
-  Set<Image<?>> images();
+	/**
+	 * Payload installation images relative to this type's installation root.
+	 * 
+	 * @return installation images
+	 */
+	@NonNull
+	Set<Image<?>> images();
 
+	/**
+	 * Compatibility state of this artifact against a label's explicit target
+	 * declarations.
+	 * 
+	 * @param target target label
+	 * @return Compatibility state
+	 */
+	@NonNull
+	Compatibility allow(@NonNull Label target);
 }
