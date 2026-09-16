@@ -20,113 +20,113 @@ import lombok.experimental.FieldDefaults;
  */
 public sealed interface Distribution permits Distribution.Java, Distribution.Bedrock {
 
-  /**
-   * Stable namespaced distribution identifier
-   *
-   * @return identifier
-   */
-  String id();
+	/**
+	 * Stable namespaced distribution identifier
+	 *
+	 * @return identifier
+	 */
+	String id();
 
-  /**
-   * Structurally supported physical environments
-   *
-   * @return supported environments
-   */
-  Set<Environment> environments();
+	/**
+	 * Structurally supported physical environments
+	 *
+	 * @return supported environments
+	 */
+	Set<Environment> environments();
 
-  /**
-   * Structurally supported artifact capabilities
-   *
-   * @return supported artifacts
-   */
-  Set<Class<? extends Artifact>> capabilities();
+	/**
+	 * Structurally supported artifact capabilities
+	 *
+	 * @return supported artifacts
+	 */
+	Set<Class<? extends Artifact>> capabilities();
 
-  /**
-   *
-   * @param version
-   * @return
-   */
-  boolean applicable(@NonNull Version version);
+	/**
+	 *
+	 * @param version
+	 * @return
+	 */
+	boolean applicable(@NonNull Version version);
 
-  @AllArgsConstructor
-  @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-  public enum Java implements Distribution {
+	@AllArgsConstructor
+	@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+	public enum Java implements Distribution {
 
-    // TODO: Enum Values Need Completion
-    NATIVE("");
+		// TODO: Enum Values Need Completion
+		NATIVE("");
 
-    @NonNull
-    String id;
+		@NonNull
+		String id;
 
-    @NonNull
-    Set<Class<? extends Artifact>> capabilities;
-    @NonNull
-    Set<Environment> environments;
+		@NonNull
+		Set<Class<? extends Artifact>> capabilities;
+		@NonNull
+		Set<Environment> environments;
 
-    @SafeVarargs
-    Java(String id, Class<? extends Artifact>... capabilities) {
-      this(id, Set.of(capabilities), Set.of(Environment.SERVER, Environment.CLIENT));
-    }
+		@SafeVarargs
+		Java(String id, Class<? extends Artifact>... capabilities) {
+			this(id, Set.of(capabilities), Set.of(Environment.SERVER, Environment.CLIENT));
+		}
 
-    @Override
-    public String id() {
-      return id;
-    }
+		@Override
+		public String id() {
+			return id;
+		}
 
-    @Override
-    public Set<Class<? extends Artifact>> capabilities() {
-      return capabilities;
-    }
+		@Override
+		public Set<Class<? extends Artifact>> capabilities() {
+			return capabilities;
+		}
 
-    @Override
-    public Set<Environment> environments() {
-      return environments;
-    }
+		@Override
+		public Set<Environment> environments() {
+			return environments;
+		}
 
-    @Override
-    public boolean applicable(@NonNull Version version) {
-      return Version.Java.applicable(version);
-    }
-  }
+		@Override
+		public boolean applicable(@NonNull Version version) {
+			return Version.Java.applicable(version);
+		}
+	}
 
-  @AllArgsConstructor
-  @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-  public enum Bedrock implements Distribution {
+	@AllArgsConstructor
+	@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+	public enum Bedrock implements Distribution {
 
-    // TODO: Enum Values Need Completion
-    NATIVE("");
+		// TODO: Enum Values Need Completion
+		NATIVE("");
 
-    @NonNull
-    String id;
+		@NonNull
+		String id;
 
-    @NonNull
-    Set<Class<? extends Artifact>> capabilities;
-    @NonNull
-    Set<Environment> environments;
+		@NonNull
+		Set<Class<? extends Artifact>> capabilities;
+		@NonNull
+		Set<Environment> environments;
 
-    @SafeVarargs
-    Bedrock(String id, Class<? extends Artifact>... capabilities) {
-      this(id, Set.of(capabilities), Set.of(Environment.SERVER, Environment.CLIENT));
-    }
+		@SafeVarargs
+		Bedrock(String id, Class<? extends Artifact>... capabilities) {
+			this(id, Set.of(capabilities), Set.of(Environment.SERVER, Environment.CLIENT));
+		}
 
-    @Override
-    public String id() {
-      return id;
-    }
+		@Override
+		public String id() {
+			return id;
+		}
 
-    @Override
-    public Set<Class<? extends Artifact>> capabilities() {
-      return capabilities;
-    }
+		@Override
+		public Set<Class<? extends Artifact>> capabilities() {
+			return capabilities;
+		}
 
-    @Override
-    public Set<Environment> environments() {
-      return environments;
-    }
+		@Override
+		public Set<Environment> environments() {
+			return environments;
+		}
 
-    @Override
-    public boolean applicable(@NonNull Version version) {
-      return Version.Bedrock.applicable(version);
-    }
-  }
+		@Override
+		public boolean applicable(@NonNull Version version) {
+			return Version.Bedrock.applicable(version);
+		}
+	}
 }

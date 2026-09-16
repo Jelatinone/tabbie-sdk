@@ -5,11 +5,20 @@ import java.util.Set;
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.album.Image;
 import cat.tabbie.sdk.album.Store;
-import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Label;
 import lombok.NonNull;
 
-public interface Artifact extends Store {
+/**
+ * 
+ * <h1>Artifact</h1>
+ * 
+ * <p>
+ * Described artifact content backed by a supplied store sink, without access to
+ * the target filesystem.
+ * </p>
+ * 
+ */
+public interface Artifact {
 
 	/**
 	 * Stable artifact identity
@@ -35,6 +44,20 @@ public interface Artifact extends Store {
 	 * @return payload size
 	 */
 	long artifactSize();
+
+	/**
+	 * Delegated storage receiving capture/open calls
+	 * 
+	 * @return delegated storage
+	 */
+	Store store();
+
+	/**
+	 * 
+	 * @return
+	 */
+	@NonNull
+	Set<Label> labels();
 
 	/**
 	 * Artifact identities that must be installed alongside this artifact
@@ -68,5 +91,5 @@ public interface Artifact extends Store {
 	 * @return Compatibility state
 	 */
 	@NonNull
-	Compatibility allow(@NonNull Label target);
+	boolean allow(@NonNull Label target);
 }
