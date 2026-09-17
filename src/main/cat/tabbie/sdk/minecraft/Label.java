@@ -15,12 +15,24 @@ import lombok.NonNull;
  */
 public record Label(@NonNull Version version, @NonNull Distribution distribution, @NonNull Environment environment) {
 
-  public Label {
-    if (!distribution.applicable(version)) {
-      throw new IllegalArgumentException("Distribution does not support this version!");
-    }
-    if (!distribution.environments().contains(environment)) {
-      throw new IllegalArgumentException("Distribution does not support this environment");
-    }
-  }
+	public Label {
+		if (!distribution.applicable(version)) {
+			throw new IllegalArgumentException("Distribution does not support this version!");
+		}
+		if (!distribution.environments().contains(environment)) {
+			throw new IllegalArgumentException("Distribution does not support this environment");
+		}
+	}
+
+	/**
+	 * Compares target identity independently of release date and classification.
+	 * 
+	 * @param other target declaration to compare
+	 * @return whether edition, game version, distribution, and environment agree
+	 */
+	public boolean match(@NonNull Label other) {
+		return version.equals(other.version)
+				&& distribution.equals(other.distribution)
+				&& environment == other.environment;
+	}
 }

@@ -5,6 +5,7 @@ import java.util.Set;
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.album.Image;
 import cat.tabbie.sdk.album.Store;
+import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Label;
 import lombok.NonNull;
 
@@ -52,10 +53,11 @@ public interface Artifact {
 	 */
 	Store store();
 
-	/**
-	 * 
-	 * @return
-	 */
+  /**
+   * Declares support for the entire artifact.
+   *
+   * @return immutable, nonempty supported targets
+   */
 	@NonNull
 	Set<Label> labels();
 
@@ -84,12 +86,18 @@ public interface Artifact {
 	Set<Image<?>> images();
 
 	/**
-	 * Compatibility state of this artifact against a label's explicit target
-	 * declarations.
+	 * Assesses type support followed by explicit target declarations. Unlisted
+	 * targets remain unknown; no compatibility between runtime forks is inferred.
 	 * 
-	 * @param target target label
-	 * @return Compatibility state
+	 * @param target target to assess
+	 * @return structural rejection, declared support, or unknown support
 	 */
-	@NonNull
-	boolean allow(@NonNull Label target);
+	default Compatibility compatibility(@NonNull Label target) {
+		if (!target.distribution().capabilities().contains(getClass())) {
+			return Compatibility.UNSUPPORTED;
+		}
+		return labels().stream().anyMatch(label -> label.match(target))
+				? Compatibility.SUPPORTED
+				: Compatibility.UNKNOWN;
+	}
 }

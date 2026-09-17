@@ -6,52 +6,82 @@ import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.addon.artifact.Artifact;
+import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Label;
 import lombok.NonNull;
 
 /**
- *
- * <h1>Addon</h1>
- *
+ * <h2>Addon</h2>
+ * 
  * <p>
+ * A provider-owned catalog project with independently identified builds and
+ * tags. Implementations supply immutable, non-null collections, a non-blank
+ * name,
+ * builds owned by this addon, and distinct build/tag identities. Discovery may
+ * produce a project with no builds; each published {@link Build} is complete.
  * </p>
- *
  */
 public interface Addon {
 
 	/**
-	 *
-	 * @return
+	 * Identifies the owning catalog provider.
+	 * 
+	 * @return provider identity using the same marker as
+	 *         {@link Provider#providerId()}
 	 */
 	@NonNull
 	Identity<Provider<?>> providerId();
 
 	/**
-	 *
-	 * @return
+	 * Identifies this project independently of its builds.
+	 * 
+	 * @return stable addon identity
 	 */
 	@NonNull
 	Identity<Addon> addonId();
 
 	/**
-	 *
-	 * @return
+	 * Names this project for display.
+	 * 
+	 * @return non-blank canonical name
 	 */
 	@NonNull
 	String addonName();
 
 	/**
-	 *
-	 * @return
+	 * Exposes immutable build declarations owned by this addon.
+	 * 
+	 * @return builds with distinct identities, possibly empty
 	 */
+	@NonNull
 	Set<Build> builds();
 
 	/**
-	 *
-	 * @return
+	 * Exposes provider-defined catalog tags.
+	 * 
+	 * @return immutable tags with distinct identities, possibly empty
 	 */
+	@NonNull
 	Set<Tag> tags();
 
+	/**
+	 * <h2>Build</h2>
+	 * <p>
+	 * A published selection of artifacts. Every artifact must explicitly support
+	 * every build label, while artifacts may declare additional supported targets.
+	 * External dependency availability and internal pack members are resolved
+	 * later.
+	 * </p>
+	 * 
+	 * @param addonId     owning catalog addon
+	 * @param buildId     immutable build identity
+	 * @param buildName   non-blank display name
+	 * @param buildDate   publication instant
+	 * @param buildNumber positive provider-assigned build number
+	 * @param labels      nonempty targets advertised for the entire build
+	 * @param artifacts   nonempty immutable artifact selection with distinct
+	 *                    identities
+	 */
 	record Build(
 			@NonNull Identity<Addon> addonId,
 			@NonNull Identity<Build> buildId,
@@ -66,25 +96,51 @@ public interface Addon {
 		public Build {
 			labels = Set.copyOf(labels);
 			artifacts = Set.copyOf(artifacts);
+			if (buildNumber < 1L || buildName.isBlank()) {
+				throw new IllegalArgumentException("Build number must be positive and name non-blank.");
+			}
+			validate(labels, artifacts);
+		}
 
-			Set<Identity<Artifact>> artifactIds = artifacts().stream()
+		/**
+		 * Assesses artifact type support and this build's explicit declaration.
+		 * A structurally unsupported artifact takes precedence over missing evidence.
+		 * 
+		 * @param target selected runtime target
+		 * @return declared support, structural rejection, or unknown support
+		 */
+		public Compatibility compatibility(@NonNull Label target) {
+			Set<Compatibility> assessments = artifacts.stream()
+					.map(artifact -> artifact.compatibility(target)).collect(Collectors.toSet());
+			if (assessments.contains(Compatibility.UNSUPPORTED)) {
+				return Compatibility.UNSUPPORTED;
+			}
+			return labels.stream().anyMatch(label -> label.match(target))
+					&& assessments.stream().allMatch(result -> result == Compatibility.SUPPORTED)
+							? Compatibility.SUPPORTED
+							: Compatibility.UNKNOWN;
+		}
+
+		/**
+		 * Checks copied constructor inputs before record fields are initialized.
+		 * 
+		 * @param labels    advertised targets
+		 * @param artifacts directly bundled artifacts
+		 */
+		private static void validate(@NonNull Set<Label> labels, @NonNull Set<Artifact> artifacts) {
+			Set<Identity<Artifact>> ids = artifacts.stream()
 					.map(Artifact::artifactId)
 					.collect(Collectors.toSet());
 
-			if (buildNumber < 1L) {
-				throw new IllegalArgumentException("Build number must be positive!");
+			if (ids.size() != artifacts.size()) {
+				throw new IllegalArgumentException("Build artifacts must have distinct identities.");
 			}
-			if (buildName.isBlank()) {
-				throw new IllegalArgumentException("Build name must be non-blank");
+			if (artifacts.stream().anyMatch(artifact -> artifact.conflicts().stream().anyMatch(ids::contains))) {
+				throw new IllegalArgumentException("Build artifacts conflict with each other.");
 			}
-			if (artifactIds.size() != artifacts().size()) {
-				throw new IllegalArgumentException("Build artifacts must be distinct");
-			}
-			if (artifacts.stream().anyMatch(artifact -> artifact.conflicts().stream().anyMatch(artifactIds::contains))) {
-				throw new IllegalArgumentException("Build artifacts conflict with each other");
-			}
-			if (artifacts.stream().allMatch(artifact -> labels().stream().allMatch(label -> artifact.allow(label)))) {
-				throw new IllegalArgumentException("Build artifacts must support every declared label");
+			if (artifacts.stream().anyMatch(artifact -> labels.stream()
+					.anyMatch(label -> artifact.compatibility(label) != Compatibility.SUPPORTED))) {
+				throw new IllegalArgumentException("Every build artifact must support every declared label.");
 			}
 		}
 	}

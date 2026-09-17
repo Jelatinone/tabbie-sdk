@@ -2,7 +2,6 @@ package cat.tabbie.sdk.minecraft;
 
 import java.time.Instant;
 import java.util.Locale;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import lombok.NonNull;
@@ -27,7 +26,7 @@ import lombok.NonNull;
 public sealed interface Version
 		permits Version.Java, Version.Bedrock {
 
-	static final Pattern VERSION_PATTERN = Pattern.compile(
+	Pattern VERSION_PATTERN = Pattern.compile(
 			"(?i)^(?:minecraft(?:\\s*:\\s*|\\s+))?(?:(java|bedrock)(?:\\s+edition)?(?:\\s*:\\s*|\\s+))?(.+)$");
 
 	/**
@@ -46,24 +45,6 @@ public sealed interface Version
 	 */
 	@NonNull
 	Instant releaseDate();
-
-	/**
-	 * Matches an external identifier with optional Minecraft and edition prefixes.
-	 * Explicitly naming the other edition never matches. Only leading qualifiers
-	 * are removed; arbitrary identifier substrings remain meaningful.
-	 *
-	 * @param id external identifier
-	 * @return whether the identifier names this version
-	 */
-	default boolean match(@NonNull String id) {
-		Matcher matcher = VERSION_PATTERN.matcher(id.strip());
-		if (!matcher.matches()) {
-			return false;
-		}
-		String edition = matcher.group(1);
-		return (edition == null || edition.equalsIgnoreCase(this instanceof Java ? "java" : "bedrock"))
-				&& matcher.group(2).strip().equalsIgnoreCase(id());
-	}
 
 	/**
 	 *

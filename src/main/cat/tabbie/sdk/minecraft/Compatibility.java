@@ -11,9 +11,18 @@ package cat.tabbie.sdk.minecraft;
  */
 public enum Compatibility {
 
+	/**
+	 * The available declaration explicitly supports the target.
+	 */
 	SUPPORTED,
 
+	/**
+	 * The target is not covered by the available declaration.
+	 */
 	UNKNOWN,
 
-	UNSUPPORTED;
+	/**
+	 * A known structural constraint prevents use.
+	 */
+	UNSUPPORTED
 }

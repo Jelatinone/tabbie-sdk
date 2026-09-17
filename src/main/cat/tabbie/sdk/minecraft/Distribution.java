@@ -3,7 +3,6 @@ package cat.tabbie.sdk.minecraft;
 import java.util.Set;
 
 import cat.tabbie.sdk.addon.artifact.Artifact;
-import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
@@ -42,91 +41,268 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 	Set<Class<? extends Artifact>> capabilities();
 
 	/**
-	 *
-	 * @param version
-	 * @return
+	 * Tests edition membership without discovering a runtime release.
+	 * 
+	 * @param version discovered game version
+	 * @return whether the version belongs to the supported edition
 	 */
 	boolean applicable(@NonNull Version version);
 
-	@AllArgsConstructor
-	@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-	public enum Java implements Distribution {
+	sealed interface Java extends Distribution {
 
-		// TODO: Enum Values Need Completion
-		NATIVE("");
+		@AllArgsConstructor
+		@FieldDefaults(makeFinal = true)
+		enum Of implements Java {
 
-		@NonNull
-		String id;
+			JAVA_NATIVE(new Java.Native()),
 
-		@NonNull
-		Set<Class<? extends Artifact>> capabilities;
-		@NonNull
-		Set<Environment> environments;
+			FABRIC(new Java.Fabric()),
+			QUILT(new Java.Quilt()),
+			FORGE(new Java.Forge()),
+			NEO_FORGE(new Java.NeoForge()),
 
-		@SafeVarargs
-		Java(String id, Class<? extends Artifact>... capabilities) {
-			this(id, Set.of(capabilities), Set.of(Environment.SERVER, Environment.CLIENT));
+			CRAFT_BUKKIT(new Java.CraftBukkit()),
+			SPIGOT(new Java.Spigot()),
+			PAPER(new Java.Paper()),
+			PURPUR(new Java.Purpur()),
+			FOLIA(new Java.Folia());
+
+			@NonNull
+			Distribution distribution;
+
+			@Override
+			public String id() {
+				return distribution.id();
+			}
+
+			@Override
+			public Set<Environment> environments() {
+				return distribution.environments();
+			}
+
+			@Override
+			public Set<Class<? extends Artifact>> capabilities() {
+				return distribution.capabilities();
+			}
+
+			@Override
+			public boolean applicable(@NonNull Version version) {
+				return distribution.applicable(version);
+			}
 		}
 
 		@Override
-		public String id() {
-			return id;
+		default Set<Environment> environments() {
+			return Set.of(Environment.CLIENT, Environment.SERVER);
 		}
 
 		@Override
-		public Set<Class<? extends Artifact>> capabilities() {
-			return capabilities;
+		default Set<Class<? extends Artifact>> capabilities() {
+			// Default artifact types here soon:)
+			return Set.of();
 		}
 
 		@Override
-		public Set<Environment> environments() {
-			return environments;
-		}
-
-		@Override
-		public boolean applicable(@NonNull Version version) {
+		default boolean applicable(@NonNull Version version) {
 			return Version.Java.applicable(version);
+		}
+
+		record Native() implements Java {
+
+			@Override
+			public String id() {
+				return "java:native";
+			}
+		}
+
+		record Fabric() implements Launcher {
+
+			@Override
+			public String id() {
+				return "java:fabric";
+			}
+		}
+
+		record Quilt() implements Launcher {
+
+			@Override
+			public String id() {
+				return "java:quilt";
+			}
+		}
+
+		record Forge() implements Launcher {
+			@Override
+			public String id() {
+				return "java:forge";
+			}
+		}
+
+		record NeoForge() implements Launcher {
+			@Override
+			public String id() {
+				return "java:neoforge";
+			}
+		}
+
+		record CraftBukkit() implements Plugin {
+			@Override
+			public String id() {
+				return "java:craftbukkit";
+			}
+		}
+
+		record Spigot() implements Plugin {
+
+			@Override
+			public String id() {
+				return "java:spigot";
+			}
+		}
+
+		record Paper() implements Plugin {
+
+			@Override
+			public String id() {
+				return "java:paper";
+			}
+		}
+
+		record Purpur() implements Plugin {
+
+			@Override
+			public String id() {
+				return "java:purpur";
+			}
+		}
+
+		record Folia() implements Plugin {
+
+			@Override
+			public String id() {
+				return "java:folia";
+			}
+		}
+
+		sealed interface Launcher extends Java {
+
+			@Override
+			default Set<Class<? extends Artifact>> capabilities() {
+				// Default artifact types here soon:)
+				return Set.of();
+			}
+		}
+
+		sealed interface Plugin extends Java {
+
+			@Override
+			default Set<Environment> environments() {
+				return Set.of(Environment.SERVER);
+			}
+
+			@Override
+			default Set<Class<? extends Artifact>> capabilities() {
+				// Default artifact types here soon:)
+				return Set.of();
+			}
 		}
 	}
 
-	@AllArgsConstructor
-	@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-	public enum Bedrock implements Distribution {
+	sealed interface Bedrock extends Distribution {
 
-		// TODO: Enum Values Need Completion
-		NATIVE("");
-
-		@NonNull
-		String id;
-
-		@NonNull
-		Set<Class<? extends Artifact>> capabilities;
-		@NonNull
-		Set<Environment> environments;
-
-		@SafeVarargs
-		Bedrock(String id, Class<? extends Artifact>... capabilities) {
-			this(id, Set.of(capabilities), Set.of(Environment.SERVER, Environment.CLIENT));
+		@Override
+		default Set<Environment> environments() {
+			return Set.of(Environment.CLIENT, Environment.SERVER);
 		}
 
 		@Override
-		public String id() {
-			return id;
+		default Set<Class<? extends Artifact>> capabilities() {
+			// Default artifact types here soon:)
+			return Set.of();
 		}
 
 		@Override
-		public Set<Class<? extends Artifact>> capabilities() {
-			return capabilities;
-		}
-
-		@Override
-		public Set<Environment> environments() {
-			return environments;
-		}
-
-		@Override
-		public boolean applicable(@NonNull Version version) {
+		default boolean applicable(@NonNull Version version) {
 			return Version.Bedrock.applicable(version);
+		}
+
+		@AllArgsConstructor
+		@FieldDefaults(makeFinal = true)
+		enum Of implements Bedrock {
+
+			BEDROCK_NATIVE(new Bedrock.Native()),
+
+			POCKET_MINE(new Bedrock.PocketMine()),
+			NUKKIT(new Bedrock.Nukkit()),
+			POWER_NUKKITX(new Bedrock.PowerNukkitX());
+
+			@NonNull
+			Distribution distribution;
+
+			@Override
+			public String id() {
+				return distribution.id();
+			}
+
+			@Override
+			public Set<Environment> environments() {
+				return distribution.environments();
+			}
+
+			@Override
+			public Set<Class<? extends Artifact>> capabilities() {
+				return distribution.capabilities();
+			}
+
+			@Override
+			public boolean applicable(@NonNull Version version) {
+				return distribution.applicable(version);
+			}
+		}
+
+		record Native() implements Distribution.Bedrock {
+
+			@Override
+			public String id() {
+				return "bedrock:native";
+			}
+		}
+
+		record PocketMine() implements Plugin {
+
+			@Override
+			public String id() {
+				return "bedrock:pocketmine";
+			}
+		}
+
+		record Nukkit() implements Plugin {
+
+			@Override
+			public String id() {
+				return "bedrock:nukkit";
+			}
+		}
+
+		record PowerNukkitX() implements Plugin {
+
+			@Override
+			public String id() {
+				return "bedrock:powernukkitx";
+			}
+		}
+
+		sealed interface Plugin extends Distribution.Bedrock {
+
+			@Override
+			default Set<Environment> environments() {
+				return Set.of(Environment.SERVER);
+			}
+
+			@Override
+			default Set<Class<? extends Artifact>> capabilities() {
+				return Set.of();
+			}
 		}
 	}
 }
