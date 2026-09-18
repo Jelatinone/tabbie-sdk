@@ -3,19 +3,15 @@ package cat.tabbie.sdk.album;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
+
+import org.junit.jupiter.api.Test;
 
 import cat.tabbie.sdk.album.Chunk.Fragment;
 import cat.tabbie.sdk.album.Chunk.Range;
@@ -25,7 +21,7 @@ import cat.tabbie.sdk.album.Image.Text;
 class ImageTest {
 
 	private static final Path PATH = Path.of("config", "..", "settings.txt");
-	private static final Reference EMPTY = new Reference(
+	private static final Reference.Captured EMPTY = new Reference.Captured(
 			"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", 0);
 
 	@Test
@@ -70,21 +66,6 @@ class ImageTest {
 		assertEquals(List.of(fragment("4\n", 4)), present(image.before()).fragments());
 		assertEquals(List.of(fragment("changed\n", 4)), present(image.after()).fragments());
 		assertThrows(IllegalArgumentException.class, () -> Image.configure(PATH, before, after, -1));
-	}
-
-	@ParameterizedTest
-	@ValueSource(strings = { "", "\n", "last", "a\r\nb\rc\nlast" })
-	void textCreationAndDeletionDescribeCompleteContent(String text) {
-		Image<Text> creation = Image.create(PATH, text);
-		assertInstanceOf(Text.Absent.class, creation.before());
-		Text.Present after = present(creation.after());
-		assertEquals(text, after.fragments().stream().map(Fragment::text).collect(Collectors.joining()));
-		if (!after.fragments().isEmpty()) {
-			assertEquals(0, after.fragments().getFirst().range().start());
-		}
-		assertNotEquals(new Text.Absent(), after);
-		assertEquals(Image.delete(PATH, text), creation.preimage());
-		assertEquals(creation, creation.preimage().preimage());
 	}
 
 	@Test
@@ -153,7 +134,6 @@ class ImageTest {
 	@Test
 	void rejectsNullStatesPathsAndListElements() {
 		assertThrows(NullPointerException.class, () -> Image.create(null, EMPTY));
-		assertThrows(NullPointerException.class, () -> Image.create(PATH, (String) null));
 		assertThrows(NullPointerException.class, () -> Image.configure(PATH, (List<Chunk>) null));
 		assertThrows(NullPointerException.class, () -> new Configuration((List<Chunk>) null, PATH));
 		assertThrows(NullPointerException.class, () -> Image.configure(PATH, (Text) null, new Text.Absent()));

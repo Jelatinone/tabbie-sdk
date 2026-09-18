@@ -14,11 +14,11 @@ import lombok.NonNull;
  * @param sha256 lowercase SHA-256 hexadecimal digest
  * @param size   exact byte count
  */
-public interface Reference {
+public sealed interface Reference {
 
 	long size();
 
-	public record Pending(long size) {
+	public record Pending(long size) implements Reference {
 
 		public Pending {
 			if (size < 0L) {
@@ -27,7 +27,7 @@ public interface Reference {
 		}
 	}
 
-	public record Captured(@NonNull String sha256, long size) {
+	public record Captured(@NonNull String sha256, long size) implements Reference {
 
 		public Captured {
 			if (size < 0L) {
