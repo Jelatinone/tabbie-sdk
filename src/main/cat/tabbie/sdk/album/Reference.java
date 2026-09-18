@@ -11,30 +11,39 @@ import lombok.NonNull;
  *
  * Identity of immutable bytes, independent of their storage location.
  *
- * @param sha256 lowercase SHA-256 hexadecimal digest
- * @param size   exact byte count
+ * @param fileName name in file system
+ * @param size     exact byte count
  */
 public sealed interface Reference {
 
+	@NonNull
+	String fileName();
+
 	long size();
 
-	public record Pending(long size) implements Reference {
+	public record Pending(@NonNull String fileName, long size) implements Reference {
 
 		public Pending {
+			if (fileName().isBlank()) {
+				throw new IllegalArgumentException("Content file name must be non-blank");
+			}
 			if (size < 0L) {
-				throw new IllegalArgumentException("Content size must be non-negative.");
+				throw new IllegalArgumentException("Content size must be non-negative");
 			}
 		}
 	}
 
-	public record Captured(@NonNull String sha256, long size) implements Reference {
+	public record Captured(@NonNull String fileName, @NonNull String sha256, long size) implements Reference {
 
 		public Captured {
+			if (fileName().isBlank()) {
+				throw new IllegalArgumentException("Content file name must be non-blank");
+			}
 			if (size < 0L) {
-				throw new IllegalArgumentException("Content size must be non-negative.");
+				throw new IllegalArgumentException("Content size must be non-negative");
 			}
 			if (!sha256.matches("[0-9a-f]{64}")) {
-				throw new IllegalArgumentException("Expected a lowercase SHA-256 hex digest.");
+				throw new IllegalArgumentException("Expected a lowercase SHA-256 hex digest");
 			}
 		}
 
@@ -44,9 +53,10 @@ public sealed interface Reference {
 		 * @param bytes content to identify
 		 * @return SHA-256 reference and exact size
 		 */
-		public static Captured of(@NonNull byte[] bytes) {
+		public static Captured of(@NonNull String fileName, @NonNull byte[] bytes) {
 			try {
 				return new Captured(
+						fileName,
 						HexFormat.of()
 								.formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)),
 						bytes.length);

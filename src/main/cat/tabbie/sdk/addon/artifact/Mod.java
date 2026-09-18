@@ -50,7 +50,7 @@ public sealed interface Mod extends Artifact {
 			Set<Identity<Artifact>> depends,
 			Set<Identity<Artifact>> conflicts,
 
-			@NonNull Artist artist
+			@NonNull Artist<Mod> artist
 
 	) implements Mod {
 

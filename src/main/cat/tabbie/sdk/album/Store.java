@@ -21,14 +21,6 @@ public interface Store extends AutoCloseable {
 
 	/**
 	 * Opens verified content. The caller closes the returned independent stream.
-	 *
-	 * @return readable content at position zero
-	 * @throws IOException when content is absent, corrupt, or unreadable
-	 */
-	InputStream open() throws IOException;
-
-	/**
-	 * Opens verified content. The caller closes the returned independent stream.
 	 * 
 	 * @param reference retained content reference
 	 * 
@@ -36,7 +28,8 @@ public interface Store extends AutoCloseable {
 	 * 
 	 * @throws IOException when reading or retention fails
 	 */
-	InputStream open(Reference reference) throws IOException;
+	@NonNull
+	InputStream open(@NonNull Reference reference) throws IOException;
 
 	/**
 	 * Retains bytes without closing the caller-owned stream.
@@ -48,7 +41,9 @@ public interface Store extends AutoCloseable {
 	 * 
 	 * @throws IOException when reading or retention fails
 	 */
-	Reference.Captured capture(InputStream source, Observer observer) throws IOException;
+	@NonNull
+	Reference.Captured capture(@NonNull String fileName,
+			@NonNull InputStream source, @NonNull Observer observer) throws IOException;
 
 	/**
 	 * Retains bytes without closing the caller-owned stream.
@@ -58,8 +53,9 @@ public interface Store extends AutoCloseable {
 	 * 
 	 * @throws IOException when reading or retention fails
 	 */
-	default Reference.Captured capture(InputStream source) throws IOException {
-		return capture(source, Observer.NONE);
+	@NonNull
+	default Reference.Captured capture(@NonNull String fileName, @NonNull InputStream source) throws IOException {
+		return capture(fileName, source, Observer.NONE);
 	}
 
 	/**
@@ -71,9 +67,10 @@ public interface Store extends AutoCloseable {
 	 * 
 	 * @throws IOException when opening, reading, closing, or retention fails
 	 */
+	@NonNull
 	default Reference.Captured capture(@NonNull Path source) throws IOException {
 		try (InputStream input = Files.newInputStream(source)) {
-			return capture(input);
+			return capture(source.getFileName().toString(), input);
 		}
 	}
 
@@ -84,8 +81,9 @@ public interface Store extends AutoCloseable {
 	 * @return retained content reference
 	 * @throws IOException when retention fails
 	 */
-	default Reference.Captured capture(@NonNull byte[] bytes) throws IOException {
-		return capture(new ByteArrayInputStream(bytes.clone()));
+	@NonNull
+	default Reference.Captured capture(@NonNull String fileName, @NonNull byte[] bytes) throws IOException {
+		return capture(fileName, new ByteArrayInputStream(bytes.clone()));
 	}
 
 	/**
@@ -106,7 +104,7 @@ public interface Store extends AutoCloseable {
 		 * @param transferredSize current total bytes transferred
 		 * @param expectedSize    expected total bytes transferred
 		 */
-		default void transferred(long transferredSize, OptionalLong expectedSize) {
+		default void transferred(long transferredSize, @NonNull OptionalLong expectedSize) {
 		}
 
 		/**

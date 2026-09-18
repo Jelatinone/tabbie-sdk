@@ -94,36 +94,32 @@ public interface Artifact {
 	 * @return installation images
 	 */
 	@NonNull
-	Set<Image<?>> images(Context context) throws IOException;
+	Set<Image<?>> images(@NonNull Context context) throws IOException;
 
-	final Artist DEFAULT = new Artist() {
+	final Artist<Artifact> DEFAULT = (artifact, context) -> {
+		Artifact.Layout layout = context.label()
+				.distribution()
+				.layout(artifact, context);
 
-		@Override
-		public <Canvas extends Artifact> Set<Image<?>> paint(Canvas artifact, Context context) throws IOException {
+		InputStream stream = context.store()
+				.open(artifact.artifactReference());
 
-			Artifact.Layout layout = context.label()
-					.distribution()
-					.layout(artifact, context);
+		Reference.Captured captured = context.store()
+				.capture(artifact.artifactReference().fileName(), stream);
 
-			InputStream stream = context.store()
-					.open(artifact.artifactReference());
-			Reference.Captured captured = context.store()
-					.capture(stream);
+		// TODO: Unpack zips, safety checks
 
-			// TODO: Unpack zips, safety checks
+		Image<?> image = Image.create(
+				layout.directory()
+						.resolve(artifact.artifactReference().fileName()),
+				captured);
 
-			Image<?> image = Image.create(
-					layout.directory().resolve(artifact.artifactName()),
-					captured);
-
-			return Set.of(image);
-		}
-
+		return Set.of(image);
 	};
 
-	interface Artist {
+	interface Artist<Canvas extends Artifact> {
 
-		<Canvas extends Artifact> Set<Image<?>> paint(Canvas artifact, Context context) throws IOException;
+		Set<Image<?>> paint(Canvas artifact, Context context) throws IOException;
 	}
 
 	interface Context {
@@ -134,6 +130,7 @@ public interface Artifact {
 		@NonNull
 		Path root();
 
+		@NonNull
 		Store store();
 
 		record Default(Label label, Path root, Store store) implements Context {
@@ -182,7 +179,7 @@ public interface Artifact {
 	 * @return verified set of images
 	 * @throws IllegalArgumentException when generated images cannot be verified
 	 */
-	static Set<Image<?>> fence(Collection<@NonNull ? extends Image<?>> images) throws IllegalArgumentException {
+	static Set<Image<?>> fence(@NonNull Collection<@NonNull ? extends Image<?>> images) throws IllegalArgumentException {
 		Map<Path, Image<?>> byPath = new LinkedHashMap<>();
 
 		for (Image<?> image : images) {
