@@ -1,23 +1,69 @@
 package cat.tabbie.sdk.addon.artifact;
 
+import java.io.IOException;
 import java.util.Set;
 
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.album.Image;
+import cat.tabbie.sdk.album.Reference;
 import cat.tabbie.sdk.album.Store;
 import cat.tabbie.sdk.minecraft.Label;
+import lombok.NonNull;
 
-public record Mod(
-		Identity<Artifact> artifactId,
-		String artifactName,
-		long artifactSize,
+public sealed interface Mod extends Artifact {
 
-		Store store,
+	record Default(
+			Identity<Artifact> artifactId,
+			String artifactName,
+			Reference artifactReference,
 
-		Set<Label> labels,
+			Store store,
 
-		Set<Identity<Artifact>> depends,
-		Set<Identity<Artifact>> conflicts,
+			Set<Label> labels,
 
-		Set<Image<?>> images) implements Artifact {
+			Set<Identity<Artifact>> depends,
+			Set<Identity<Artifact>> conflicts
+
+	) implements Mod {
+
+		public Default {
+			labels = Set.copyOf(labels);
+			depends = Set.copyOf(depends);
+			conflicts = Set.copyOf(conflicts);
+		}
+
+		@Override
+		public @NonNull Set<Image<?>> images(Context context) throws IOException {
+			return Artifact.fence(Artifact.DEFAULT.paint(this, context));
+		}
+	}
+
+	record Custom(
+			Identity<Artifact> artifactId,
+			String artifactName,
+			Reference artifactReference,
+
+			Store store,
+
+			Set<Label> labels,
+
+			Set<Identity<Artifact>> depends,
+			Set<Identity<Artifact>> conflicts,
+
+			@NonNull Artist artist
+
+	) implements Mod {
+
+		public Custom {
+			labels = Set.copyOf(labels);
+			depends = Set.copyOf(depends);
+			conflicts = Set.copyOf(conflicts);
+		}
+
+		@Override
+		public @NonNull Set<Image<?>> images(Context context) throws IOException {
+			return Artifact.fence(artist.paint(this, context));
+		}
+	}
+
 }

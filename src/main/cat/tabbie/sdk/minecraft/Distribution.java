@@ -1,8 +1,11 @@
 package cat.tabbie.sdk.minecraft;
 
+import java.io.IOException;
 import java.util.Set;
 
 import cat.tabbie.sdk.addon.artifact.Artifact;
+import cat.tabbie.sdk.addon.artifact.Mod;
+
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
@@ -47,6 +50,38 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 	 * @return whether the version belongs to the supported edition
 	 */
 	boolean applicable(@NonNull Version version);
+
+	/**
+	 * Determines image layout for this distribution; context implementations may
+	 * supply additional custom data. Including server resource-pack delivery. This
+	 * method does not discover installation directories.
+	 * 
+	 * @param artifact reference artifact
+	 * @param context  reference context
+	 * 
+	 * @return distribution relative context
+	 * 
+	 * @throws IOException              when no matching layout can be determined
+	 * @throws IllegalArgumentException when this distribution does not support the
+	 *                                  artifact type
+	 */
+	default Artifact.Layout layout(@NonNull Artifact artifact, @NonNull Artifact.Context context) throws IOException {
+		if (!capabilities().contains(artifact.getClass())) {
+			throw new IllegalArgumentException(String.format(
+					"Distribution does not support %s artifact",
+					Artifact.class.getSimpleName()));
+		}
+		return switch (artifact) {
+			case Mod _ -> {
+				yield new Artifact.Layout.Default(context.root().resolve("mods"), false);
+			}
+			default -> {
+				throw new IOException(String.format(
+						"Distribution has no default layout for %s artifact",
+						Artifact.class.getSimpleName()));
+			}
+		};
+	}
 
 	sealed interface Java extends Distribution {
 

@@ -56,20 +56,22 @@ public sealed interface Image<State extends Image.Alteration> {
 	 *
 	 * @return Resulting image
 	 */
-	static Image<File> create(@NonNull Path path, @NonNull Reference after) {
+	static Image<File> create(@NonNull Path path, @NonNull Reference.Captured after) {
 		return new Installation(new File.Absent(), new File.Present(after), path);
 	}
 
 	/**
-	 * Describes creation of the complete supplied text; empty text is present.
-	 *
-	 * @param path  target path
-	 * @param after file reference after
+	 * Describes replacement of a file deleted and succeeded by another file
+	 * created.
+	 * 
+	 * @param path   target path
+	 * @param before file reference before
+	 * @param after  file reference after
+	 * 
 	 * @return resulting image
 	 */
-	static Image<Text> create(@NonNull Path path, @NonNull String after) {
-		return configure(path, new Text.Absent(), new Text.Present(
-				Chunk.diff("", after).stream().map(Chunk::after).toList()));
+	static Image<File> replace(Path path, Reference.Captured before, Reference.Captured after) {
+		return new Installation(new File.Present(before), new File.Present(after), path);
 	}
 
 	/**
@@ -80,7 +82,7 @@ public sealed interface Image<State extends Image.Alteration> {
 	 *
 	 * @return resulting image
 	 */
-	static Image<File> delete(@NonNull Path path, @NonNull Reference before) {
+	static Image<File> delete(@NonNull Path path, @NonNull Reference.Captured before) {
 		return new Installation(new File.Present(before), new File.Absent(), path);
 	}
 
@@ -101,8 +103,8 @@ public sealed interface Image<State extends Image.Alteration> {
 	 * Describes a text change using explicit existence and fragment states.
 	 *
 	 * @param path   target path
-	 * @param before file reference before
-	 * @param after  file reference after
+	 * @param before text before
+	 * @param after  text after
 	 *
 	 * @return resulting image
 	 */
@@ -127,8 +129,8 @@ public sealed interface Image<State extends Image.Alteration> {
 	 * Describes text differences with three surrounding context lines.
 	 *
 	 * @param path   target path
-	 * @param before file reference before
-	 * @param after  file reference after
+	 * @param before text before
+	 * @param after  text after
 	 *
 	 * @return resulting image
 	 */
@@ -142,8 +144,8 @@ public sealed interface Image<State extends Image.Alteration> {
 	 * exist, but no particular content is described.
 	 *
 	 * @param path         target path
-	 * @param before       file reference before
-	 * @param after        file reference after
+	 * @param before       text before
+	 * @param after        text after
 	 * @param contextLines number of context lines to keep
 	 *
 	 * @return resulting image
@@ -151,6 +153,19 @@ public sealed interface Image<State extends Image.Alteration> {
 	static Image<Text> configure(@NonNull Path path, @NonNull String before, @NonNull String after,
 			int contextLines) {
 		return configure(path, Chunk.diff(before, after, contextLines));
+	}
+
+	/**
+	 * Describes creation of the complete supplied text; empty text is present.
+	 *
+	 * @param path  target path
+	 * @param after text after
+	 * 
+	 * @return resulting image
+	 */
+	static Image<Text> configure(@NonNull Path path, @NonNull String after) {
+		return configure(path, new Text.Absent(), new Text.Present(
+				Chunk.diff("", after).stream().map(Chunk::after).toList()));
 	}
 
 	/**
@@ -170,7 +185,7 @@ public sealed interface Image<State extends Image.Alteration> {
 		record Absent() implements File {
 		}
 
-		record Present(@NonNull Reference reference) implements File {
+		record Present(@NonNull Reference.Captured reference) implements File {
 		}
 	}
 
@@ -201,9 +216,6 @@ record Installation(@NonNull File before, @NonNull File after, @NonNull Path pat
 	public Installation {
 		if (before instanceof File.Absent && after instanceof File.Absent) {
 			throw new IllegalArgumentException("Files may not both be absent!");
-		}
-		if (before instanceof File.Present && after instanceof File.Present) {
-			throw new IllegalArgumentException("Files may not both be present!");
 		}
 	}
 

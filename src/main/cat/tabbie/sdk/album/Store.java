@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.OptionalLong;
 
 import lombok.NonNull;
 
@@ -16,47 +17,112 @@ import lombok.NonNull;
  * Implementations verify references, support independent repeated reads, and
  * keep content available for as long as their documented storage lifetime.
  */
-public interface Store {
+public interface Store extends AutoCloseable {
 
-  /**
-   * Retains bytes without closing the caller-owned stream.
-   *
-   * @param source stream consumed to EOF
-   * @return identity of the retained bytes
-   * @throws IOException when reading or retention fails
-   */
-  Reference capture(InputStream source) throws IOException;
+	/**
+	 * Opens verified content. The caller closes the returned independent stream.
+	 *
+	 * @return readable content at position zero
+	 * @throws IOException when content is absent, corrupt, or unreadable
+	 */
+	InputStream open() throws IOException;
 
-  /**
-   * Opens verified content. The caller closes the returned independent stream.
-   *
-   * @param content exact digest and size to retrieve
-   * @return readable content at position zero
-   * @throws IOException when content is absent, corrupt, or unreadable
-   */
-  InputStream open(Reference content) throws IOException;
+	/**
+	 * Opens verified content. The caller closes the returned independent stream.
+	 * 
+	 * @param reference retained content reference
+	 * 
+	 * @return readable content at position zero
+	 * 
+	 * @throws IOException when reading or retention fails
+	 */
+	InputStream open(Reference reference) throws IOException;
 
-  /**
-   * Captures a local file and closes the stream opened by this method.
-   *
-   * @param source file to read
-   * @return retained content reference
-   * @throws IOException when opening, reading, closing, or retention fails
-   */
-  default Reference capture(@NonNull Path source) throws IOException {
-    try (InputStream input = Files.newInputStream(source)) {
-      return capture(input);
-    }
-  }
+	/**
+	 * Retains bytes without closing the caller-owned stream.
+	 * 
+	 * @param source   stream consumed to EOF
+	 * @param observer transfer observer
+	 * 
+	 * @return retained content reference
+	 * 
+	 * @throws IOException when reading or retention fails
+	 */
+	Reference.Captured capture(InputStream source, Observer observer) throws IOException;
 
-  /**
-   * Captures a defensive copy of caller-owned bytes.
-   *
-   * @param bytes complete content
-   * @return retained content reference
-   * @throws IOException when retention fails
-   */
-  default Reference capture(@NonNull byte[] bytes) throws IOException {
-    return capture(new ByteArrayInputStream(bytes.clone()));
-  }
+	/**
+	 * Retains bytes without closing the caller-owned stream.
+	 *
+	 * @param source stream consumed to EOF
+	 * @return identity of the retained bytes
+	 * 
+	 * @throws IOException when reading or retention fails
+	 */
+	default Reference.Captured capture(InputStream source) throws IOException {
+		return capture(source, Observer.NONE);
+	}
+
+	/**
+	 * Captures a local file and closes the stream opened by this method.
+	 *
+	 * @param source file to read
+	 * 
+	 * @return retained content reference
+	 * 
+	 * @throws IOException when opening, reading, closing, or retention fails
+	 */
+	default Reference.Captured capture(@NonNull Path source) throws IOException {
+		try (InputStream input = Files.newInputStream(source)) {
+			return capture(input);
+		}
+	}
+
+	/**
+	 * Captures a defensive copy of caller-owned bytes.
+	 *
+	 * @param bytes complete content
+	 * @return retained content reference
+	 * @throws IOException when retention fails
+	 */
+	default Reference.Captured capture(@NonNull byte[] bytes) throws IOException {
+		return capture(new ByteArrayInputStream(bytes.clone()));
+	}
+
+	/**
+	 * 
+	 * <h2>Observer</h2>
+	 * 
+	 * Per-transfer callbacks to provide a caller with metrics. Byte counts concern
+	 * this source artifact only, not several artifacts.
+	 */
+	interface Observer {
+
+		Observer NONE = new Observer() {
+		};
+
+		/**
+		 * Observe in-progress transfer statistics
+		 * 
+		 * @param transferredSize current total bytes transferred
+		 * @param expectedSize    expected total bytes transferred
+		 */
+		default void transferred(long transferredSize, OptionalLong expectedSize) {
+		}
+
+		/**
+		 * Observe complete transfer verification of a capture
+		 * 
+		 * @param reference verified capture reference
+		 */
+		default void verified(Reference reference) {
+		}
+
+		/**
+		 * Observe failed transfer verification of a capture
+		 * 
+		 * @param failure failed capture exception
+		 */
+		default void failed(IOException failure) {
+		}
+	}
 }
