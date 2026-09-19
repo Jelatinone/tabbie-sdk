@@ -1,22 +1,26 @@
 package cat.tabbie.sdk.album;
 
 import java.nio.file.Path;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 import lombok.NonNull;
 
 /**
  *
- * <h1>Image</h1>
+ * <h2>Image</h2>
  *
- * @param <State> Description of the underlying filesystem state
+ * An immutable description of a change to a file's content or existence.
+ * Images perform no I/O and track no filesystem metadata. The preimage
+ * exchanges before and after states; checking and applying either description
+ * belongs to its consumer. A replacement does not authorize overwriting
+ * observed content.
  *
- *                <p>
- *                An immutable description of a change to a file's content or
- *                existence. Images perform no I/O and track no filesystem
- *                metadata. A reverse image describes the inverse change;
- *                checking and applying either image belongs to its consumer.
- *                </p>
+ * @param <State> underlying content or existence state
  */
 public sealed interface Image<State extends Image.Alteration> {
 
@@ -56,7 +60,7 @@ public sealed interface Image<State extends Image.Alteration> {
 	 *
 	 * @return Resulting image
 	 */
-	static Image<File> create(@NonNull Path path, @NonNull Reference.Captured after) {
+	static Image<File> create(@NonNull Path path, @NonNull Reference after) {
 		return new Installation(new File.Absent(), new File.Present(after), path);
 	}
 
@@ -70,7 +74,7 @@ public sealed interface Image<State extends Image.Alteration> {
 	 * 
 	 * @return resulting image
 	 */
-	static Image<File> replace(Path path, Reference.Captured before, Reference.Captured after) {
+	static Image<File> replace(Path path, Reference before, Reference after) {
 		return new Installation(new File.Present(before), new File.Present(after), path);
 	}
 
@@ -82,7 +86,7 @@ public sealed interface Image<State extends Image.Alteration> {
 	 *
 	 * @return resulting image
 	 */
-	static Image<File> delete(@NonNull Path path, @NonNull Reference.Captured before) {
+	static Image<File> delete(@NonNull Path path, @NonNull Reference before) {
 		return new Installation(new File.Present(before), new File.Absent(), path);
 	}
 
@@ -169,33 +173,90 @@ public sealed interface Image<State extends Image.Alteration> {
 	}
 
 	/**
+	 * Check against a given collection's images for image correctness.
+	 * 
+	 * @param images generated images
+	 * @return verified set of images
+	 * @throws IllegalArgumentException when generated images cannot be verified
+	 */
+	static Set<Image<?>> fence(@NonNull Collection<@NonNull ? extends Image<?>> images) throws IllegalArgumentException {
+		Map<Path, Image<?>> byPath = new LinkedHashMap<>();
+
+		for (Image<?> image : images) {
+			Path path = Objects.requireNonNull(image, "image").path();
+			if (!path.isAbsolute() || byPath.putIfAbsent(path.normalize(), image) != null) {
+				throw new IllegalArgumentException("Images require unique absolute destinations");
+			}
+		}
+
+		for (Path path : byPath.keySet()) {
+			for (Path parent = path.getParent(); parent != null; parent = parent.getParent()) {
+				if (byPath.containsKey(parent)) {
+					throw new IllegalArgumentException("A file destination may not also be used as a directory");
+				}
+			}
+		}
+
+		return Set.copyOf(byPath.values());
+	}
+
+	/**
+	 * <h2>Alteration</h2>
 	 *
-	 * <h1>Alteration</h1>
-	 *
-	 * <p>
 	 * Describes the underlying filesystem state of a file's contents or existence.
-	 * </p>
-	 *
 	 */
 	sealed interface Alteration {
 	}
 
+	/**
+	 * <h2>File</h2>
+	 * 
+	 * Complete file-content expectations, distinguished from absence.
+	 */
 	sealed interface File extends Alteration {
 
+		/**
+		 * Assertion that no file exists at the image path.
+		 */
 		record Absent() implements File {
 		}
 
-		record Present(@NonNull Reference.Captured reference) implements File {
+		/**
+		 * Assertion of complete retained file content, including zero bytes.
+		 *
+		 * @param reference named captured content
+		 */
+		record Present(@NonNull Reference reference) implements File {
 		}
 	}
 
+	/**
+	 * <h2>Text</h2>
+	 * 
+	 * Text existence and selected content ranges. An empty fragment list asserts
+	 * existence without asserting any particular content for an existing file.
+	 */
 	sealed interface Text extends Alteration {
 
+		/**
+		 * Assertion that no text file exists at the image path.
+		 */
 		record Absent() implements Text {
 		}
 
+		/**
+		 * Selected ordered ranges, rather than an implicit complete-file snapshot.
+		 *
+		 * @param fragments immutable copied ranges, possibly empty
+		 */
 		record Present(@NonNull List<Chunk.Fragment> fragments) implements Text {
 
+			/**
+			 * Copies and validates fragment order and line termination.
+			 *
+			 * @throws IllegalArgumentException when fragments overlap or have invalid
+			 *                                  termination
+			 */
 			public Present {
 				fragments = List.copyOf(fragments);
 				Chunk.validateFragments(fragments);
@@ -205,14 +266,22 @@ public sealed interface Image<State extends Image.Alteration> {
 }
 
 /**
+ * <h2>Installation</h2>
+ * 
+ * Creates, deletes, or replaces a whole file. Both sides may be present, but
+ * both sides may not be absent. Equal references describe an unchanged file.
  *
- * <h1>Installation</h1>
- *
- * <p>
- * Creates or deletes a whole file. Exactly one side must be absent.
- * </p>
+ * @param before complete content or absence expected before the change
+ * @param after  complete content or absence described after the change
+ * @param path   target path retained as supplied
  */
 record Installation(@NonNull File before, @NonNull File after, @NonNull Path path) implements Image<Image.File> {
+
+	/**
+	 * Rejects an absence-to-absence description.
+	 *
+	 * @throws IllegalArgumentException when both sides are absent
+	 */
 	public Installation {
 		if (before instanceof File.Absent && after instanceof File.Absent) {
 			throw new IllegalArgumentException("Files may not both be absent!");
@@ -226,24 +295,36 @@ record Installation(@NonNull File before, @NonNull File after, @NonNull Path pat
 }
 
 /**
- *
- * <h1>Configuration</h1>
- *
- * <p>
+ * <h2>Configuration</h2>
+ * 
  * Stores corresponding text fragments, with equal unchanged gaps on both sides.
  * Creation/deletion describes all content from line zero without gaps;
  * consumers
  * must also check actual EOF when matching complete content. Both absent is
  * invalid; both present with no fragments is an unchanged existence assertion.
- * </p>
+ *
+ * @param before text expectations before the change
+ * @param after  text expectations after the change
+ * @param path   target path retained as supplied
  */
 record Configuration(@NonNull Text before, @NonNull Text after, @NonNull Path path) implements Image<Image.Text> {
 
+	/**
+	 * Projects each authored chunk into corresponding before and after fragments.
+	 *
+	 * @param chunks ordered authored chunks
+	 * @param path   target path
+	 */
 	public Configuration(@NonNull List<Chunk> chunks, @NonNull Path path) {
 		this(new Text.Present(chunks.stream().map(Chunk::before).toList()),
 				new Text.Present(chunks.stream().map(Chunk::after).toList()), path);
 	}
 
+	/**
+	 * Checks corresponding fragments and complete creation/deletion content.
+	 *
+	 * @throws IllegalArgumentException when existence, range, or gap rules disagree
+	 */
 	public Configuration {
 		validate(before, after);
 	}
@@ -254,13 +335,14 @@ record Configuration(@NonNull Text before, @NonNull Text after, @NonNull Path pa
 	}
 
 	/**
-	 * Validate text before and after
+	 * Checks text expectations without reading an actual file.
 	 *
 	 * @param before text before
 	 * @param after  text after
 	 *
-	 * @throws IllegalArgumentException when text states are both absent or gaps
-	 *                                  have occurred
+	 * @throws IllegalArgumentException when both states are absent, corresponding
+	 *                                  ranges have unequal gaps, or
+	 *                                  creation/deletion content is incomplete
 	 */
 	private static void validate(Text before, Text after) {
 		if (before instanceof Text.Absent && after instanceof Text.Absent) {

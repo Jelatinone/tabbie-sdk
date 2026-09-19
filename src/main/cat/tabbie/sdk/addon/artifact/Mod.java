@@ -30,11 +30,12 @@ public sealed interface Mod extends Artifact {
 			labels = Set.copyOf(labels);
 			depends = Set.copyOf(depends);
 			conflicts = Set.copyOf(conflicts);
+			validate();
 		}
 
 		@Override
 		public @NonNull Set<Image<?>> images(Context context) throws IOException {
-			return Artifact.fence(Artifact.DEFAULT.paint(this, context));
+			return Image.fence(Artifact.DEFAULT_ARTIST.paint(this, context));
 		}
 	}
 
@@ -58,11 +59,12 @@ public sealed interface Mod extends Artifact {
 			labels = Set.copyOf(labels);
 			depends = Set.copyOf(depends);
 			conflicts = Set.copyOf(conflicts);
+			validate();
 		}
 
 		@Override
 		public @NonNull Set<Image<?>> images(Context context) throws IOException {
-			return Artifact.fence(artist.paint(this, context));
+			return Image.fence(artist.paint(this, context));
 		}
 	}
 

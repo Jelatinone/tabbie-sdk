@@ -13,19 +13,17 @@ import lombok.NonNull;
 /**
  * <h2>Addon</h2>
  * 
- * <p>
  * A provider-owned catalog project with independently identified builds and
  * tags. Implementations supply immutable, non-null collections, a non-blank
- * name,
- * builds owned by this addon, and distinct build/tag identities. Discovery may
- * produce a project with no builds; each published {@link Build} is complete.
- * </p>
+ * name, builds owned by this addon, and distinct build/tag identities.
+ * Discovery may produce a project with no builds; each published {@link Build}
+ * is complete.
  */
 public interface Addon {
 
 	/**
 	 * Identifies the owning catalog provider.
-	 * 
+	 *
 	 * @return provider identity using the same marker as
 	 *         {@link Provider#providerId()}
 	 */
@@ -42,7 +40,7 @@ public interface Addon {
 
 	/**
 	 * Names this project for display.
-	 * 
+	 *
 	 * @return non-blank canonical name
 	 */
 	@NonNull
@@ -50,7 +48,7 @@ public interface Addon {
 
 	/**
 	 * Exposes immutable build declarations owned by this addon.
-	 * 
+	 *
 	 * @return builds with distinct identities, possibly empty
 	 */
 	@NonNull
@@ -66,13 +64,11 @@ public interface Addon {
 
 	/**
 	 * <h2>Build</h2>
-	 * <p>
+	 * 
 	 * A published selection of artifacts. Every artifact must explicitly support
 	 * every build label, while artifacts may declare additional supported targets.
-	 * External dependency availability and internal pack members are resolved
-	 * later.
-	 * </p>
-	 * 
+	 * External dependency availability is resolved later.
+	 *
 	 * @param addonId     owning catalog addon
 	 * @param buildId     immutable build identity
 	 * @param buildName   non-blank display name
@@ -93,6 +89,11 @@ public interface Addon {
 			@NonNull Set<Label> labels,
 			@NonNull Set<Artifact> artifacts) {
 
+		/**
+		 * Copies and checks the published artifact selection and advertised labels.
+		 *
+		 * @throws IllegalArgumentException when publication invariants are violated
+		 */
 		public Build {
 			labels = Set.copyOf(labels);
 			artifacts = Set.copyOf(artifacts);
@@ -105,13 +106,13 @@ public interface Addon {
 		/**
 		 * Assesses artifact type support and this build's explicit declaration.
 		 * A structurally unsupported artifact takes precedence over missing evidence.
-		 * 
+		 *
 		 * @param target selected runtime target
 		 * @return declared support, structural rejection, or unknown support
 		 */
 		public Compatibility compatibility(@NonNull Label target) {
 			Set<Compatibility> assessments = artifacts.stream()
-					.map(artifact -> artifact.compatibility(target)).collect(Collectors.toSet());
+					.map(target::compatibility).collect(Collectors.toSet());
 			if (assessments.contains(Compatibility.UNSUPPORTED)) {
 				return Compatibility.UNSUPPORTED;
 			}
@@ -123,7 +124,7 @@ public interface Addon {
 
 		/**
 		 * Checks copied constructor inputs before record fields are initialized.
-		 * 
+		 *
 		 * @param labels    advertised targets
 		 * @param artifacts directly bundled artifacts
 		 */
@@ -138,17 +139,29 @@ public interface Addon {
 			if (artifacts.stream().anyMatch(artifact -> artifact.conflicts().stream().anyMatch(ids::contains))) {
 				throw new IllegalArgumentException("Build artifacts conflict with each other.");
 			}
+
 			if (artifacts.stream().anyMatch(artifact -> labels.stream()
-					.anyMatch(label -> artifact.compatibility(label) != Compatibility.SUPPORTED))) {
+					.anyMatch(label -> label.compatibility(artifact) == Compatibility.UNSUPPORTED))) {
 				throw new IllegalArgumentException("Every build artifact must support every declared label.");
 			}
 		}
 	}
 
+	/**
+	 * Provider-defined immutable catalog tag.
+	 *
+	 * @param tagId   stable tag identity
+	 * @param tagName non-blank display name
+	 */
 	record Tag(
 			@NonNull Identity<Tag> tagId,
 			@NonNull String tagName) {
 
+		/**
+		 * Checks that a tag has a meaningful display name.
+		 *
+		 * @throws IllegalArgumentException when the name is blank
+		 */
 		public Tag {
 			if (tagName.isBlank()) {
 				throw new IllegalArgumentException("Tag name must be non-blank");
