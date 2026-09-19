@@ -3,17 +3,23 @@ package cat.tabbie.sdk.api;
 import lombok.NonNull;
 
 /**
+ * <h2>Query</h2>
+ * 
  * A typed read request to a local or remote queryable resource.
  *
  * @param <Criterion> selection criteria interpreted by the provider
  */
 public sealed interface Query<Criterion> {
 
-	/** @return non-null selection criteria */
+	/**
+	 * Returns the request's selection criteria.
+	 *
+	 * @return non-null selection criteria
+	 */
 	Criterion criteria();
 
 	/**
-	 * Exist
+	 * <h2>Exist</h2>
 	 * 
 	 * A collection request, returning whether an item exists
 	 *
@@ -24,7 +30,7 @@ public sealed interface Query<Criterion> {
 	}
 
 	/**
-	 * Count
+	 * <h2>Count</h2>
 	 *
 	 * A collection request, where the number of items is returned.
 	 *
@@ -35,7 +41,7 @@ public sealed interface Query<Criterion> {
 	}
 
 	/**
-	 * Singular
+	 * <h2>Singular</h2>
 	 *
 	 * A item request.
 	 *
@@ -46,7 +52,7 @@ public sealed interface Query<Criterion> {
 	}
 
 	/**
-	 * Several
+	 * <h2>Several</h2>
 	 *
 	 * A collection request; no limit means all matching results.
 	 *
@@ -55,6 +61,7 @@ public sealed interface Query<Criterion> {
 	 * @param limit       positive maximum result count, or null for no bound
 	 */
 	public record Several<Criterion>(@NonNull Criterion criteria, Integer limit) implements Query<Criterion> {
+
 		/**
 		 * Requests all matching results.
 		 *
@@ -64,6 +71,11 @@ public sealed interface Query<Criterion> {
 			this(criteria, null);
 		}
 
+		/**
+		 * Validates an optional positive limit.
+		 *
+		 * @throws IllegalArgumentException when the limit is not positive
+		 */
 		public Several {
 			if (limit != null && limit < 1) {
 				throw new IllegalArgumentException("limit must be positive");

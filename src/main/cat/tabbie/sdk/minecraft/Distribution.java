@@ -1,45 +1,53 @@
 package cat.tabbie.sdk.minecraft;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Set;
 
 import cat.tabbie.sdk.addon.artifact.Artifact;
+import cat.tabbie.sdk.addon.artifact.Behaviourpack;
 import cat.tabbie.sdk.addon.artifact.Mod;
+import cat.tabbie.sdk.addon.artifact.Modpack;
+import cat.tabbie.sdk.addon.artifact.Plugin;
+import cat.tabbie.sdk.addon.artifact.Resourcepack;
+import cat.tabbie.sdk.addon.artifact.Datapack;
 
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
 
 /**
+ * <h2>Distribution</h2>
  *
- * <h1>Distribution</h1>
+ * A stateless runtime family describing edition, environments, capabilities,
+ * and common content placement. Version resolution, installation conflicts,
+ * filesystem observations, and deployment belong to Core.
  *
- * <p>
- * Represents a Minecraft software distribution capable of providing a
- * runnable game or server environment.
- * </p>
+ * Canonical enum aliases delegate behavior to records but are not equal to
+ * them. Separately constructed instances of the same stateless record are
+ * equal.
  *
  */
 public sealed interface Distribution permits Distribution.Java, Distribution.Bedrock {
 
 	/**
-	 * Stable namespaced distribution identifier
+	 * Returns a stable, case-sensitive namespaced identifier.
 	 *
-	 * @return identifier
+	 * @return distribution identifier
 	 */
 	String id();
 
 	/**
-	 * Structurally supported physical environments
+	 * Returns supported physical runtime environments.
 	 *
-	 * @return supported environments
+	 * @return immutable environments
 	 */
 	Set<Environment> environments();
 
 	/**
-	 * Structurally supported artifact capabilities
+	 * Returns supported artifact-family class tokens.
 	 *
-	 * @return supported artifacts
+	 * @return immutable capabilities
 	 */
 	Set<Class<? extends Artifact>> capabilities();
 
@@ -66,15 +74,38 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 	 *                                  artifact type
 	 */
 	default Artifact.Layout layout(@NonNull Artifact artifact, @NonNull Artifact.Context context) throws IOException {
+
+		Environment environment = context.label().environment();
+		if (!environments().contains(environment)) {
+			throw new IllegalArgumentException(String.format(
+					"Distribution does not support %s environment",
+					environment.getClass().getSimpleName()));
+		}
 		if (!capabilities().contains(artifact.getClass())) {
 			throw new IllegalArgumentException(String.format(
 					"Distribution does not support %s artifact",
-					Artifact.class.getSimpleName()));
+					artifact.getClass().getSimpleName()));
 		}
+
 		return switch (artifact) {
-			case Mod _ -> {
-				yield new Artifact.Layout.Default(context.root().resolve("mods"), false);
-			}
+			case Mod _ ->
+				new Artifact.Layout.Root(false, Path.of("mods"));
+
+			case Plugin _ when this instanceof Java.Manager ->
+				new Artifact.Layout.Root(false, Path.of("plugins"));
+
+			case Resourcepack _ ->
+				new Artifact.Layout.Root(false, Path.of("resourcepacks"));
+
+			case Datapack _ ->
+				new Artifact.Layout.World(true, Path.of("datapacks"));
+
+			case Behaviourpack _ ->
+				new Artifact.Layout.World(true, Path.of("behavior_packs"));
+
+			case Modpack _ when this instanceof Java.Launcher ->
+				new Artifact.Layout.Root(true, Path.of("mods"));
+
 			default -> {
 				throw new IOException(String.format(
 						"Distribution has no default layout for %s artifact",
@@ -83,8 +114,20 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 		};
 	}
 
+	/**
+	 * <h2>Java</h2>
+	 * 
+	 * Java runtime families. Game versions and concrete runtime releases are
+	 * described and resolved separately from these stateless family values.
+	 */
 	sealed interface Java extends Distribution {
 
+		/**
+		 * <h2>Of</h2>
+		 * 
+		 * Canonical lookup aliases. Each delegates behavior to its concrete record,
+		 * but remains a distinct value for equality and label matching.
+		 */
 		@AllArgsConstructor
 		@FieldDefaults(makeFinal = true)
 		enum Of implements Java {
@@ -133,8 +176,7 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 
 		@Override
 		default Set<Class<? extends Artifact>> capabilities() {
-			// Default artifact types here soon:)
-			return Set.of();
+			return Set.of(Datapack.class, Resourcepack.Java.class, Modpack.class);
 		}
 
 		@Override
@@ -180,14 +222,14 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 			}
 		}
 
-		record CraftBukkit() implements Plugin {
+		record CraftBukkit() implements Manager {
 			@Override
 			public String id() {
 				return "java:craftbukkit";
 			}
 		}
 
-		record Spigot() implements Plugin {
+		record Spigot() implements Manager {
 
 			@Override
 			public String id() {
@@ -195,7 +237,7 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 			}
 		}
 
-		record Paper() implements Plugin {
+		record Paper() implements Manager {
 
 			@Override
 			public String id() {
@@ -203,7 +245,7 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 			}
 		}
 
-		record Purpur() implements Plugin {
+		record Purpur() implements Manager {
 
 			@Override
 			public String id() {
@@ -211,7 +253,7 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 			}
 		}
 
-		record Folia() implements Plugin {
+		record Folia() implements Manager {
 
 			@Override
 			public String id() {
@@ -219,16 +261,25 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 			}
 		}
 
+		/**
+		 * <h2>Launcher</h2>
+		 * 
+		 * Java loaders supporting mods on clients and dedicated servers.
+		 */
 		sealed interface Launcher extends Java {
 
 			@Override
 			default Set<Class<? extends Artifact>> capabilities() {
-				// Default artifact types here soon:)
-				return Set.of();
+				return Set.of(Mod.class, Datapack.class, Resourcepack.Java.class, Modpack.class);
 			}
 		}
 
-		sealed interface Plugin extends Java {
+		/**
+		 * <h2>Manager</h2>
+		 * 
+		 * Java plugin manager servers.
+		 */
+		sealed interface Manager extends Java {
 
 			@Override
 			default Set<Environment> environments() {
@@ -237,12 +288,18 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 
 			@Override
 			default Set<Class<? extends Artifact>> capabilities() {
-				// Default artifact types here soon:)
-				return Set.of();
+				return Set.of(Plugin.class, Datapack.class, Resourcepack.Java.class,
+						Modpack.class);
 			}
 		}
 	}
 
+	/**
+	 * <h2>Bedrock</h2>
+	 * 
+	 * Bedrock runtime families. Game versions and concrete runtime releases are
+	 * described and resolved separately from these stateless family values.
+	 */
 	sealed interface Bedrock extends Distribution {
 
 		@Override
@@ -252,8 +309,7 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 
 		@Override
 		default Set<Class<? extends Artifact>> capabilities() {
-			// Default artifact types here soon:)
-			return Set.of();
+			return Set.of(Behaviourpack.class, Resourcepack.Bedrock.class, Modpack.class);
 		}
 
 		@Override
@@ -261,14 +317,19 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 			return Version.Bedrock.applicable(version);
 		}
 
+		/**
+		 * <h2>Of</h2>
+		 * 
+		 * Canonical lookup aliases. Each delegates behavior to its concrete record,
+		 * but remains a distinct value for equality and label matching.
+		 */
 		@AllArgsConstructor
 		@FieldDefaults(makeFinal = true)
 		enum Of implements Bedrock {
 
 			BEDROCK_NATIVE(new Bedrock.Native()),
 
-			POCKET_MINE(new Bedrock.PocketMine()),
-			NUKKIT(new Bedrock.Nukkit()),
+			POCKET_MINE(new Bedrock.Endstone()),
 			POWER_NUKKITX(new Bedrock.PowerNukkitX());
 
 			@NonNull
@@ -303,15 +364,7 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 			}
 		}
 
-		record PocketMine() implements Plugin {
-
-			@Override
-			public String id() {
-				return "bedrock:pocketmine";
-			}
-		}
-
-		record Nukkit() implements Plugin {
+		record Endstone() implements Manager {
 
 			@Override
 			public String id() {
@@ -319,7 +372,7 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 			}
 		}
 
-		record PowerNukkitX() implements Plugin {
+		record PowerNukkitX() implements Manager {
 
 			@Override
 			public String id() {
@@ -327,7 +380,12 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 			}
 		}
 
-		sealed interface Plugin extends Distribution.Bedrock {
+		/**
+		 * <h2>Manager</h2<
+		 * 
+		 * Bedrock plugin manager servers.
+		 */
+		sealed interface Manager extends Distribution.Bedrock {
 
 			@Override
 			default Set<Environment> environments() {
@@ -336,7 +394,7 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 
 			@Override
 			default Set<Class<? extends Artifact>> capabilities() {
-				return Set.of();
+				return Set.of(Plugin.class, Resourcepack.Bedrock.class, Modpack.class);
 			}
 		}
 	}

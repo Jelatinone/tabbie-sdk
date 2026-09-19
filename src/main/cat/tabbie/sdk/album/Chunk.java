@@ -15,30 +15,24 @@ import lombok.Getter;
 import lombok.NonNull;
 
 /**
- *
  * <h2>Chunk</h2>
  *
- * <p>
  * One contiguous region of a text change, including its unchanged context. Each
  * ordered change consumes one before line unless it is an insertion, and one
  * after line unless it is a deletion. Context consumes a line on both sides.
  * Starting at the two ranges therefore determines every change's positions;
  * the consumed counts must equal the respective range counts.
- * </p>
  *
- * <p>
  * Each side projects to exactly one fragment, including zero-length fragments
  * at insertion/deletion boundaries. Manually authored chunks may be empty or
  * context-only. Across a file, chunks must be ordered and non-overlapping on
  * both sides, with equal lengths of omitted unchanged gaps.
- * </p>
- * <p>
+ *
  * Ranges start at zero and end exclusively. Line equality includes the exact
  * ending (LF, CRLF, CR, or none); line text excludes newline characters.
  * An unterminated line can only end its described file side. Collections are
  * immutable defensive copies.
- * </p>
- * 
+ *
  * @param changes     ordered context and edits
  * @param beforeRange original line range
  * @param afterRange  resulting line range
@@ -48,6 +42,11 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 	private static final Pattern LINE_PATTERN = Pattern.compile("([^\\r\\n]*)(\\r\\n|\\r|\\n|\\z)");
 	private static final Integer CONTEXT_LINES = 3;
 
+	/**
+	 * Copies changes and checks consumed counts and terminal lines on both sides.
+	 *
+	 * @throws IllegalArgumentException when changes disagree with either range
+	 */
 	public Chunk {
 		changes = List.copyOf(changes);
 		validateFragment(beforeRange, changes, Revision.INSERTION);
@@ -109,32 +108,31 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 	}
 
 	/**
-	 * Finds deterministic script with the shortest edits with unchanged context on each
-	 * side. Touching context windows merge. Adjacent edits merge even at zero
-	 * context.
+	 * Finds a deterministic shortest insertion/deletion script with three unchanged
+	 * context lines on each side. Touching context windows merge.
 	 *
 	 * Exact line endings participate in equality. Trace-based Myers search uses
 	 * O(N + M + D squared) space; extensive rewrites can consume substantial
 	 * memory, with no arbitrary cutoff or fallback.
-	 * 
+	 *
 	 * @param before original complete text
 	 * @param after  resulting complete text
 	 * @return immutable edited chunks, empty for identical input
-	 * @throws IllegalArgumentException when context is negative
 	 */
 	public static List<Chunk> diff(@NonNull String before, @NonNull String after) {
 		return diff(before, after, CONTEXT_LINES);
 	}
 
 	/**
-	 * Finds deterministic script with the shortest edits with unchanged context on each
-	 * side. Touching context windows merge. Adjacent edits merge even at zero
+	 * Finds a deterministic shortest insertion/deletion script with the requested
+	 * unchanged context on each side. Touching context windows merge. Adjacent
+	 * edits merge even at zero
 	 * context.
-	 * 
+	 *
 	 * Exact line endings participate in equality. Trace-based Myers search uses
 	 * O(N + M + D squared) space; extensive rewrites can consume substantial
 	 * memory, with no arbitrary cutoff or fallback.
-	 * 
+	 *
 	 * @param before       original complete text
 	 * @param after        resulting complete text
 	 * @param contextLines nonnegative surrounding unchanged line count
@@ -153,7 +151,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 	 * termination.
 	 * Empty boundaries at an unterminated end are allowed; later text or gaps are
 	 * not.
-	 * 
+	 *
 	 * @param fragments fragments in file order
 	 * @throws IllegalArgumentException when ranges overlap, regress, or follow an
 	 *                                  unterminated line
@@ -181,8 +179,8 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 	 * Empty boundaries at an unterminated end are allowed; later text or gaps are
 	 * not.
 	 *
-   * @param before fragments before in file order
-	 * @param after fragments after in file order
+	 * @param before fragments before in file order
+	 * @param after  fragments after in file order
 	 * @throws IllegalArgumentException when ranges overlap, regress, or follow an
 	 *                                  unterminated line
 	 */
@@ -209,7 +207,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
 	/**
 	 * Validates both projected sides of an authored chunk sequence.
-	 * 
+	 *
 	 * @param chunks chunks in file order
 	 * @throws IllegalArgumentException when ranges overlap or unchanged gaps differ
 	 */
@@ -225,7 +223,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
 	/**
 	 * Validates the lines consumed by one projected side.
-	 * 
+	 *
 	 * @param range    that side's declared range
 	 * @param changes  ordered script
 	 * @param excluded role that consumes no lines on this side
@@ -261,11 +259,9 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 	/**
 	 * <h2>Change</h2>
 	 * 
-	 * <p>
 	 * One exact line and its role. Positions follow from chunk ranges and
 	 * preceding changes, rather than being duplicated on each change.
-	 * </p>
-	 * 
+	 *
 	 * @param line     exact text and ending
 	 * @param revision consumption role
 	 */
@@ -274,9 +270,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 		/**
 		 * <h2>Sequence</h2>
 		 * 
-		 * <p>
 		 * Exact characters terminating a line, including no ending.
-		 * </p>
 		 */
 		@AllArgsConstructor
 		public enum Sequence {
@@ -312,9 +306,8 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
 		/**
 		 * <h2>Revision</h2>
-		 * <p>
+		 * 
 		 * A line's role within a text change, unrelated to resource revisions.
-		 * </p>
 		 */
 		public enum Revision {
 
@@ -349,10 +342,9 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
 		/**
 		 * <h2>Line</h2>
-		 * <p>
-		 * Text excluding newline characters, paired with its exact ending.
-		 * </p>
 		 * 
+		 * Text excluding newline characters, paired with its exact ending.
+		 *
 		 * @param text   line characters without CR or LF
 		 * @param ending original terminator, or none
 		 */
@@ -367,11 +359,10 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
 	/**
 	 * <h2>Range</h2>
-	 * <p>
+	 * 
 	 * A zero-based line range with an exclusive end. A zero count describes
 	 * an insertion/deletion boundary. The end must fit in a nonnegative integer.
-	 * </p>
-	 * 
+	 *
 	 * @param start zero-based first line or boundary
 	 * @param count consumed line count
 	 */
@@ -395,16 +386,20 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
 	/**
 	 * <h2>Fragment</h2>
-	 * <p>
+	 * 
 	 * One contiguous projection of a chunk's file side, including an empty
 	 * boundary.
-	 * </p>
-	 * 
+	 *
 	 * @param lines exact lines in file order
 	 * @param range described line range
 	 */
 	public record Fragment(@NonNull List<Change.Line> lines, @NonNull Range range) {
 
+		/**
+		 * Copies lines and checks the range count and line termination.
+		 *
+		 * @throws IllegalArgumentException when count or termination is invalid
+		 */
 		public Fragment {
 			lines = List.copyOf(lines);
 			validate(lines, range);
@@ -412,7 +407,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
 		/**
 		 * Checks local fragment shape without inspecting a complete file.
-		 * 
+		 *
 		 * @param lines exact lines in file order
 		 * @param range described range
 		 * @throws IllegalArgumentException when counts differ or a non-terminal line is
@@ -429,7 +424,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
 		/**
 		 * Reconstructs exact characters without normalizing or adding line endings.
-		 * 
+		 *
 		 * @return concatenated line text and terminators
 		 */
 		public String text() {
@@ -443,21 +438,17 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 	 *
 	 * <h2>Diff</h2>
 	 *
-	 * <p>
 	 * Finds a deterministic shortest insertion/deletion script and groups edits
 	 * with up to {@code contextLines} unchanged lines on either side. Touching or
 	 * overlapping windows merge; adjacent edits merge even with zero context.
 	 * With three context lines, six unchanged lines between edits merge, while
 	 * seven leave separate chunks. Equality includes each line's exact ending.
-	 * </p>
 	 *
-	 * <p>
 	 * Results are immutable, ordered, and contain edits; equal inputs return an
 	 * empty list. Trace-based Myers search uses O((N + M)(D + 1)) worst-case time
 	 * and O(N + M + D squared) space, where D is the number of inserted/deleted
 	 * lines. Extensive rewrites can require substantial trace memory; there is no
 	 * cutoff or alternative algorithm.
-	 * </p>
 	 *
 	 * @param before       original lines
 	 * @param after        resulting lines
@@ -467,7 +458,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
 		/**
 		 * Groups the complete edit script into contextual ranges.
-		 * 
+		 *
 		 * @return immutable generated chunks
 		 */
 		private List<Chunk> chunks() {
@@ -476,7 +467,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
 		/**
 		 * Trims matching ends for the search and restores them as context.
-		 * 
+		 *
 		 * @return complete ordered script
 		 */
 		private List<Change> changes() {
@@ -498,10 +489,10 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 		}
 
 		/**
-		 * Retain only reachable diagonals for reconstruction for each search depth.
+		 * Finds a shortest script, retaining reachable diagonals for reconstruction.
 		 *
-		 * @param before diagonal before
-		 * @param after  diagonal after
+		 * @param before original lines after trimming common ends
+		 * @param after  resulting lines after trimming common ends
 		 * @return shortest list of changes for complete reconstruction
 		 */
 		private static List<Change> shorten(List<Line> before, List<Line> after) {
@@ -538,11 +529,11 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 		/**
 		 * Deterministic predecessor choice for search and backtracking.
 		 *
-		 * @param previous previous
-		 * @param depth    depth
-		 * @param index    index
+		 * @param previous furthest original positions at the preceding edit depth
+		 * @param depth    current number of inserted/deleted lines
+		 * @param index    current reachable diagonal index
 		 *
-		 * @return insertion
+		 * @return whether insertion is the deterministic predecessor
 		 */
 		private static boolean insertion(int[] previous, int depth, int index) {
 			return index == 0 || (index < depth && previous[index - 1] < previous[index]);
@@ -550,7 +541,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
 		/**
 		 * Reconstructs the deterministic shortest path from saved frontiers.
-		 * 
+		 *
 		 * @param before trimmed original lines
 		 * @param after  trimmed resulting lines
 		 * @param trace  frontiers by search depth
@@ -627,7 +618,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
 		/**
 		 * Clamps a context window without overflowing its end calculation.
-		 * 
+		 *
 		 * @param edit script edit index
 		 * @param size complete script length
 		 * @return exclusive window end
@@ -638,7 +629,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
 		/**
 		 * Assigns one edit role to each supplied line.
-		 * 
+		 *
 		 * @param lines    exact lines
 		 * @param revision common edit role
 		 * @return projected changes

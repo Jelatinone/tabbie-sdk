@@ -7,21 +7,15 @@ import java.util.regex.Pattern;
 import lombok.NonNull;
 
 /**
- * <h1>Version</h1>
- *
- * <p>
+ * <h2>Version</h2>
+ * 
  * Represents a specific version of Minecraft.
- * </p>
  *
- * <p>
  * A version is identified by its edition-specific identifier and may include
  * metadata describing its release type and release date.
- * </p>
  *
- * <p>
  * Version discovery and loading are intentionally handled externally. This
  * type only models versions that have already been discovered.
- * </p>
  */
 public sealed interface Version
 		permits Version.Java, Version.Bedrock {
@@ -133,7 +127,9 @@ public sealed interface Version
 
 	private static String normalize(@NonNull String id) {
 		String result = id.strip().toLowerCase(Locale.ROOT);
-		if (result.isEmpty() || result.chars().anyMatch(Character::isWhitespace) || result.indexOf(':') >= 0) {
+		if (result.isEmpty()
+				|| result.chars().anyMatch(character -> Character.isWhitespace(character) || Character.isSpaceChar(character))
+				|| result.indexOf(':') >= 0) {
 			throw new IllegalArgumentException("Version identifiers must be non-blank and unqualified.");
 		}
 		return result;

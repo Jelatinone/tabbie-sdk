@@ -10,67 +10,69 @@ import java.util.OptionalLong;
 import lombok.NonNull;
 
 /**
- * <h1>Store</h1>
+ * <h2>Store</h2>
  *
- * Retains immutable content addressed by digest and size. Successful capture
- * publishes complete bytes atomically; a failed capture publishes nothing.
- * Implementations verify references, support independent repeated reads, and
- * keep content available for as long as their documented storage lifetime.
+ * Opens source content and retains immutable captured bytes. Implementations
+ * may acquire remote, local, cached, or generated content. Each successful
+ * capture publishes complete bytes; an I/O failure publishes no incomplete
+ * content.
+ *
+ * Captured references are verified by digest and size. Pending references
+ * select provider-owned named content with the declared size, without asserting
+ * a digest. Stores may deduplicate bytes across filenames. Providers document
+ * content lifetime, concurrency, and any limits; this interface supplies no
+ * backend.
  */
 public interface Store extends AutoCloseable {
 
 	/**
-	 * Opens verified content. The caller closes the returned independent stream.
-	 * 
-	 * @param reference retained content reference
-	 * 
-	 * @return readable content at position zero
-	 * 
-	 * @throws IOException when reading or retention fails
-	 */
-	@NonNull
-	InputStream open(@NonNull Reference reference) throws IOException;
-
-	/**
-	 * Retains bytes without closing the caller-owned stream.
-	 * 
-	 * @param source   stream consumed to EOF
-	 * @param observer transfer observer
-	 * 
-	 * @return retained content reference
-	 * 
-	 * @throws IOException when reading or retention fails
-	 */
-	@NonNull
-	Reference.Captured capture(@NonNull String fileName,
-			@NonNull InputStream source, @NonNull Observer observer) throws IOException;
-
-	/**
-	 * Retains bytes without closing the caller-owned stream.
+	 * Opens provider-designated primary content, when the store has one.
 	 *
-	 * @param source stream consumed to EOF
-	 * @return identity of the retained bytes
-	 * 
+	 * @return independent stream at position zero, owned by the caller
+	 * @throws IOException when no primary content is designated or readable
+	 */
+	@NonNull
+	InputStream open() throws IOException;
+
+	/**
+	 * Consumes the source to EOF and retains complete bytes, leaving the source
+	 * open. Reports progress for this transfer and then verification or an I/O
+	 * failure. Observer callbacks must not throw; an unchecked callback failure
+	 * propagates and does not imply retained content was rolled back.
+	 *
+	 * @param source   caller-owned stream
+	 * @param observer transfer callbacks
+	 * @return verified reference to retained bytes
 	 * @throws IOException when reading or retention fails
 	 */
 	@NonNull
-	default Reference.Captured capture(@NonNull String fileName, @NonNull InputStream source) throws IOException {
-		return capture(fileName, source, Observer.NONE);
+	Reference capture(@NonNull InputStream source, @NonNull Observer observer) throws IOException;
+
+	/**
+	 * Captures bytes without observing progress or closing the source.
+	 *
+	 * @param source caller-owned stream
+	 * @return verified reference to retained bytes
+	 * @throws IOException when reading or retention fails
+	 */
+	@NonNull
+	default Reference capture(@NonNull InputStream source) throws IOException {
+		return capture(source, Observer.NONE);
 	}
 
 	/**
-	 * Captures a local file and closes the stream opened by this method.
+	 * Captures a local file, deriving its filename and closing the opened stream.
 	 *
 	 * @param source file to read
-	 * 
-	 * @return retained content reference
-	 * 
-	 * @throws IOException when opening, reading, closing, or retention fails
+	 * @return verified reference to retained bytes
+	 * @throws IOException              when opening, reading, closing, or retention
+	 *                                  fails
+	 * @throws IllegalArgumentException when the path has no filename
 	 */
 	@NonNull
-	default Reference.Captured capture(@NonNull Path source) throws IOException {
+	default Reference capture(@NonNull Path source) throws IOException {
 		try (InputStream input = Files.newInputStream(source)) {
-			return capture(source.getFileName().toString(), input);
+			return capture(input);
 		}
 	}
 
@@ -82,19 +84,23 @@ public interface Store extends AutoCloseable {
 	 * @throws IOException when retention fails
 	 */
 	@NonNull
-	default Reference.Captured capture(@NonNull String fileName, @NonNull byte[] bytes) throws IOException {
-		return capture(fileName, new ByteArrayInputStream(bytes.clone()));
+	default Reference capture(@NonNull byte[] bytes) throws IOException {
+		return capture(new ByteArrayInputStream(bytes.clone()));
 	}
 
 	/**
-	 * 
 	 * <h2>Observer</h2>
 	 * 
-	 * Per-transfer callbacks to provide a caller with metrics. Byte counts concern
-	 * this source artifact only, not several artifacts.
+	 * Releases this store's resources according to its documented lifetime.
+	 * Artifact image generation never closes caller-owned stores.
+	 *
+	 * @throws IOException when resources cannot be released
 	 */
 	interface Observer {
 
+		/**
+		 * Observer that discards every notification.
+		 */
 		Observer NONE = new Observer() {
 		};
 
