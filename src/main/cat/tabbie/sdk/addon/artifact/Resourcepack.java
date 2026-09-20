@@ -49,7 +49,7 @@ public sealed interface Resourcepack extends Artifact {
         labels = Set.copyOf(labels);
         depends = Set.copyOf(depends);
         conflicts = Set.copyOf(conflicts);
-        validate();
+        Artifact.validate(Java.class, artifactId, artifactName, store, labels, depends, conflicts);
       }
 
       @Override
@@ -89,7 +89,7 @@ public sealed interface Resourcepack extends Artifact {
         labels = Set.copyOf(labels);
         depends = Set.copyOf(depends);
         conflicts = Set.copyOf(conflicts);
-        validate();
+        Artifact.validate(Java.class, artifactId, artifactName, store, labels, depends, conflicts);
       }
 
       @Override
@@ -135,7 +135,7 @@ public sealed interface Resourcepack extends Artifact {
         labels = Set.copyOf(labels);
         depends = Set.copyOf(depends);
         conflicts = Set.copyOf(conflicts);
-        validate();
+        Artifact.validate(Bedrock.class, artifactId, artifactName, store, labels, depends, conflicts);
       }
 
       @Override
@@ -176,7 +176,7 @@ public sealed interface Resourcepack extends Artifact {
         labels = Set.copyOf(labels);
         depends = Set.copyOf(depends);
         conflicts = Set.copyOf(conflicts);
-        validate();
+        Artifact.validate(Bedrock.class, artifactId, artifactName, store, labels, depends, conflicts);
       }
 
       @Override

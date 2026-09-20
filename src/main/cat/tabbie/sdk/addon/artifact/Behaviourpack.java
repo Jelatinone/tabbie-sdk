@@ -46,7 +46,7 @@ public sealed interface Behaviourpack extends Artifact {
       labels = Set.copyOf(labels);
       depends = Set.copyOf(depends);
       conflicts = Set.copyOf(conflicts);
-      validate();
+      Artifact.validate(Behaviourpack.class, artifactId, artifactName, store, labels, depends, conflicts);
     }
 
     @Override
@@ -87,7 +87,7 @@ public sealed interface Behaviourpack extends Artifact {
       labels = Set.copyOf(labels);
       depends = Set.copyOf(depends);
       conflicts = Set.copyOf(conflicts);
-      validate();
+      Artifact.validate(Behaviourpack.class, artifactId, artifactName, store, labels, depends, conflicts);
     }
 
     @Override

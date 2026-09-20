@@ -47,7 +47,7 @@ public sealed interface Modpack extends Artifact {
       labels = Set.copyOf(labels);
       depends = Set.copyOf(depends);
       conflicts = Set.copyOf(conflicts);
-      validate();
+      Artifact.validate(Modpack.class, artifactId, artifactName, store, labels, depends, conflicts);
     }
 
     @Override
@@ -87,7 +87,7 @@ public sealed interface Modpack extends Artifact {
       labels = Set.copyOf(labels);
       depends = Set.copyOf(depends);
       conflicts = Set.copyOf(conflicts);
-      validate();
+      Artifact.validate(Modpack.class, artifactId, artifactName, store, labels, depends, conflicts);
     }
 
     @Override

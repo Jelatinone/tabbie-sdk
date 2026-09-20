@@ -44,7 +44,7 @@ public sealed interface Datapack extends Artifact {
       labels = Set.copyOf(labels);
       depends = Set.copyOf(depends);
       conflicts = Set.copyOf(conflicts);
-      validate();
+      Artifact.validate(Datapack.class, artifactId, artifactName, store, labels, depends, conflicts);
     }
 
     @Override
@@ -85,7 +85,7 @@ public sealed interface Datapack extends Artifact {
       labels = Set.copyOf(labels);
       depends = Set.copyOf(depends);
       conflicts = Set.copyOf(conflicts);
-      validate();
+      Artifact.validate(Datapack.class, artifactId, artifactName, store, labels, depends, conflicts);
     }
 
     @Override

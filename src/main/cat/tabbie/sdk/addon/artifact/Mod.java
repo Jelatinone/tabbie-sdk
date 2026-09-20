@@ -10,8 +10,23 @@ import cat.tabbie.sdk.album.Store;
 import cat.tabbie.sdk.minecraft.Label;
 import lombok.NonNull;
 
+/**
+ * Java loader mod content. Compatibility is declared explicitly per
+ * distribution;
+ * support for one server fork does not imply support for another.
+ */
 public sealed interface Mod extends Artifact {
-
+  /**
+   * An artifact using the shared named-file and ZIP capture artist.
+   *
+   * @param artifactId   stable catalog artifact identity
+   * @param artifactName non-blank display name
+   * @param fileName     source filename known before acquisition
+   * @param store        caller-owned source store
+   * @param labels       nonempty supported targets
+   * @param depends      external dependencies
+   * @param conflicts    external conflicts
+   */
   record Default(
       Identity<Artifact> artifactId,
       String artifactName,
@@ -25,12 +40,17 @@ public sealed interface Mod extends Artifact {
       Set<Identity<Artifact>> conflicts
 
   ) implements Mod {
-
+    /**
+     * Copies collections and checks local declarations without reading content.
+     *
+     * @throws IllegalArgumentException when declared support or relationships are
+     *                                  invalid
+     */
     public Default {
       labels = Set.copyOf(labels);
       depends = Set.copyOf(depends);
       conflicts = Set.copyOf(conflicts);
-      validate();
+      Artifact.validate(Mod.class, artifactId, artifactName, store, labels, depends, conflicts);
     }
 
     @Override
@@ -39,6 +59,18 @@ public sealed interface Mod extends Artifact {
     }
   }
 
+  /**
+   * An artifact whose content images are described by a caller-supplied artist.
+   *
+   * @param artifactId   stable catalog artifact identity
+   * @param artifactName non-blank display name
+   * @param fileName     source filename known before acquisition
+   * @param store        caller-owned source store
+   * @param labels       nonempty supported targets
+   * @param depends      external dependencies
+   * @param conflicts    external conflicts
+   * @param artist       typed content description strategy
+   */
   record Custom(
       Identity<Artifact> artifactId,
       String artifactName,
@@ -54,12 +86,17 @@ public sealed interface Mod extends Artifact {
       @NonNull Artist<Mod> artist
 
   ) implements Mod {
-
+    /**
+     * Copies collections and checks local declarations without reading content.
+     *
+     * @throws IllegalArgumentException when declared support or relationships are
+     *                                  invalid
+     */
     public Custom {
       labels = Set.copyOf(labels);
       depends = Set.copyOf(depends);
       conflicts = Set.copyOf(conflicts);
-      validate();
+      Artifact.validate(Mod.class, artifactId, artifactName, store, labels, depends, conflicts);
     }
 
     @Override

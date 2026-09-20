@@ -6,8 +6,6 @@ import cat.tabbie.sdk.api.Queryable;
 import lombok.NonNull;
 
 /**
- * <h2>Provider</h2>
- * 
  * Catalog discovery capability, independent of transport or storage. Providers
  * may describe remote, local, cached, or generated content. Implementations
  * return validated immutable addon declarations and distinguish failed
@@ -17,19 +15,19 @@ import lombok.NonNull;
  */
 public interface Provider<Criterion extends Criteria<Identity<Addon>>> extends Queryable<Criterion, Addon> {
 
-	/**
-	 * Stable provider identity, also used by its catalog addons
-	 *
-	 * @return provider identity
-	 */
-	@NonNull
-	Identity<Provider<?>> providerId();
+  /**
+   * Stable provider identity, also used by its catalog addons
+   *
+   * @return provider identity
+   */
+  @NonNull
+  Identity<Provider<?>> providerId();
 
-	/**
-	 * Human-readable canonical provider name
-	 *
-	 * @return provider name
-	 */
-	@NonNull
-	String providerName();
+  /**
+   * Human-readable canonical provider name
+   *
+   * @return provider name
+   */
+  @NonNull
+  String providerName();
 }
