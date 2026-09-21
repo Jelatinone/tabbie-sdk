@@ -3,23 +3,23 @@ package cat.tabbie.sdk.album;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.OptionalLong;
 
 import lombok.NonNull;
 
 /**
- * Opens source content and retains immutable captured bytes. Implementations
- * may acquire remote, local, cached, or generated content. Each successful
- * capture publishes complete bytes; an I/O failure publishes no incomplete
- * content.
+ * Opens source content and retains immutable captured bytes for a specific
+ * item. Implementations may acquire remote, local, cached, or generated
+ * content. Each successful capture publishes complete bytes; an I/O failure
+ * publishes no incomplete content.
  *
- * Captured references are verified by digest and size. Pending references
- * select provider-owned named content with the declared size, without asserting
- * a digest. Stores may deduplicate bytes across filenames. Providers document
- * content lifetime, concurrency, and any limits; this interface supplies no
- * backend.
+ * Captured references are verified by digest and size. Stores may deduplicate
+ * bytes across filenames. Retention implementations keep bytes readable until
+ * their documented lifetime ends or their owner explicitly reclaims them. Core
+ * owns revision/backup retention. Providers document concurrency and limits;
+ * this interface supplies no backend. Sources supply open() and, for named-file
+ * placement, fileName(). Known catalog checksums are verified by the source;
+ * retention stores implement capture, open(reference), and exists(reference).
  */
 public interface Store extends AutoCloseable {
 
@@ -40,7 +40,9 @@ public interface Store extends AutoCloseable {
    * @return whether primary content is locally available
    * @throws IOException when availability cannot be checked
    */
-  boolean exists() throws IOException;
+  default boolean exists() throws IOException {
+    return false;
+  }
 
   /**
    * Consumes the source to EOF and retains complete bytes, leaving the source
@@ -68,22 +70,6 @@ public interface Store extends AutoCloseable {
   @NonNull
   default Reference capture(@NonNull InputStream source) throws IOException {
     return capture(source, Observer.NONE);
-  }
-
-  /**
-   * Captures a local file, deriving its filename and closing the opened stream.
-   *
-   * @param source file to read
-   * @return verified reference to retained bytes
-   * @throws IOException              when opening, reading, closing, or retention
-   *                                  fails
-   * @throws IllegalArgumentException when the path has no filename
-   */
-  @NonNull
-  default Reference capture(@NonNull Path source) throws IOException {
-    try (InputStream input = Files.newInputStream(source)) {
-      return capture(input);
-    }
   }
 
   /**
@@ -124,7 +110,7 @@ public interface Store extends AutoCloseable {
 
     /**
      * Observe in-progress transfer statistics
-     * 
+     *
      * @param transferredSize current total bytes transferred
      * @param expectedSize    expected total bytes transferred
      */
@@ -133,7 +119,7 @@ public interface Store extends AutoCloseable {
 
     /**
      * Observe complete transfer verification of a capture
-     * 
+     *
      * @param reference verified capture reference
      */
     default void verified(Reference reference) {
@@ -141,7 +127,7 @@ public interface Store extends AutoCloseable {
 
     /**
      * Observe failed transfer verification of a capture
-     * 
+     *
      * @param failure failed capture exception
      */
     default void failed(IOException failure) {

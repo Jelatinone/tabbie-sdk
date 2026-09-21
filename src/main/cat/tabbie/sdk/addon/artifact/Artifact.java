@@ -7,13 +7,12 @@ import java.util.Map;
 import java.util.Set;
 
 import cat.tabbie.sdk.Identity;
-import cat.tabbie.sdk.album.Reference;
+import cat.tabbie.sdk.album.Archive;
 import cat.tabbie.sdk.album.Image;
+import cat.tabbie.sdk.album.Reference;
 import cat.tabbie.sdk.album.Store;
 import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Label;
-import cat.tabbie.sdk.album.Archive;
-
 import lombok.NonNull;
 
 /**
@@ -25,6 +24,9 @@ import lombok.NonNull;
  */
 public interface Artifact {
 
+  /**
+   * Shared source-to-retention capture strategy.
+   */
   Artist<Artifact> DEFAULT_ARTIST = new Artist.Default();
 
   /**
@@ -37,7 +39,7 @@ public interface Artifact {
 
   /**
    * Human-readable canonical artifact name
-   * 
+   *
    * @return artifact name
    */
   @NonNull
@@ -45,7 +47,7 @@ public interface Artifact {
 
   /**
    * Delegated storage receiving capture/open calls
-   * 
+   *
    * @return delegated storage
    */
   Store store();
@@ -60,7 +62,7 @@ public interface Artifact {
 
   /**
    * Artifact identities that must be installed alongside this artifact
-   * 
+   *
    * @return depending artifact identities
    */
   @NonNull
@@ -68,7 +70,7 @@ public interface Artifact {
 
   /**
    * Artifact identities that may not be installed alongside this artifact
-   * 
+   *
    * @return conflicting artifact identities
    */
   @NonNull
@@ -76,30 +78,31 @@ public interface Artifact {
 
   /**
    * Payload installation images relative to this type's installation root.
-   * 
+   *
+   * @param context target mounts and retention store
    * @return installation images
+   * @throws IOException when acquisition, capture, or layout resolution fails
    */
   @NonNull
   Set<Image<?>> images(@NonNull Context context) throws IOException;
 
   /**
    * Checks copied constructor parameters before record fields are assigned.
-   * 
-   * @param family    artifact family token
-   * @param id        exact artifact identity
-   * @param name      display name
-   * @param fileName  single source filename
-   * @param store     source store
-   * @param labels    declared targets
-   * @param depends   required identities
-   * @param conflicts incompatible identities
-   * 
+   *
+   * @param artifactFamily artifact family token
+   * @param artifactId     exact artifact identity
+   * @param artifactName   display name
+   * @param store          source store
+   * @param labels         declared targets
+   * @param depends        required identities
+   * @param conflicts      incompatible identities
+   *
    * @throws IllegalArgumentException when declarations contradict structural
    *                                  facts
    */
   static void validate(
       @NonNull Class<? extends Artifact> artifactFamily,
-      @NonNull Identity<Artifact> arrtifactId,
+      @NonNull Identity<Artifact> artifactId,
       @NonNull String artifactName,
 
       @NonNull Store store,
@@ -114,13 +117,19 @@ public interface Artifact {
     if (labels.stream().anyMatch(label -> !label.distribution().supports(artifactFamily))) {
       throw new IllegalArgumentException("A declared distribution does not support this artifact family.");
     }
-    if (depends.contains(arrtifactId) || conflicts.contains(arrtifactId)
+    if (depends.contains(artifactId) || conflicts.contains(artifactId)
         || depends.stream().anyMatch(conflicts::contains)) {
       throw new IllegalArgumentException("External relationships must not reference self or contradict each other.");
     }
   }
 
-  public static void require(Artifact artifact, Context context) {
+  /**
+   * Requires an explicitly supported target before invoking an artist.
+   *
+   * @param artifact source artifact
+   * @param context  selected target
+   */
+  static void require(@NonNull Artifact artifact, @NonNull Context context) {
     if (context.label().compatibility(artifact) != Compatibility.SUPPORTED) {
       throw new IllegalArgumentException("Image generation requires explicit target support.");
     }
@@ -128,7 +137,7 @@ public interface Artifact {
 
   /**
    * Describes content without applying it.
-   * 
+   *
    * @param <Canvas> accepted artifact family
    */
   @FunctionalInterface
@@ -136,7 +145,7 @@ public interface Artifact {
 
     /**
      * Captures and describes the supplied content.
-     * 
+     *
      * @param artifact source artifact
      * @param context  target context
      * @return described images
@@ -168,7 +177,7 @@ public interface Artifact {
                 layout.relativePath()
                     .resolve(captured.fileName()),
                 captured);
-            return Image.fence(Set.of(image));
+            return Set.of(image);
           }
         }
       }
@@ -184,7 +193,7 @@ public interface Artifact {
 
     /**
      * Returns explicitly selected target.
-     * 
+     *
      * @return explicitly selected target
      */
     @NonNull
@@ -192,7 +201,7 @@ public interface Artifact {
 
     /**
      * Returns caller-owned retention store.
-     * 
+     *
      * @return caller-owned retention store
      */
     @NonNull
@@ -200,7 +209,7 @@ public interface Artifact {
 
     /**
      * Returns mount relative to the Den, empty for its working directory.
-     * 
+     *
      * @return mount relative to the Den, empty for its working directory
      */
     @NonNull
@@ -208,14 +217,14 @@ public interface Artifact {
 
     /**
      * Returns selected world mount relative to this context's root, if selected.
-     * 
+     *
      * @return selected world mount relative to this context's root, if selected
      */
     Path worldRoot();
 
     /**
      * Returns per-artifact layout overrides.
-     * 
+     *
      * @return per-artifact layout overrides
      */
     default Map<Identity<Artifact>, Layout> layouts() {
@@ -224,7 +233,7 @@ public interface Artifact {
 
     /**
      * Binds a scoped layout to a normalized Den-relative destination.
-     * 
+     *
      * @param layout scoped destination
      * @return Den-relative directory
      * @throws IOException when a world layout has no selected world mount
@@ -240,7 +249,7 @@ public interface Artifact {
 
     /**
      * Selects an override or the distribution's default layout.
-     * 
+     *
      * @param artifact selected artifact
      * @return scoped logical layout
      * @throws IOException when no default or override exists
@@ -251,7 +260,19 @@ public interface Artifact {
       return override != null ? override : label().distribution().layout(artifact, this);
     }
 
-    record Default(Label label, Store store, Path contextRoot, Path worldRoot) implements Context {
+    /**
+     * Immutable context with explicit root and world mounts.
+     *
+     * @param label       selected target
+     * @param store       retention store
+     * @param contextRoot Den-relative context mount
+     * @param worldRoot   selected world relative to the context mount
+     */
+    record Default(@NonNull Label label, @NonNull Store store, @NonNull Path contextRoot, @NonNull Path worldRoot)
+        implements Context {
+      /**
+       * Validates and normalizes both logical mounts without filesystem access.
+       */
       public Default {
         contextRoot = Image.relative(contextRoot);
         worldRoot = Image.relative(worldRoot);
@@ -261,8 +282,6 @@ public interface Artifact {
   }
 
   /**
-   * <h2>Layout</h2>
-   * 
    * Scoped directory; an unpacking layout names the exact extraction root.
    */
   sealed interface Layout
@@ -270,14 +289,14 @@ public interface Artifact {
 
     /**
      * Returns whether to capture ZIP entries instead of the original file.
-     * 
+     *
      * @return whether to capture ZIP entries instead of the original file
      */
     boolean unpack();
 
     /**
      * Returns normalized directory relative to the corresponding mount.
-     * 
+     *
      * @return normalized directory relative to the corresponding mount
      */
     @NonNull
@@ -285,12 +304,15 @@ public interface Artifact {
 
     /**
      * Directory relative to the assembled Den/context root.
-     * 
+     *
      * @param unpack       whether to unpack the payload
      * @param relativePath destination directory
      */
     record Root(boolean unpack, Path relativePath) implements Layout {
 
+      /**
+       * Validates and normalizes the mount-relative destination.
+       */
       public Root {
         relativePath = Image.relative(relativePath);
       }
@@ -298,12 +320,15 @@ public interface Artifact {
 
     /**
      * Directory relative to the selected world's mount.
-     * 
+     *
      * @param unpack       whether to unpack the payload
      * @param relativePath destination directory
      */
     record World(boolean unpack, Path relativePath) implements Layout {
 
+      /**
+       * Validates and normalizes the world-relative destination.
+       */
       public World {
         relativePath = Image.relative(relativePath);
       }

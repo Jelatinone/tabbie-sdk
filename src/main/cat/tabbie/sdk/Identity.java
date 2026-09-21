@@ -7,7 +7,7 @@ import lombok.NonNull;
 
 /**
  * A stable UUID reference to a given resource.
- * 
+ *
  * @param <T> the referenced domain type; this marker is checked at compile time
  * @param id  stable UUID, independent of revisions and content hashes
  *

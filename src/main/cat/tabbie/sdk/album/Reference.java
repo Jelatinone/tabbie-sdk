@@ -11,10 +11,14 @@ import lombok.NonNull;
  * Identity of immutable bytes, independent of their storage location.
  *
  * @param fileName name in file system
+ * @param sha256 lowercase SHA-256 digest of complete bytes
  * @param size     exact byte count
  */
 public record Reference(@NonNull String fileName, @NonNull String sha256, long size) {
 
+  /**
+   * Checks a single filename, a lowercase digest, and a nonnegative byte count.
+   */
   public Reference {
     validateFilename(fileName);
     if (size < 0L) {
@@ -43,6 +47,7 @@ public record Reference(@NonNull String fileName, @NonNull String sha256, long s
   /**
    * Computes a reference without retaining or modifying the supplied bytes.
    *
+   * @param fileName single filename
    * @param bytes content to identify
    * @return SHA-256 reference and exact size
    */

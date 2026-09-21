@@ -238,7 +238,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
   /**
    * Projects one side while retaining exact line objects.
-   * 
+   *
    * @param range    that side's declared range
    * @param changes  ordered script
    * @param excluded role to omit
@@ -291,7 +291,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
       /**
        * Exact terminator characters.
-       * 
+       *
        * @return exact terminator characters, possibly empty
        */
       @Getter
@@ -320,7 +320,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
       /**
        * Exchanges insertion and deletion, preserving context.
-       * 
+       *
        * @return inverse consumption role
        */
       public Revision invert() {
@@ -339,6 +339,9 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
      * @param ending original terminator, or none
      */
     public record Line(@NonNull String text, @NonNull Sequence ending) {
+      /**
+       * Checks that line content excludes terminators.
+       */
       public Line {
         if (text.indexOf('\r') >= 0 || text.indexOf('\n') >= 0) {
           throw new IllegalArgumentException("Line text must not contain newline characters.");
@@ -356,6 +359,9 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
    */
   public record Range(int start, int count) {
 
+    /**
+     * Checks nonnegative start/count and a representable end position.
+     */
     public Range {
       if (start < 0 || count < 0 || (long) start + count > Integer.MAX_VALUE) {
         throw new IllegalArgumentException("Line range must have a valid non-negative end.");
@@ -364,7 +370,7 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
     /**
      * Computes the previously validated exclusive end.
-     * 
+     *
      * @return start plus count
      */
     public int end() {

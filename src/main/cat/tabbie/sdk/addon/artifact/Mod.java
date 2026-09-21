@@ -5,7 +5,6 @@ import java.util.Set;
 
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.album.Image;
-import cat.tabbie.sdk.album.Reference;
 import cat.tabbie.sdk.album.Store;
 import cat.tabbie.sdk.minecraft.Label;
 import lombok.NonNull;
@@ -21,7 +20,6 @@ public sealed interface Mod extends Artifact {
    *
    * @param artifactId   stable catalog artifact identity
    * @param artifactName non-blank display name
-   * @param fileName     source filename known before acquisition
    * @param store        caller-owned source store
    * @param labels       nonempty supported targets
    * @param depends      external dependencies
@@ -30,7 +28,6 @@ public sealed interface Mod extends Artifact {
   record Default(
       Identity<Artifact> artifactId,
       String artifactName,
-      Reference artifactReference,
 
       Store store,
 
@@ -55,7 +52,7 @@ public sealed interface Mod extends Artifact {
 
     @Override
     public @NonNull Set<Image<?>> images(Context context) throws IOException {
-      return Image.fence(Artifact.DEFAULT_ARTIST.paint(this, context));
+      return Image.fence(Artifact.DEFAULT_ARTIST.paint(this, context), Image.relative(context.contextRoot()));
     }
   }
 
@@ -64,7 +61,6 @@ public sealed interface Mod extends Artifact {
    *
    * @param artifactId   stable catalog artifact identity
    * @param artifactName non-blank display name
-   * @param fileName     source filename known before acquisition
    * @param store        caller-owned source store
    * @param labels       nonempty supported targets
    * @param depends      external dependencies
@@ -74,7 +70,6 @@ public sealed interface Mod extends Artifact {
   record Custom(
       Identity<Artifact> artifactId,
       String artifactName,
-      Reference artifactReference,
 
       Store store,
 
@@ -101,7 +96,7 @@ public sealed interface Mod extends Artifact {
 
     @Override
     public @NonNull Set<Image<?>> images(Context context) throws IOException {
-      return Image.fence(artist().paint(this, context));
+      return Image.fence(artist().paint(this, context), Image.relative(context.contextRoot()));
     }
   }
 

@@ -39,6 +39,16 @@ public sealed interface Version
   Instant releaseDate();
 
   /**
+   * Compares edition and normalized identifier independently of release metadata.
+   *
+   * @param other discovered version
+   * @return whether edition and identifier agree
+   */
+  default boolean match(@NonNull Version other) {
+    return getClass() == other.getClass() && id().equals(other.id());
+  }
+
+  /**
    *
    * A discovered Java Edition version.
    *
@@ -51,10 +61,16 @@ public sealed interface Version
       @NonNull Java.Release releaseType,
       @NonNull Instant releaseDate) implements Version {
 
+    /**
+     * Normalizes the edition-specific identifier.
+     */
     public Java {
       id = normalize(id);
     }
 
+    /**
+     * Provider-reported release classification, independent of version identity.
+     */
     public enum Release {
 
       RELEASE,
@@ -74,7 +90,7 @@ public sealed interface Version
 
     /**
      * Whether a version is applicable to this version kind
-     * 
+     *
      * @param version version target
      * @return whether a version is applicable
      */
@@ -95,10 +111,16 @@ public sealed interface Version
       @NonNull Bedrock.Release releaseType,
       @NonNull Instant releaseDate) implements Version {
 
+    /**
+     * Normalizes the edition-specific identifier.
+     */
     public Bedrock {
       id = normalize(id);
     }
 
+    /**
+     * Provider-reported release classification, independent of version identity.
+     */
     public enum Release {
 
       RELEASE,
@@ -114,7 +136,7 @@ public sealed interface Version
 
     /**
      * Whether a version is applicable to this version kind
-     * 
+     *
      * @param version version target
      * @return whether a version is applicable
      */

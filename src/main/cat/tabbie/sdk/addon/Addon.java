@@ -31,7 +31,7 @@ public interface Addon {
 
   /**
    * Identifies this project independently of its builds.
-   * 
+   *
    * @return stable addon identity
    */
   @NonNull
@@ -55,7 +55,7 @@ public interface Addon {
 
   /**
    * Exposes provider-defined catalog tags.
-   * 
+   *
    * @return immutable tags with distinct identities, possibly empty
    */
   @NonNull
@@ -121,7 +121,7 @@ public interface Addon {
 
     /**
      * Checks copied constructor inputs before record fields are initialized.
-     * 
+     *
      * @param labels    advertised targets
      * @param artifacts directly bundled artifacts
      */
@@ -141,7 +141,7 @@ public interface Addon {
       }
 
       if (artifacts.stream().anyMatch(artifact -> labels.stream()
-          .anyMatch(label -> label.compatibility(artifact) == Compatibility.UNSUPPORTED))) {
+          .anyMatch(label -> label.compatibility(artifact) != Compatibility.SUPPORTED))) {
         throw new IllegalArgumentException("Every build artifact must support every declared label.");
       }
     }

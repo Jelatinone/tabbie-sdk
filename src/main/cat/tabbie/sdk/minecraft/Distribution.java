@@ -6,12 +6,11 @@ import java.util.Set;
 
 import cat.tabbie.sdk.addon.artifact.Artifact;
 import cat.tabbie.sdk.addon.artifact.Behaviourpack;
+import cat.tabbie.sdk.addon.artifact.Datapack;
 import cat.tabbie.sdk.addon.artifact.Mod;
 import cat.tabbie.sdk.addon.artifact.Modpack;
 import cat.tabbie.sdk.addon.artifact.Plugin;
 import cat.tabbie.sdk.addon.artifact.Resourcepack;
-import cat.tabbie.sdk.addon.artifact.Datapack;
-
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
@@ -51,7 +50,7 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 
   /**
    * Tests edition membership without discovering a runtime release.
-   * 
+   *
    * @param version discovered game version
    * @return whether the version belongs to the supported edition
    */
@@ -59,7 +58,7 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
 
   /**
    * Tests a family interface or concrete artifact against family capabilities.
-   * 
+   *
    * @param family family or implementation class
    * @return whether a declared capability is assignable from the supplied type
    */
@@ -71,12 +70,12 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
    * Determines image layout for this distribution; context implementations may
    * supply additional custom data. Including server resource-pack delivery. This
    * method does not discover installation directories.
-   * 
+   *
    * @param artifact reference artifact
    * @param context  reference context
-   * 
+   *
    * @return distribution relative context
-   * 
+   *
    * @throws IOException              when no matching layout can be determined
    * @throws IllegalArgumentException when this distribution does not support the
    *                                  artifact type
@@ -89,7 +88,7 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
           "Distribution does not support %s environment",
           environment.getClass().getSimpleName()));
     }
-    if (!capabilities().contains(artifact.getClass())) {
+    if (!supports(artifact.getClass())) {
       throw new IllegalArgumentException(String.format(
           "Distribution does not support %s artifact",
           artifact.getClass().getSimpleName()));
@@ -106,10 +105,10 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
         new Artifact.Layout.Root(false, Path.of("resourcepacks"));
 
       case Datapack _ ->
-        new Artifact.Layout.World(true, Path.of("datapacks"));
+        new Artifact.Layout.World(true, Path.of("datapacks", artifact.artifactId().id().toString()));
 
       case Behaviourpack _ ->
-        new Artifact.Layout.World(true, Path.of("behavior_packs"));
+        new Artifact.Layout.World(true, Path.of("behavior_packs", artifact.artifactId().id().toString()));
 
       case Modpack _ when this instanceof Java.Launcher ->
         new Artifact.Layout.Root(true, Path.of("mods"));
@@ -136,17 +135,47 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
     @FieldDefaults(makeFinal = true)
     enum Of implements Java {
 
+      /**
+       * Canonical alias of {@link Java.Native}.
+       */
       JAVA_NATIVE(new Java.Native()),
 
+      /**
+       * Canonical alias of {@link Java.Fabric}.
+       */
       FABRIC(new Java.Fabric()),
+      /**
+       * Canonical alias of {@link Java.Quilt}.
+       */
       QUILT(new Java.Quilt()),
+      /**
+       * Canonical alias of {@link Java.Forge}.
+       */
       FORGE(new Java.Forge()),
+      /**
+       * Canonical alias of {@link Java.NeoForge}.
+       */
       NEO_FORGE(new Java.NeoForge()),
 
+      /**
+       * Canonical alias of {@link Java.CraftBukkit}.
+       */
       CRAFT_BUKKIT(new Java.CraftBukkit()),
+      /**
+       * Canonical alias of {@link Java.Spigot}.
+       */
       SPIGOT(new Java.Spigot()),
+      /**
+       * Canonical alias of {@link Java.Paper}.
+       */
       PAPER(new Java.Paper()),
+      /**
+       * Canonical alias of {@link Java.Purpur}.
+       */
       PURPUR(new Java.Purpur()),
+      /**
+       * Canonical alias of {@link Java.Folia}.
+       */
       FOLIA(new Java.Folia());
 
       @NonNull
@@ -171,6 +200,11 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
       public boolean applicable(@NonNull Version version) {
         return distribution.applicable(version);
       }
+
+      @Override
+      public Artifact.Layout layout(@NonNull Artifact artifact, @NonNull Artifact.Context context) throws IOException {
+        return distribution.layout(artifact, context);
+      }
     }
 
     @Override
@@ -188,6 +222,9 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
       return Version.Java.applicable(version);
     }
 
+    /**
+     * Native runtime family; exact releases are provider-resolved.
+     */
     record Native() implements Java {
 
       @Override
@@ -196,6 +233,9 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
       }
     }
 
+    /**
+     * Fabric runtime family; exact releases are provider-resolved.
+     */
     record Fabric() implements Launcher {
 
       @Override
@@ -204,6 +244,9 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
       }
     }
 
+    /**
+     * Quilt runtime family; exact releases are provider-resolved.
+     */
     record Quilt() implements Launcher {
 
       @Override
@@ -212,6 +255,9 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
       }
     }
 
+    /**
+     * Forge runtime family; exact releases are provider-resolved.
+     */
     record Forge() implements Launcher {
       @Override
       public String id() {
@@ -219,6 +265,9 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
       }
     }
 
+    /**
+     * NeoForge runtime family; exact releases are provider-resolved.
+     */
     record NeoForge() implements Launcher {
       @Override
       public String id() {
@@ -226,6 +275,9 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
       }
     }
 
+    /**
+     * CraftBukkit runtime family; exact releases are provider-resolved.
+     */
     record CraftBukkit() implements Manager {
       @Override
       public String id() {
@@ -233,6 +285,9 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
       }
     }
 
+    /**
+     * Spigot runtime family; exact releases are provider-resolved.
+     */
     record Spigot() implements Manager {
 
       @Override
@@ -241,6 +296,9 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
       }
     }
 
+    /**
+     * Paper runtime family; exact releases are provider-resolved.
+     */
     record Paper() implements Manager {
 
       @Override
@@ -249,6 +307,9 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
       }
     }
 
+    /**
+     * Purpur runtime family; exact releases are provider-resolved.
+     */
     record Purpur() implements Manager {
 
       @Override
@@ -257,6 +318,9 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
       }
     }
 
+    /**
+     * Folia runtime family; exact releases are provider-resolved.
+     */
     record Folia() implements Manager {
 
       @Override
@@ -323,9 +387,18 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
     @FieldDefaults(makeFinal = true)
     enum Of implements Bedrock {
 
+      /**
+       * Canonical alias of {@link Bedrock.Native}.
+       */
       BEDROCK_NATIVE(new Bedrock.Native()),
 
-      POCKET_MINE(new Bedrock.Endstone()),
+      /**
+       * Canonical alias of {@link Bedrock.Endstone}.
+       */
+      ENDSTONE(new Bedrock.Endstone()),
+      /**
+       * Canonical alias of {@link Bedrock.PowerNukkitX}.
+       */
       POWER_NUKKITX(new Bedrock.PowerNukkitX());
 
       @NonNull
@@ -350,8 +423,16 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
       public boolean applicable(@NonNull Version version) {
         return distribution.applicable(version);
       }
+
+      @Override
+      public Artifact.Layout layout(@NonNull Artifact artifact, @NonNull Artifact.Context context) throws IOException {
+        return distribution.layout(artifact, context);
+      }
     }
 
+    /**
+     * Native runtime family; exact releases are provider-resolved.
+     */
     record Native() implements Distribution.Bedrock {
 
       @Override
@@ -360,14 +441,20 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
       }
     }
 
+    /**
+     * Endstone runtime family; exact releases are provider-resolved.
+     */
     record Endstone() implements Manager {
 
       @Override
       public String id() {
-        return "bedrock:nukkit";
+        return "bedrock:endstone";
       }
     }
 
+    /**
+     * PowerNukkitX runtime family; exact releases are provider-resolved.
+     */
     record PowerNukkitX() implements Manager {
 
       @Override

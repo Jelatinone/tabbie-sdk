@@ -5,7 +5,6 @@ import java.util.Set;
 
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.album.Image;
-import cat.tabbie.sdk.album.Reference;
 import cat.tabbie.sdk.album.Store;
 import cat.tabbie.sdk.minecraft.Label;
 import lombok.NonNull;
@@ -23,18 +22,16 @@ public sealed interface Resourcepack extends Artifact {
     /**
      * An artifact using the shared named-file and ZIP capture artist.
      *
-     * @param artifactId        stable catalog artifact identity
-     * @param artifactName      nonblank display name
-     * @param artifactReference named source content
-     * @param store             caller-owned source store
-     * @param labels            nonempty supported targets
-     * @param depends           external dependencies
-     * @param conflicts         external conflicts
+     * @param artifactId   stable catalog artifact identity
+     * @param artifactName nonblank display name
+     * @param store        caller-owned source store
+     * @param labels       nonempty supported targets
+     * @param depends      external dependencies
+     * @param conflicts    external conflicts
      */
     record Default(
         @NonNull Identity<Artifact> artifactId,
         @NonNull String artifactName,
-        @NonNull Reference artifactReference,
         @NonNull Store store,
         @NonNull Set<Label> labels,
         @NonNull Set<Identity<Artifact>> depends,
@@ -54,26 +51,24 @@ public sealed interface Resourcepack extends Artifact {
 
       @Override
       public Set<Image<?>> images(@NonNull Context context) throws IOException {
-        return Image.fence(Artifact.DEFAULT_ARTIST.paint(this, context));
+        return Image.fence(Artifact.DEFAULT_ARTIST.paint(this, context), Image.relative(context.contextRoot()));
       }
     }
 
     /**
      * An artifact whose content images are described by a caller-supplied artist.
      *
-     * @param artifactId        stable catalog artifact identity
-     * @param artifactName      nonblank display name
-     * @param artifactReference named source content
-     * @param store             caller-owned source store
-     * @param labels            nonempty supported targets
-     * @param depends           external dependencies
-     * @param conflicts         external conflicts
-     * @param artist            typed content description strategy
+     * @param artifactId   stable catalog artifact identity
+     * @param artifactName nonblank display name
+     * @param store        caller-owned source store
+     * @param labels       nonempty supported targets
+     * @param depends      external dependencies
+     * @param conflicts    external conflicts
+     * @param artist       typed content description strategy
      */
     record Custom(
         @NonNull Identity<Artifact> artifactId,
         @NonNull String artifactName,
-        @NonNull Reference artifactReference,
         @NonNull Store store,
         @NonNull Set<Label> labels,
         @NonNull Set<Identity<Artifact>> depends,
@@ -94,13 +89,13 @@ public sealed interface Resourcepack extends Artifact {
 
       @Override
       public Set<Image<?>> images(@NonNull Context context) throws IOException {
-        return Image.fence(artist().paint(this, context));
+        return Image.fence(artist().paint(this, context), Image.relative(context.contextRoot()));
       }
     }
   }
 
   /**
-   * Bedrock resource content with a separate manifest pack identity.
+   * Bedrock resource content requiring activation metadata at integration time.
    * Placement is selected explicitly by the caller.
    */
   sealed interface Bedrock extends Resourcepack {
@@ -108,19 +103,16 @@ public sealed interface Resourcepack extends Artifact {
     /**
      * An artifact using the shared named-file and ZIP capture artist.
      *
-     * @param artifactId        stable catalog artifact identity
-     * @param artifactName      nonblank display name
-     * @param artifactReference named source content
-     * @param store             caller-owned source store
-     * @param labels            nonempty supported targets
-     * @param depends           external dependencies
-     * @param conflicts         external conflicts
-     * @param pack              manifest identity and declared version
+     * @param artifactId   stable catalog artifact identity
+     * @param artifactName nonblank display name
+     * @param store        caller-owned source store
+     * @param labels       nonempty supported targets
+     * @param depends      external dependencies
+     * @param conflicts    external conflicts
      */
     record Default(
         @NonNull Identity<Artifact> artifactId,
         @NonNull String artifactName,
-        @NonNull Reference artifactReference,
         @NonNull Store store,
         @NonNull Set<Label> labels,
         @NonNull Set<Identity<Artifact>> depends,
@@ -140,27 +132,24 @@ public sealed interface Resourcepack extends Artifact {
 
       @Override
       public Set<Image<?>> images(@NonNull Context context) throws IOException {
-        return Image.fence(Artifact.DEFAULT_ARTIST.paint(this, context));
+        return Image.fence(Artifact.DEFAULT_ARTIST.paint(this, context), Image.relative(context.contextRoot()));
       }
     }
 
     /**
      * An artifact whose content images are described by a caller-supplied artist.
      *
-     * @param artifactId        stable catalog artifact identity
-     * @param artifactName      nonblank display name
-     * @param artifactReference named source content
-     * @param store             caller-owned source store
-     * @param labels            nonempty supported targets
-     * @param depends           external dependencies
-     * @param conflicts         external conflicts
-     * @param pack              manifest identity and declared version
-     * @param artist            typed content description strategy
+     * @param artifactId   stable catalog artifact identity
+     * @param artifactName nonblank display name
+     * @param store        caller-owned source store
+     * @param labels       nonempty supported targets
+     * @param depends      external dependencies
+     * @param conflicts    external conflicts
+     * @param artist       typed content description strategy
      */
     record Custom(
         @NonNull Identity<Artifact> artifactId,
         @NonNull String artifactName,
-        @NonNull Reference artifactReference,
         @NonNull Store store,
         @NonNull Set<Label> labels,
         @NonNull Set<Identity<Artifact>> depends,
@@ -181,7 +170,7 @@ public sealed interface Resourcepack extends Artifact {
 
       @Override
       public Set<Image<?>> images(@NonNull Context context) throws IOException {
-        return Image.fence(artist().paint(this, context));
+        return Image.fence(artist().paint(this, context), Image.relative(context.contextRoot()));
       }
     }
   }

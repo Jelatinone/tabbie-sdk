@@ -64,11 +64,11 @@ public sealed interface Image<State extends Image.Alteration> {
   /**
    * Describes replacement of a file deleted and succeeded by another file
    * created.
-   * 
+   *
    * @param path   target path
    * @param before file reference before
    * @param after  file reference after
-   * 
+   *
    * @return resulting image
    */
   static Image<File> replace(Path path, Reference before, Reference after) {
@@ -161,7 +161,7 @@ public sealed interface Image<State extends Image.Alteration> {
    *
    * @param path  target path
    * @param after text after
-   * 
+   *
    * @return resulting image
    */
   static Image<Text> configure(@NonNull Path path, @NonNull String after) {
@@ -174,7 +174,7 @@ public sealed interface Image<State extends Image.Alteration> {
    * Empty paths name a mount itself. This does not inspect physical containment,
    * symlinks, or target filesystem case/name restrictions; the agent checks
    * those.
-   * 
+   *
    * @param path logical path
    * @return normalized path contained within its mount
    */
@@ -192,18 +192,19 @@ public sealed interface Image<State extends Image.Alteration> {
 
   /**
    * Check against a given collection's images for image correctness.
-   * 
+   *
    * @param images generated images
    * @return verified set of images
    * @throws IllegalArgumentException when generated images cannot be verified
    */
-  static Set<Image<?>> fence(@NonNull Collection<@NonNull ? extends Image<?>> images) throws IllegalArgumentException {
+  static Set<Image<?>> fence(@NonNull Collection<@NonNull ? extends Image<?>> images, Path mount)
+      throws IllegalArgumentException {
     Map<Path, Image<?>> byPath = new LinkedHashMap<>();
 
     for (Image<?> image : images) {
       Path path = Objects.requireNonNull(image, "image").path();
-      if (!path.isAbsolute() || byPath.putIfAbsent(path.normalize(), image) != null) {
-        throw new IllegalArgumentException("Images require unique absolute destinations");
+      if (path.toString().isEmpty() || !path.equals(relative(path)) || byPath.putIfAbsent(path, image) != null) {
+        throw new IllegalArgumentException("Images require unique normalized relative destinations");
       }
     }
 
@@ -213,6 +214,10 @@ public sealed interface Image<State extends Image.Alteration> {
           throw new IllegalArgumentException("A file destination may not also be used as a directory");
         }
       }
+    }
+
+    if (!mount.toString().isEmpty() && images.stream().anyMatch(image -> !image.path().startsWith(mount))) {
+      throw new IllegalArgumentException("An artist destination escapes the context mount.");
     }
 
     return Set.copyOf(byPath.values());

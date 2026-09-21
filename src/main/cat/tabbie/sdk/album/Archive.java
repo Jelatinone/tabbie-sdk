@@ -6,11 +6,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.zip.CRC32;
@@ -23,13 +22,16 @@ import lombok.NonNull;
 /**
  * Bounds ZIP processing; defaults allow 100,000 entries, 1 GiB compressed, and
  * 4 GiB expanded. Callers can supply tighter or larger bounds explicitly.
- * 
+ *
  * @param entries       maximum directory and file entries
  * @param archiveBytes  maximum input ZIP bytes
  * @param expandedBytes maximum total uncompressed bytes
  */
 public record Archive(int entries, long archiveBytes, long expandedBytes) {
 
+  /**
+   * Default limits for entry count, compressed input, and expanded bytes.
+   */
   public static final Archive DEFAULT = new Archive(100_000, 1L << 30, 4L << 30);
 
   /**
@@ -41,6 +43,25 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
     }
   }
 
+  /**
+   * Captures stored/deflated ZIP entries, including ZIP64, beneath a logical
+   * relative directory. No installation files are written. A temporary archive
+   * allows central-directory validation; entry sizes and CRCs are checked.
+   * Traversal, duplicates, file/directory collisions, unsupported compression or
+   * encryption, corrupt data, and exceeded bounds are rejected. Every file is
+   * ordinary bytes; filesystem links, permissions, and timestamps are not
+   * applied.
+   * Empty files are preserved, empty directories omitted, and archives with no
+   * files rejected. Failure returns no images; complete retained blobs follow the
+   * store's lifetime policy. Caller-owned streams and stores remain open.
+   *
+   * @param stream      ZIP content
+   * @param destination logical extraction root
+   * @param store       retention store
+   * @param limits      processing bounds
+   * @return complete immutable file images
+   * @throws IOException when input, validation, or capture fails
+   */
   public static Set<Image<?>> unpack(
       @NonNull InputStream stream,
       @NonNull Path destination,
@@ -93,7 +114,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
         if (files.isEmpty()) {
           throw new IOException("ZIP contains no files.");
         }
-        List<Image<?>> images = new ArrayList<>();
+        Set<Image<?>> images = new HashSet<>();
         for (var file : files.entrySet()) {
           ZipEntry entry = file.getValue();
           try (CheckedInputStream input = new CheckedInputStream(zip.getInputStream(entry), new CRC32())) {
@@ -105,7 +126,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
             images.add(Image.create(root.resolve(file.getKey()), captured));
           }
         }
-        return Image.fence(Set.of());
+        return images;
       } catch (IllegalArgumentException exception) {
         throw new IOException("Invalid ZIP content", exception);
       }
@@ -126,7 +147,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
   /**
    * Decodes a canonical forward-slash file path, rejecting traversal and native
    * separators. The same encoding can be used on Windows and Unix.
-   * 
+   *
    * @param encoded persisted file destination
    * @return platform path with identical logical components
    */
