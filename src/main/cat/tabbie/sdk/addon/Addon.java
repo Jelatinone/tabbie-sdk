@@ -6,6 +6,9 @@ import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.addon.artifact.Artifact;
+import cat.tabbie.sdk.api.Provider;
+import cat.tabbie.sdk.api.Provider.Coordinate;
+import cat.tabbie.sdk.api.Release;
 import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Label;
 import lombok.NonNull;
@@ -27,7 +30,7 @@ public interface Addon {
    *         {@link Provider#providerId()}
    */
   @NonNull
-  Identity<Provider<?>> providerId();
+  Identity<Provider<?, ?>> providerId();
 
   /**
    * Identifies this project independently of its builds.
@@ -76,15 +79,12 @@ public interface Addon {
    *                    identities
    */
   record Build(
-      @NonNull Identity<Addon> addonId,
-      @NonNull Identity<Build> buildId,
-
-      @NonNull String buildName,
-      @NonNull Instant buildDate,
-      long buildNumber,
-
+      @NonNull Coordinate.Build coordinates,
+      @NonNull String releaseName,
+      @NonNull Instant releaseDate,
+      long releaseNumber,
       @NonNull Set<Label> labels,
-      @NonNull Set<Artifact> artifacts) {
+      @NonNull Set<Artifact> content) implements Release<Artifact> {
 
     /**
      * Copies and checks the published artifact selection and advertised labels.
@@ -93,11 +93,8 @@ public interface Addon {
      */
     public Build {
       labels = Set.copyOf(labels);
-      artifacts = Set.copyOf(artifacts);
-      if (buildNumber < 1L || buildName.isBlank()) {
-        throw new IllegalArgumentException("Build number must be positive and name non-blank.");
-      }
-      validate(labels, artifacts);
+      content = Release.validate(coordinates, releaseName, releaseNumber, content);
+      validate(labels, content);
     }
 
     /**
@@ -108,7 +105,7 @@ public interface Addon {
      * @return declared support, structural rejection, or unknown support
      */
     public Compatibility compatibility(@NonNull Label target) {
-      Set<Compatibility> assessments = artifacts.stream()
+      Set<Compatibility> assessments = content().stream()
           .map(target::compatibility).collect(Collectors.toSet());
       if (assessments.contains(Compatibility.UNSUPPORTED)) {
         return Compatibility.UNSUPPORTED;
@@ -126,9 +123,7 @@ public interface Addon {
      * @param artifacts directly bundled artifacts
      */
     private static void validate(@NonNull Set<Label> labels, @NonNull Set<Artifact> artifacts) {
-      if (labels.isEmpty() || artifacts.isEmpty()) {
-        throw new IllegalArgumentException("A build needs supported labels and required artifacts.");
-      }
+
       Set<Identity<Artifact>> ids = artifacts.stream()
           .map(Artifact::artifactId)
           .collect(Collectors.toSet());
