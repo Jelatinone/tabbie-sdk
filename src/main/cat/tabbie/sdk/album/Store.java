@@ -24,24 +24,7 @@ import lombok.NonNull;
  * placement, fileName(). Known catalog checksums are verified by the source;
  * retention stores implement capture, open(reference), and exists(reference).
  */
-public interface Store extends AutoCloseable {
-
-  /**
-   * Describes this store's own primary content without opening it.
-   *
-   * @return expected identity of this store's primary content
-   */
-  Reference.Pending of();
-
-  /**
-   * Opens provider-designated primary content, when the store has one.
-   *
-   * @param source expected identity of the content being opened
-   * @return independent stream at position zero, owned by the caller
-   * @throws IOException when no primary content is designated or readable
-   */
-  @NonNull
-  InputStream open(Reference.Pending source) throws IOException;
+public interface Store extends AutoCloseable, Describe, Extract {
 
   /**
    * Checks whether primary content is already locally available, without
@@ -76,18 +59,6 @@ public interface Store extends AutoCloseable {
   }
 
   /**
-   * Captures bytes without observing progress or closing the source.
-   *
-   * @param source caller-owned stream
-   * @return verified reference to retained bytes
-   * @throws IOException when reading or retention fails
-   */
-  @NonNull
-  default Intermediate<Reference> capture(@NonNull InputStream source) throws IOException {
-    return capture(source, Observer.none());
-  }
-
-  /**
    * Captures a defensive copy of caller-owned bytes.
    *
    * @param bytes complete content
@@ -96,7 +67,7 @@ public interface Store extends AutoCloseable {
    */
   @NonNull
   default Intermediate<Reference> capture(@NonNull byte[] bytes) throws IOException {
-    return capture(new ByteArrayInputStream(bytes.clone()));
+    return capture(new ByteArrayInputStream(bytes.clone()), Observer.none());
   }
 
   /**
@@ -107,75 +78,6 @@ public interface Store extends AutoCloseable {
    */
   @Override
   default void close() throws IOException {
-  }
-
-  /**
-   * A reusable, inspectable description of how to produce derived bytes.
-   * Describing performs no I/O; {@link #open()} is repeatable and independent
-   * of any prior inspection, so a description can be reopened later without
-   * retaining an open handle to whatever it was derived from.
-   */
-  interface Describe {
-
-    /**
-     * Describes the derived bytes without opening them.
-     *
-     * @return expected identity of the derived content
-     */
-    Reference.Pending of();
-
-    /**
-     * Opens fresh content independently of prior inspection resources.
-     *
-     * @return caller-owned stream
-     * @throws IOException when opening fails
-     */
-    InputStream open() throws IOException;
-  }
-
-  /**
-   * A retention backend capable of capturing an arbitrary described source
-   * under that source's own identity, rather than this backend's own.
-   */
-  interface Extract {
-
-    /**
-     * Checks whether content matching the given description is already
-     * retained, without acquiring it.
-     *
-     * @param source expected identity to check for
-     * @return whether matching content is already retained
-     * @throws IOException when availability cannot be checked
-     */
-    boolean exists(Reference.Pending source) throws IOException;
-
-    /**
-     * Captures a described source, verifying and retaining its bytes under
-     * its own identity. The default opens the source only when the returned
-     * intermediate is collapsed.
-     *
-     * @param source   reusable description of the bytes to capture
-     * @param observer transfer callbacks
-     * @return verified reference to retained bytes
-     */
-    @NonNull
-    default Intermediate<Reference.Captured> capture(@NonNull Describe source,
-        @NonNull Observer<? super Reference.Captured, ? super Transfer> observer) {
-      return new Extraction(source, observer);
-    }
-
-    /**
-     * Captures a described source, verifying and retaining its bytes under
-     * its own identity. The default opens the source only when the returned
-     * intermediate is collapsed.
-     *
-     * @param source reusable description of the bytes to capture
-     * @return verified reference to retained bytes
-     */
-    @NonNull
-    default Intermediate<Reference.Captured> capture(@NonNull Describe source) {
-      return capture(source, Observer.none());
-    }
   }
 
   /**
@@ -233,10 +135,12 @@ public interface Store extends AutoCloseable {
         observer.transfer(Transfer.of(size, pending.expectedSize() != null ? pending.expectedSize() : 0));
       }
       String hash = HexFormat.of().formatHex(digest.digest());
-      if (pending.expectedSize() != null && pending.expectedSize() != size)
+      if (pending.expectedSize() != null && pending.expectedSize() != size) {
         throw new IOException("Captured size does not match expected evidence.");
-      if (pending.expectedSha256() != null && !pending.expectedSha256().equals(hash))
+      }
+      if (pending.expectedSha256() != null && !pending.expectedSha256().equals(hash)) {
         throw new IOException("Captured digest does not match expected evidence.");
+      }
       Reference.Captured captured = new Reference.Captured(pending.fileName(), hash, size);
       observer.verified(captured);
       return captured;
@@ -254,7 +158,7 @@ public interface Store extends AutoCloseable {
     }
   }
 
-  public record Transfer(long transferredSize, OptionalLong expectedSize) {
+  record Transfer(long transferredSize, OptionalLong expectedSize) {
 
     public Transfer {
       if (transferredSize < 0) {

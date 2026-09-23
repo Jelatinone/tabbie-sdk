@@ -42,8 +42,9 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * Requires positive limits.
    */
   public Archive {
-    if (entries < 1 || archiveBytes < 1 || expandedBytes < 1)
+    if (entries < 1 || archiveBytes < 1 || expandedBytes < 1) {
       throw new IllegalArgumentException("ZIP limits must be positive.");
+    }
   }
 
   /**
@@ -65,7 +66,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * @param destination logical extraction directory
    * @return unevaluated image preparation
    */
-  public <S extends Store & Store.Extract> Intermediate<Set<Image<?>>> unpack(@NonNull S store,
+  public <S extends Store & Extract> Intermediate<Set<Image<?>>> unpack(@NonNull S store,
       @NonNull Path destination) {
     Path root = Image.relative(destination);
     return inspect(store).flatMap(found -> new Unpack<>(store, root, found));
@@ -92,16 +93,18 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
     @Override
     public List<Entry> collapse(Intermediate.Context context) throws IOException {
       Reference.Pending pending = store.of();
-      if (pending.expectedSize() != null && pending.expectedSize() > limits.archiveBytes())
+      if (pending.expectedSize() != null && pending.expectedSize() > limits.archiveBytes()) {
         throw new IOException("ZIP byte limit exceeded.");
+      }
       Path scratch = Files.createTempFile(context.scratch(), "tabbie-archive-", ".zip");
       try {
-        try (InputStream input = store.open(pending); OutputStream output = Files.newOutputStream(scratch)) {
+        try (InputStream input = store.open(); OutputStream output = Files.newOutputStream(scratch)) {
           bound(input, limits.archiveBytes()).transferTo(output);
         }
         try (ZipFile zip = new ZipFile(scratch.toFile())) {
-          if (zip.size() > limits.entries())
+          if (zip.size() > limits.entries()) {
             throw new IOException("ZIP entry limit exceeded.");
+          }
           Map<Path, Boolean> paths = new HashMap<>();
           List<ZipEntry> files = new ArrayList<>();
           Map<String, Long> sizes = new HashMap<>();
@@ -127,16 +130,18 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
           }
           for (Path path : paths.keySet()) {
             for (Path parent = path.getParent(); parent != null; parent = parent.getParent()) {
-              if (Boolean.FALSE.equals(paths.get(parent)))
+              if (!paths.get(parent)) {
                 throw new IOException("ZIP file is also used as a directory: " + parent);
+              }
             }
           }
           if (files.isEmpty())
             throw new IOException("ZIP contains no files.");
           Map<String, Long> catalog = Map.copyOf(sizes);
           List<Entry> result = new ArrayList<>();
-          for (ZipEntry entry : files)
+          for (ZipEntry entry : files) {
             result.add(new Entry(store, entry.getName(), entry.getSize(), entry.getCrc(), catalog));
+          }
           return List.copyOf(result);
         } catch (IllegalArgumentException failure) {
           throw new IOException("Invalid ZIP content.", failure);
@@ -157,7 +162,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * @param destination logical extraction directory
    * @param entries     inspected file entries
    */
-  record Unpack<S extends Store & Store.Extract>(S store, Path destination, List<Entry> entries)
+  record Unpack<S extends Store & Extract>(S store, Path destination, List<Entry> entries)
       implements Intermediate.Step<Set<Image<?>>> {
     @Override
     public Set<Image<?>> collapse(Intermediate.Context context) throws IOException {
@@ -183,17 +188,19 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * @param catalog validated central-directory names and expanded sizes
    */
   record Entry(@NonNull Store store, @NonNull String path, long size, long crc, @NonNull Map<String, Long> catalog)
-      implements Store.Describe {
+      implements Describe {
     /**
      * Checks portable entry coordinates and integrity evidence.
      */
     public Entry {
       decode(path);
       catalog = Map.copyOf(catalog);
-      if (!Long.valueOf(size).equals(catalog.get(path)))
+      if (!Long.valueOf(size).equals(catalog.get(path))) {
         throw new IllegalArgumentException("ZIP entry must agree with its inspected catalog.");
-      if (size < 0 || crc < 0 || crc > 0xffffffffL)
+      }
+      if (size < 0 || crc < 0 || crc > 0xffffffffL) {
         throw new IllegalArgumentException("Invalid ZIP entry evidence.");
+      }
     }
 
     @Override
@@ -204,7 +211,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 
     @Override
     public InputStream open() throws IOException {
-      ZipInputStream zip = new ZipInputStream(store.open(store.of()));
+      ZipInputStream zip = new ZipInputStream(store.open());
       try {
         Set<String> visited = new HashSet<>();
         for (ZipEntry current; (current = zip.getNextEntry()) != null;) {
@@ -216,8 +223,9 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
             return entryStream(zip);
           }
           long skipped = bound(zip, expectedSize).transferTo(OutputStream.nullOutputStream());
-          if (skipped != expectedSize)
+          if (skipped != expectedSize) {
             throw new IOException("ZIP skipped entry size differs from the inspected catalog.");
+          }
         }
         throw new IOException("Retained ZIP entry is missing: " + path);
       } catch (IOException | RuntimeException failure) {
@@ -261,8 +269,9 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
             checksum.update(bytes, offset, read);
           } else if (read == -1 && !finished) {
             finished = true;
-            if (count != size || checksum.getValue() != crc)
+            if (count != size || checksum.getValue() != crc) {
               throw new IOException("ZIP entry size or CRC mismatch: " + path);
+            }
           }
           return read;
         }
@@ -270,8 +279,9 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
         @Override
         public void close() throws IOException {
           try (InputStream _ = in) {
-            if (!finished && !failed)
+            if (!finished && !failed) {
               transferTo(OutputStream.nullOutputStream());
+            }
           }
         }
       };
@@ -296,8 +306,9 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    */
   static Path decode(@NonNull String encoded) {
     String[] components = encoded.split("/", -1);
-    for (String component : components)
+    for (String component : components) {
       Reference.validateFilename(component);
+    }
     return Path.of(components[0], Arrays.copyOfRange(components, 1, components.length));
   }
 
@@ -308,8 +319,9 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
       @Override
       public int read() throws IOException {
         int value = in.read();
-        if (value != -1 && remaining-- <= 0)
+        if (value != -1 && remaining-- <= 0) {
           throw new IOException("ZIP byte limit exceeded.");
+        }
         return value;
       }
 
@@ -322,8 +334,9 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
           return value == -1 ? -1 : 1;
         }
         int count = in.read(bytes, offset, (int) Math.min(length, remaining));
-        if (count > 0)
+        if (count > 0) {
           remaining -= count;
+        }
         return count;
       }
 
@@ -333,8 +346,9 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
         byte[] bytes = new byte[8192];
         while (skipped < count) {
           int read = read(bytes, 0, (int) Math.min(bytes.length, count - skipped));
-          if (read < 0)
+          if (read < 0) {
             break;
+          }
           skipped += read;
         }
         return skipped;

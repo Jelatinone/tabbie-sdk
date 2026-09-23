@@ -1,5 +1,8 @@
 package cat.tabbie.sdk.api;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
 import cat.tabbie.sdk.Identity;
 import lombok.NonNull;
 
@@ -93,10 +96,52 @@ public interface Provider<Criterion extends Criteria<Identity<Result>>, Result>
     /**
      * Returns this level's opaque provider key.
      *
-     * @return nonblank key
+     * @return non-blank key
      */
     @NonNull
     String key();
+
+    /**
+     * Returns the project this coordinate belongs to, or itself for a project.
+     *
+     * @return owning project coordinates
+     */
+    @NonNull
+    Project project();
+
+    /**
+     * Checks whether the other coordinate is this coordinate or addressed beneath
+     * it. A project includes its releases and their files, a release includes
+     * its files, and a file includes only itself. Dependency and conflict
+     * declarations match candidate content by this rule.
+     *
+     * @param other candidate coordinate
+     * @return whether this coordinate includes the other
+     */
+    default boolean includes(@NonNull Coordinate other) {
+      return switch (this) {
+        case Project project -> project.equals(other.project());
+        case Build build -> build.equals(other) || other instanceof File file && build.equals(file.build());
+        case File file -> file.equals(other);
+      };
+    }
+
+    /**
+     * Returns stable, unambiguous text of the form
+     * {@code provider/project[/build[/file]]}, with the provider UUID followed
+     * by each key URL-encoded as UTF-8. Equal coordinates, and only equal
+     * coordinates, share canonical text, so it is suitable for persistence and
+     * for deriving identities with {@link Identity#create(String)}.
+     *
+     * @return canonical coordinate text
+     */
+    default String canonical() {
+      return switch (this) {
+        case Project project -> project.providerId().id() + "/" + encode(project.key());
+        case Build build -> build.project().canonical() + "/" + encode(build.key());
+        case File file -> file.build().canonical() + "/" + encode(file.key());
+      };
+    }
 
     /**
      * A catalog project independent of its releases.
@@ -107,10 +152,15 @@ public interface Provider<Criterion extends Criteria<Identity<Result>>, Result>
     record Project(@NonNull Identity<Provider<?, ?>> providerId, @NonNull String key) implements Coordinate {
 
       /**
-       * Validates the opaque nonblank project key.
+       * Validates the opaque non-blank project key.
        */
       public Project {
         validate(key);
+      }
+
+      @Override
+      public Project project() {
+        return this;
       }
 
       /**
@@ -195,8 +245,18 @@ public interface Provider<Criterion extends Criteria<Identity<Result>>, Result>
      */
     private static void validate(String key) {
       if (key.isBlank()) {
-        throw new IllegalArgumentException("Provider coordinates must be nonblank.");
+        throw new IllegalArgumentException("Provider coordinates must be non-blank.");
       }
+    }
+
+    /**
+     * Escapes an opaque key so separators in canonical text stay unambiguous.
+     *
+     * @param key opaque key
+     * @return URL-encoded key
+     */
+    private static String encode(String key) {
+      return URLEncoder.encode(key, StandardCharsets.UTF_8);
     }
   }
 }

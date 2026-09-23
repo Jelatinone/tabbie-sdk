@@ -1,17 +1,15 @@
 package cat.tabbie.sdk.addon.artifact;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import cat.tabbie.sdk.Identity;
-import cat.tabbie.sdk.album.Archive;
-import cat.tabbie.sdk.album.Image;
-import cat.tabbie.sdk.album.Intermediate;
-import cat.tabbie.sdk.album.Reference.Pending;
-import cat.tabbie.sdk.album.Store;
+import cat.tabbie.sdk.album.*;
+import cat.tabbie.sdk.api.Provider.Coordinate;
 import cat.tabbie.sdk.api.Release;
 import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Label;
@@ -20,9 +18,9 @@ import lombok.NonNull;
 /**
  * Provider-described content and its logical placement. Artists capture bytes
  * and describe changes without writing to the target installation filesystem.
- * Stores remain caller-owned. Artifact identities refer to exact
- * provider-scoped payload selections; dependencies/conflicts name those same
- * identities.
+ * Stores remain caller-owned. File coordinates identify the exact
+ * provider-scoped payload; dependencies and conflicts name catalog coordinates
+ * at any level, matched by {@link Coordinate#includes(Coordinate)}.
  */
 public interface Artifact extends Release.Payload {
 
@@ -32,12 +30,14 @@ public interface Artifact extends Release.Payload {
   Artist<Artifact> DEFAULT_ARTIST = new Artist.Default();
 
   /**
-   * Stable artifact identity
+   * Stable artifact identity derived from the file coordinates, so equal
+   * coordinates always yield the same identity across processes.
    *
    * @return artifact identity
    */
-  @NonNull
-  Identity<Artifact> artifactId();
+  default Identity<Artifact> artifactId() {
+    return Identity.create(coordinates().canonical());
+  }
 
   /**
    * Human-readable canonical artifact name
@@ -63,20 +63,23 @@ public interface Artifact extends Release.Payload {
   Set<Label> labels();
 
   /**
-   * Artifact identities that must be installed alongside this artifact
+   * Catalog content that must be installed alongside this artifact. A project
+   * coordinate is satisfied by any file of that project, a build coordinate by
+   * any file of that release, and a file coordinate only by that exact file.
    *
-   * @return depending artifact identities
+   * @return required coordinates
    */
   @NonNull
-  Set<Identity<Artifact>> depends();
+  Set<Coordinate> depends();
 
   /**
-   * Artifact identities that may not be installed alongside this artifact
+   * Catalog content that may not be installed alongside this artifact, matched
+   * the same way as {@link #depends()}.
    *
-   * @return conflicting artifact identities
+   * @return conflicting coordinates
    */
   @NonNull
-  Set<Identity<Artifact>> conflicts();
+  Set<Coordinate> conflicts();
 
   /**
    * Payload installation images relative to this type's installation root.
@@ -92,35 +95,37 @@ public interface Artifact extends Release.Payload {
    * Checks copied constructor parameters before record fields are assigned.
    *
    * @param artifactFamily artifact family token
-   * @param artifactId     exact artifact identity
+   * @param coordinates    exact file coordinates
    * @param artifactName   display name
    * @param store          source store
    * @param labels         declared targets
-   * @param depends        required identities
-   * @param conflicts      incompatible identities
+   * @param depends        required coordinates
+   * @param conflicts      incompatible coordinates
    *
    * @throws IllegalArgumentException when declarations contradict structural
-   *                                  facts
+   *                                  facts, a relationship includes this
+   *                                  artifact, or a conflict includes a
+   *                                  dependency
    */
   static void validate(
       @NonNull Class<? extends Artifact> artifactFamily,
-      @NonNull Identity<Artifact> artifactId,
+      @NonNull Coordinate.File coordinates,
       @NonNull String artifactName,
 
       @NonNull Store store,
 
       @NonNull Set<Label> labels,
 
-      @NonNull Set<Identity<Artifact>> depends,
-      @NonNull Set<Identity<Artifact>> conflicts) {
+      @NonNull Set<Coordinate> depends,
+      @NonNull Set<Coordinate> conflicts) {
     if (artifactName.isBlank() || labels.isEmpty()) {
       throw new IllegalArgumentException("An artifact needs a nonblank name and supported labels.");
     }
     if (labels.stream().anyMatch(label -> !label.distribution().supports(artifactFamily))) {
       throw new IllegalArgumentException("A declared distribution does not support this artifact family.");
     }
-    if (depends.contains(artifactId) || conflicts.contains(artifactId)
-        || depends.stream().anyMatch(conflicts::contains)) {
+    if (Stream.concat(depends.stream(), conflicts.stream()).anyMatch(relation -> relation.includes(coordinates))
+        || conflicts.stream().anyMatch(conflict -> depends.stream().anyMatch(conflict::includes))) {
       throw new IllegalArgumentException("External relationships must not reference self or contradict each other.");
     }
   }
@@ -156,7 +161,11 @@ public interface Artifact extends Release.Payload {
     Intermediate<Set<Image<?>>> paint(@NonNull Canvas artifact, @NonNull Context context) throws IOException;
 
     /**
-     * Shared source-to-retention capture strategy.
+     * Shared source-to-retention capture strategy. The artifact's primary
+     * content is captured into the context's retention store under its own
+     * verified identity. A named-file layout places that file in the layout
+     * directory; an unpacking layout extracts every entry of the retained
+     * archive there instead. Nothing is opened until core collapses the result.
      */
     record Default() implements Artist<Artifact> {
 
@@ -167,20 +176,17 @@ public interface Artifact extends Release.Payload {
         Layout layout = context.layout(artifact);
         Path destination = context.resolve(layout);
 
-        Pending reference = context.store().of();
+        Store store = context.store();
+        Intermediate<Reference.Captured> retained = store.capture(store);
         if (layout.unpack()) {
-          return Archive.DEFAULT.unpack(context.store(), destination);
-        } else {
-          try (InputStream in = context.store().open(reference)) {
-            return artifact.store().capture(in)
-                .map((redference) -> Image.create(
-                    destination.resolve(reference.fileName()), reference))
-                .map(Set::of);
-          }
-
+          return retained
+              .flatMap(archive -> Archive.DEFAULT.unpack(store, destination))
+              .map((images) -> Image.fence(images, destination));
         }
+        return retained
+            .map(captured -> List.of(Image.create(destination.resolve(captured.fileName()), captured)))
+            .map((images) -> Image.fence(images, destination));
       }
-
     }
   }
 
@@ -204,7 +210,7 @@ public interface Artifact extends Release.Payload {
      * @return caller-owned retention store
      */
     @NonNull
-    <S extends Store & Store.Extract> S store();
+    <S extends Store & Extract> S store();
 
     /**
      * Returns mount relative to the Den, empty for its working directory.
@@ -268,7 +274,7 @@ public interface Artifact extends Release.Payload {
      * @param contextRoot Den-relative context mount
      * @param worldRoot   selected world relative to the context mount
      */
-    record Default<S extends Store & Store.Extract>(@NonNull Label label, @NonNull S store, @NonNull Path contextRoot,
+    record Default<S extends Store & Extract>(@NonNull Label label, @NonNull S store, @NonNull Path contextRoot,
         @NonNull Path worldRoot)
         implements Context {
       /**

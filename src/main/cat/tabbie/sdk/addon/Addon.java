@@ -14,14 +14,22 @@ import cat.tabbie.sdk.minecraft.Label;
 import lombok.NonNull;
 
 /**
- *
- * A provider-owned catalog project with independently identified builds and
+ * A provider-owned catalog project with independently addressed builds and
  * tags. Implementations supply immutable, non-null collections, a non-blank
- * name, builds owned by this addon, and distinct build/tag identities.
+ * name, builds released under this addon's project coordinates, and distinct
+ * build coordinates and tag identities; {@link #validate} checks these.
  * Discovery may produce a project with no builds; each published {@link Build}
  * is complete.
  */
 public interface Addon {
+
+  /**
+   * Returns provider coordinates for this project.
+   *
+   * @return project coordinates
+   */
+  @NonNull
+  Coordinate.Project coordinates();
 
   /**
    * Identifies the owning catalog provider.
@@ -29,16 +37,19 @@ public interface Addon {
    * @return provider identity using the same marker as
    *         {@link Provider#providerId()}
    */
-  @NonNull
-  Identity<Provider<?, ?>> providerId();
+  default Identity<Provider<?, ?>> providerId() {
+    return coordinates().providerId();
+  }
 
   /**
-   * Identifies this project independently of its builds.
+   * Identifies this project independently of its builds, derived from the
+   * project coordinates.
    *
    * @return stable addon identity
    */
-  @NonNull
-  Identity<Addon> addonId();
+  default Identity<Addon> addonId() {
+    return Identity.create(coordinates().canonical());
+  }
 
   /**
    * Names this project for display.
@@ -65,18 +76,48 @@ public interface Addon {
   Set<Tag> tags();
 
   /**
-   * A published selection of artifacts. Every artifact must explicitly support
-   * every build label, while artifacts may declare additional supported targets.
-   * External dependency availability is resolved later.
+   * Checks copied constructor parameters before record fields are assigned.
    *
-   * @param addonId     owning catalog addon
-   * @param buildId     immutable build identity
-   * @param buildName   non-blank display name
-   * @param buildDate   publication instant
-   * @param buildNumber positive provider-assigned build number
-   * @param labels      nonempty targets advertised for the entire build
-   * @param artifacts   nonempty immutable artifact selection with distinct
-   *                    identities
+   * @param coordinates candidate project coordinates
+   * @param addonName   candidate display name
+   * @param builds      candidate builds
+   * @param tags        candidate tags
+   * @throws IllegalArgumentException when the name is blank, a build belongs to
+   *                                  another project, or build coordinates or
+   *                                  tag identities repeat
+   */
+  static void validate(
+      @NonNull Coordinate.Project coordinates,
+      @NonNull String addonName,
+      @NonNull Set<Build> builds,
+      @NonNull Set<Tag> tags) {
+    if (addonName.isBlank()) {
+      throw new IllegalArgumentException("An addon needs a non-blank name.");
+    }
+    if (!builds.stream().allMatch(build -> build.project().equals(coordinates))) {
+      throw new IllegalArgumentException("Every build must be a release of this addon's project.");
+    }
+    if (builds.stream().map(Build::coordinates).distinct().count() != builds.size()) {
+      throw new IllegalArgumentException("Addon builds must have distinct coordinates.");
+    }
+    if (tags.stream().map(Tag::tagId).distinct().count() != tags.size()) {
+      throw new IllegalArgumentException("Addon tags must have distinct identities.");
+    }
+  }
+
+  /**
+   * A published selection of artifacts. Every artifact must be a file of this
+   * build and explicitly support every build label, while artifacts may declare
+   * additional supported targets. External dependency availability is resolved
+   * later.
+   *
+   * @param coordinates   exact release coordinates
+   * @param releaseName   non-blank display name
+   * @param releaseDate   publication instant
+   * @param releaseNumber positive provider-assigned release number
+   * @param labels        nonempty targets advertised for the entire build
+   * @param content       nonempty immutable artifact selection with distinct
+   *                      file coordinates
    */
   record Build(
       @NonNull Coordinate.Build coordinates,
@@ -106,7 +147,8 @@ public interface Addon {
      */
     public Compatibility compatibility(@NonNull Label target) {
       Set<Compatibility> assessments = content().stream()
-          .map(target::compatibility).collect(Collectors.toSet());
+          .map(target::compatibility)
+          .collect(Collectors.toSet());
       if (assessments.contains(Compatibility.UNSUPPORTED)) {
         return Compatibility.UNSUPPORTED;
       }
@@ -118,20 +160,18 @@ public interface Addon {
 
     /**
      * Checks copied constructor inputs before record fields are initialized.
+     * Payload ownership and distinct file coordinates are checked by
+     * {@link Release#validate(Coordinate.Build, String, long, Set)}.
      *
      * @param labels    advertised targets
      * @param artifacts directly bundled artifacts
      */
     private static void validate(@NonNull Set<Label> labels, @NonNull Set<Artifact> artifacts) {
-
-      Set<Identity<Artifact>> ids = artifacts.stream()
-          .map(Artifact::artifactId)
-          .collect(Collectors.toSet());
-
-      if (ids.size() != artifacts.size()) {
-        throw new IllegalArgumentException("Build artifacts must have distinct identities.");
+      if (labels.isEmpty()) {
+        throw new IllegalArgumentException("A build needs supported labels.");
       }
-      if (artifacts.stream().anyMatch(artifact -> artifact.conflicts().stream().anyMatch(ids::contains))) {
+      if (artifacts.stream().anyMatch(artifact -> artifact.conflicts().stream()
+          .anyMatch(conflict -> artifacts.stream().anyMatch(other -> conflict.includes(other.coordinates()))))) {
         throw new IllegalArgumentException("Build artifacts conflict with each other.");
       }
 

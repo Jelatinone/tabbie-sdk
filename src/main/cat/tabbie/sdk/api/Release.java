@@ -27,8 +27,8 @@ public interface Release<Content> {
    * date. Ordering releases of different projects is meaningless.
    */
   Comparator<Release<?>> PUBLICATION_ORDER = Comparator
-      .<Release<?>>comparingLong(release -> release.releaseNumber())
-      .thenComparing(release -> release.releaseDate());
+      .<Release<?>>comparingLong(Release::releaseNumber)
+      .thenComparing(Release::releaseDate);
 
   /**
    * Returns provider coordinates for this exact release.
@@ -41,7 +41,7 @@ public interface Release<Content> {
   /**
    * Returns the release display name.
    *
-   * @return nonblank display name
+   * @return non-blank display name
    */
   @NonNull
   String releaseName();

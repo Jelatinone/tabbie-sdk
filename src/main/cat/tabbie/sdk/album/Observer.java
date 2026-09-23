@@ -3,10 +3,8 @@ package cat.tabbie.sdk.album;
 /**
  * Releases this store's resources according to its documented lifetime.
  * Artifact image generation never closes caller-owned stores.
- *
- * @throws Exception when an observation has failed
  */
-interface Observer<Observe, Transfer> {
+public interface Observer<Observe, Transfer> {
 
   /**
    * Observer that discards every notification.
