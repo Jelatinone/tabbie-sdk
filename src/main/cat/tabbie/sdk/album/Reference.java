@@ -9,23 +9,51 @@ import lombok.NonNull;
 
 /**
  * Identity of immutable bytes, independent of their storage location.
- *
- * @param fileName name in file system
- * @param sha256 lowercase SHA-256 digest of complete bytes
- * @param size     exact byte count
  */
-public record Reference(@NonNull String fileName, @NonNull String sha256, long size) {
+public sealed interface Reference {
+
+  String fileName();
 
   /**
    * Checks a single filename, a lowercase digest, and a nonnegative byte count.
    */
-  public Reference {
-    validateFilename(fileName);
-    if (size < 0L) {
-      throw new IllegalArgumentException("Content size must be non-negative");
+
+  record Pending(
+      @NonNull String fileName,
+
+      @NonNull Path path,
+      String expectedSha256,
+      Long expectedSize) implements Reference {
+    public Pending {
+      validateFilename(fileName);
+
+      path = path.normalize();
+      if (path.isAbsolute() || path.startsWith("..")) {
+        throw new IllegalArgumentException("Expected a safe relative source path.");
+      }
+      if (expectedSize != null && expectedSize < 0L) {
+        throw new IllegalArgumentException("Content size must be non-negative");
+      }
+      if (expectedSha256 != null && !expectedSha256.matches("[0-9a-f]{64}")) {
+        throw new IllegalArgumentException("Expected a lowercase SHA-256 hex digest");
+      }
     }
-    if (!sha256.matches("[0-9a-f]{64}")) {
-      throw new IllegalArgumentException("Expected a lowercase SHA-256 hex digest");
+  }
+
+  record Captured(
+      @NonNull String fileName,
+
+      @NonNull String sha256,
+      long size) implements Reference {
+    public Captured {
+      validateFilename(fileName);
+
+      if (size < 0L) {
+        throw new IllegalArgumentException("Content size must be non-negative");
+      }
+      if (!sha256.matches("[0-9a-f]{64}")) {
+        throw new IllegalArgumentException("Expected a lowercase SHA-256 hex digest");
+      }
     }
   }
 
@@ -40,7 +68,7 @@ public record Reference(@NonNull String fileName, @NonNull String sha256, long s
     if (fileName.isBlank() || fileName.equals(".") || fileName.equals("..")
         || fileName.chars().anyMatch(character -> character < 32 || "<>:\"/\\|?*".indexOf(character) >= 0)
         || Path.of(fileName).isAbsolute() || Path.of(fileName).getNameCount() != 1) {
-      throw new IllegalArgumentException("Expected a nonblank single filename.");
+      throw new IllegalArgumentException("Expected a non-blank single filename.");
     }
   }
 
@@ -48,12 +76,12 @@ public record Reference(@NonNull String fileName, @NonNull String sha256, long s
    * Computes a reference without retaining or modifying the supplied bytes.
    *
    * @param fileName single filename
-   * @param bytes content to identify
+   * @param bytes    content to identify
    * @return SHA-256 reference and exact size
    */
   public static Reference of(@NonNull String fileName, @NonNull byte[] bytes) {
     try {
-      return new Reference(
+      return new Captured(
           fileName,
           HexFormat.of()
               .formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)),

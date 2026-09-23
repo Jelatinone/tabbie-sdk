@@ -6,136 +6,275 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.zip.CRC32;
-import java.util.zip.CheckedInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
 
 import lombok.NonNull;
 
 /**
- * Bounds ZIP processing; defaults allow 100,000 entries, 1 GiB compressed, and
- * 4 GiB expanded. Callers can supply tighter or larger bounds explicitly.
+ * Bounds ZIP processing. Default limits permit 100,000 entries, 1 GiB
+ * compressed
+ * and 4 GiB expanded. Description performs no I/O; scratch files exist only
+ * while
+ * an explicit inspection effect executes and are never installation files.
  *
  * @param entries       maximum directory and file entries
- * @param archiveBytes  maximum input ZIP bytes
- * @param expandedBytes maximum total uncompressed bytes
+ * @param archiveBytes  maximum compressed bytes
+ * @param expandedBytes maximum total expanded bytes
  */
 public record Archive(int entries, long archiveBytes, long expandedBytes) {
 
 	/**
-	 * Default limits for entry count, compressed input, and expanded bytes.
+	 * Default processing limits.
 	 */
 	public static final Archive DEFAULT = new Archive(100_000, 1L << 30, 4L << 30);
 
 	/**
-	 * Checks positive processing bounds
+	 * Requires positive limits.
 	 */
 	public Archive {
-		if (entries < 1 || archiveBytes < 1 || expandedBytes < 1) {
+		if (entries < 1 || archiveBytes < 1 || expandedBytes < 1)
 			throw new IllegalArgumentException("ZIP limits must be positive.");
+	}
+
+	/**
+	 * Describes inspection of the archive's central directory, followed by
+	 * capture of every file entry and assembly of the complete image set.
+	 * Supports stored/deflated ZIP and ZIP64. Rejects traversal, duplicates,
+	 * file/directory collisions, unsupported compression, encryption, corrupt
+	 * data, exceeded bounds, and archives without files. Empty files are
+	 * preserved; empty directories and filesystem metadata are not installed.
+	 *
+	 * Streams opened during execution are closed; the store stays caller-owned.
+	 * Entry descriptions reopen the retained archive independently, without
+	 * holding a ZIP handle open across entries.
+	 *
+	 * @param <S>         a store that both reads its own bytes and extracts
+	 *                    described children
+	 * @param store       bound archive source, also usable as a retention
+	 *                    backend for its own entries
+	 * @param destination logical extraction directory
+	 * @return unevaluated image preparation
+	 */
+	public <S extends Store & Store.Extract> Intermediate<Set<Image<?>>> unpack(@NonNull S store,
+			@NonNull Path destination) {
+		Path root = Image.relative(destination);
+		return inspect(store).flatMap(found -> new Unpack<>(store, root, found));
+	}
+
+	/**
+	 * Describes explicit central-directory inspection using execution-owned
+	 * scratch space, independent of extraction.
+	 *
+	 * @param store bound archive source
+	 * @return unevaluated inspection, producing the archive's file entries
+	 */
+	public <S extends Store> Intermediate<List<Entry>> inspect(@NonNull S store) {
+		return new Inspect(store, this);
+	}
+
+	/**
+	 * Explicit central-directory inspection using execution-owned scratch space.
+	 *
+	 * @param store  retained archive
+	 * @param limits processing bounds
+	 */
+	record Inspect(Store store, Archive limits) implements Intermediate.Step<List<Entry>> {
+		@Override
+		public List<Entry> collapse(Intermediate.Context context) throws IOException {
+			Reference.Pending pending = store.of();
+			if (pending.expectedSize() != null && pending.expectedSize() > limits.archiveBytes())
+				throw new IOException("ZIP byte limit exceeded.");
+			Path scratch = Files.createTempFile(context.scratch(), "tabbie-archive-", ".zip");
+			try {
+				try (InputStream input = store.open(pending); OutputStream output = Files.newOutputStream(scratch)) {
+					bound(input, limits.archiveBytes()).transferTo(output);
+				}
+				try (ZipFile zip = new ZipFile(scratch.toFile())) {
+					if (zip.size() > limits.entries())
+						throw new IOException("ZIP entry limit exceeded.");
+					Map<Path, Boolean> paths = new HashMap<>();
+					List<ZipEntry> files = new ArrayList<>();
+					Map<String, Long> sizes = new HashMap<>();
+					long expanded = 0;
+					var iterator = zip.entries();
+					while (iterator.hasMoreElements()) {
+						ZipEntry entry = iterator.nextElement();
+						Path path = resolve(entry.getName());
+						if (paths.putIfAbsent(path, entry.isDirectory()) != null)
+							throw new IOException("Duplicate ZIP destination: " + path);
+						if (entry.getMethod() != ZipEntry.STORED && entry.getMethod() != ZipEntry.DEFLATED)
+							throw new IOException("Unsupported ZIP compression: " + entry.getName());
+						if (entry.getSize() < 0 || entry.getSize() > limits.expandedBytes() - expanded)
+							throw new IOException("ZIP expanded-byte limit exceeded.");
+						expanded += entry.getSize();
+						sizes.put(entry.getName(), entry.getSize());
+						if (entry.isDirectory()) {
+							if (entry.getSize() != 0 || entry.getCrc() != 0)
+								throw new IOException("Invalid ZIP directory entry.");
+						} else {
+							files.add(entry);
+						}
+					}
+					for (Path path : paths.keySet()) {
+						for (Path parent = path.getParent(); parent != null; parent = parent.getParent()) {
+							if (Boolean.FALSE.equals(paths.get(parent)))
+								throw new IOException("ZIP file is also used as a directory: " + parent);
+						}
+					}
+					if (files.isEmpty())
+						throw new IOException("ZIP contains no files.");
+					Map<String, Long> catalog = Map.copyOf(sizes);
+					List<Entry> result = new ArrayList<>();
+					for (ZipEntry entry : files)
+						result.add(new Entry(store, entry.getName(), entry.getSize(), entry.getCrc(), catalog));
+					return List.copyOf(result);
+				} catch (IllegalArgumentException failure) {
+					throw new IOException("Invalid ZIP content.", failure);
+				}
+			} finally {
+				Files.deleteIfExists(scratch);
+			}
 		}
 	}
 
 	/**
-	 * Captures stored/deflated ZIP entries, including ZIP64, beneath a logical
-	 * relative directory. No installation files are written. A temporary archive
-	 * allows central-directory validation; entry sizes and CRCs are checked.
-	 * Traversal, duplicates, file/directory collisions, unsupported compression or
-	 * encryption, corrupt data, and exceeded bounds are rejected. Every file is
-	 * ordinary bytes; filesystem links, permissions, and timestamps are not
-	 * applied.
-	 * Empty files are preserved, empty directories omitted, and archives with no
-	 * files rejected. Failure returns no images; complete retained blobs follow the
-	 * store's lifetime policy. Caller-owned streams and stores remain open.
+	 * Extraction effect over every inspected file entry, producing the complete
+	 * immutable image set.
 	 *
-	 * @param stream      ZIP content
-	 * @param destination logical extraction root
-	 * @param store       retention store
-	 * @param limits      processing bounds
-	 * @return complete immutable file images
-	 * @throws IOException when input, validation, or capture fails
+	 * @param <S>         a store that both reads its own bytes and extracts
+	 *                    described children
+	 * @param store       retention backend for the archive's entries
+	 * @param destination logical extraction directory
+	 * @param entries     inspected file entries
 	 */
-	public static Intermediate<Set<Image<?>>> unpack(
-			@NonNull InputStream stream,
-			@NonNull Path destination,
+	record Unpack<S extends Store & Store.Extract>(S store, Path destination, List<Entry> entries)
+			implements Intermediate.Step<Set<Image<?>>> {
+		@Override
+		public Set<Image<?>> collapse(Intermediate.Context context) throws IOException {
+			List<Image<?>> images = entries().stream()
+					.map((entry) -> {
+						Reference.Captured captured = store.capture(entry)
+								.collapse(context);
+						return Image.create(destination.resolve(decode(entry.path())), captured);
+					}).toList();
+			return Image.fence(images, destination);
+		}
+	}
 
-			@NonNull Store store,
+	/**
+	 * Immutable description of one entry from an inspected archive. No open ZIP
+	 * handle survives inspection; reopening scans the retained parent, with
+	 * entry size and CRC checked at EOF.
+	 *
+	 * @param store   bound parent store
+	 * @param path    canonical entry path
+	 * @param size    exact expanded size
+	 * @param crc     expected CRC32
+	 * @param catalog validated central-directory names and expanded sizes
+	 */
+	record Entry(@NonNull Store store, @NonNull String path, long size, long crc, @NonNull Map<String, Long> catalog)
+			implements Store.Describe {
+		/**
+		 * Checks portable entry coordinates and integrity evidence.
+		 */
+		public Entry {
+			decode(path);
+			catalog = Map.copyOf(catalog);
+			if (!Long.valueOf(size).equals(catalog.get(path)))
+				throw new IllegalArgumentException("ZIP entry must agree with its inspected catalog.");
+			if (size < 0 || crc < 0 || crc > 0xffffffffL)
+				throw new IllegalArgumentException("Invalid ZIP entry evidence.");
+		}
 
-			@NonNull Archive limits) throws IOException {
-		Path root = Image.relative(destination);
-		Path temporary = Files.createTempFile("tabbie-artifact-", ".zip");
-		try {
-			try (OutputStream output = Files.newOutputStream(temporary)) {
-				bound(stream, limits.archiveBytes()).transferTo(output);
+		@Override
+		public Reference.Pending of() {
+			Path decoded = decode(path);
+			return new Reference.Pending(decoded.getFileName().toString(), decoded, null, size);
+		}
+
+		@Override
+		public InputStream open() throws IOException {
+			ZipInputStream zip = new ZipInputStream(store.open(store.of()));
+			try {
+				Set<String> visited = new HashSet<>();
+				for (ZipEntry current; (current = zip.getNextEntry()) != null;) {
+					Long expectedSize = catalog.get(current.getName());
+					if (expectedSize == null || !visited.add(current.getName())) {
+						throw new IOException("ZIP local entries differ from the inspected catalog.");
+					}
+					if (current.getName().equals(path)) {
+						return entryStream(zip);
+					}
+					long skipped = bound(zip, expectedSize).transferTo(OutputStream.nullOutputStream());
+					if (skipped != expectedSize)
+						throw new IOException("ZIP skipped entry size differs from the inspected catalog.");
+				}
+				throw new IOException("Retained ZIP entry is missing: " + path);
+			} catch (IOException | RuntimeException failure) {
+				try {
+					zip.close();
+				} catch (IOException closeFailure) {
+					failure.addSuppressed(closeFailure);
+				}
+				throw failure;
 			}
-			try (ZipFile zip = new ZipFile(temporary.toFile())) {
-				if (zip.size() > limits.entries()) {
-					throw new IOException("ZIP entry limit exceeded.");
-				}
-				Map<Path, Boolean> paths = new HashMap<>();
-				Map<Path, ZipEntry> files = new LinkedHashMap<>();
+		}
 
-				long expanded = 0;
-				var entries = zip.entries();
-				while (entries.hasMoreElements()) {
-					ZipEntry entry = entries.nextElement();
-					Path path = resolve(entry.getName());
-					if (paths.putIfAbsent(path, entry.isDirectory()) != null) {
-						throw new IOException("Duplicate ZIP destination: " + path);
-					}
-					if (entry.getMethod() != ZipEntry.STORED && entry.getMethod() != ZipEntry.DEFLATED) {
-						throw new IOException("Unsupported ZIP compression: " + entry.getName());
-					}
-					if (entry.getSize() < 0 || entry.getSize() > limits.expandedBytes() - expanded) {
-						throw new IOException("ZIP expanded-byte limit exceeded.");
-					}
-					expanded += entry.getSize();
-					if (entry.isDirectory()) {
-						if (entry.getSize() != 0 || entry.getCrc() != 0)
-							throw new IOException("Invalid ZIP directory entry.");
-					} else {
-						files.put(path, entry);
-					}
+		private InputStream entryStream(ZipInputStream zip) {
+			return new FilterInputStream(zip) {
+				private final CRC32 checksum = new CRC32();
+				private long count;
+				private boolean finished;
+				private boolean failed;
+
+				@Override
+				public int read() throws IOException {
+					byte[] one = new byte[1];
+					return read(one, 0, 1) == -1 ? -1 : Byte.toUnsignedInt(one[0]);
 				}
-				for (Path path : paths.keySet()) {
-					for (Path parent = path.getParent(); parent != null; parent = parent.getParent()) {
-						if (Boolean.FALSE.equals(paths.get(parent))) {
-							throw new IOException("ZIP file is also used as a directory: " + parent);
+
+				@Override
+				public int read(byte[] bytes, int offset, int length) throws IOException {
+					int read;
+					try {
+						read = in.read(bytes, offset, length);
+					} catch (IOException failure) {
+						failed = true;
+						throw failure;
+					}
+					if (read > 0) {
+						count += read;
+						if (count > size) {
+							failed = true;
+							throw new IOException("ZIP entry size exceeded.");
 						}
+						checksum.update(bytes, offset, read);
+					} else if (read == -1 && !finished) {
+						finished = true;
+						if (count != size || checksum.getValue() != crc)
+							throw new IOException("ZIP entry size or CRC mismatch: " + path);
+					}
+					return read;
+				}
+
+				@Override
+				public void close() throws IOException {
+					try (InputStream ignored = in) {
+						if (!finished && !failed)
+							transferTo(OutputStream.nullOutputStream());
 					}
 				}
-				if (files.isEmpty()) {
-					throw new IOException("ZIP contains no files.");
-				}
-				for (var file : files.entrySet()) {
-					ZipEntry entry = file.getValue();
-					try (CheckedInputStream input = new CheckedInputStream(zip.getInputStream(entry), new CRC32())) {
-						Intermediate<Reference> captured = store.capture(bound(input, entry.getSize()));
-						return captured.map((capture) -> {
-							try {
-								if (input.read() != -1 || capture.size() != entry.getSize()
-										|| input.getChecksum().getValue() != entry.getCrc()) {
-									throw new IOException("ZIP entry size or CRC mismatch: " + entry.getName());
-								}
-							} catch (IOException except) {
-								except.printStackTrace();
-							}
-							return Set.of(Image.create(root.resolve(file.getKey()), capture));
-						});
-					}
-				}
-				return null;
-			} catch (IllegalArgumentException exception) {
-				throw new IOException("Invalid ZIP content", exception);
-			}
-		} finally {
-			Files.deleteIfExists(temporary);
+			};
 		}
 	}
 
@@ -178,8 +317,10 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 			public int read(byte[] bytes, int offset, int length) throws IOException {
 				if (length == 0)
 					return 0;
-				if (remaining == 0)
-					return read();
+				if (remaining == 0) {
+					int value = read();
+					return value == -1 ? -1 : 1;
+				}
 				int count = in.read(bytes, offset, (int) Math.min(length, remaining));
 				if (count > 0)
 					remaining -= count;
@@ -189,18 +330,14 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 			@Override
 			public long skip(long count) throws IOException {
 				long skipped = 0;
-				byte[] buffer = new byte[8192];
+				byte[] bytes = new byte[8192];
 				while (skipped < count) {
-					int read = read(buffer, 0, (int) Math.min(buffer.length, count - skipped));
+					int read = read(bytes, 0, (int) Math.min(bytes.length, count - skipped));
 					if (read < 0)
 						break;
 					skipped += read;
 				}
 				return skipped;
-			}
-
-			@Override
-			public void close() {
 			}
 		};
 	}

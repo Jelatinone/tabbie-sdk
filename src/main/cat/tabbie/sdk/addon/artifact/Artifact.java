@@ -211,6 +211,7 @@ public interface Artifact {
 		 *
 		 * @return selected world mount relative to this context's root, if selected
 		 */
+		@NonNull
 		Path worldRoot();
 
 		/**
