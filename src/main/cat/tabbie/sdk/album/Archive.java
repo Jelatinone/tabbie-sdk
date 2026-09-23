@@ -278,7 +278,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 
         @Override
         public void close() throws IOException {
-          try (InputStream _ = in) {
+          try (InputStream input = in) {
             if (!finished && !failed) {
               transferTo(OutputStream.nullOutputStream());
             }

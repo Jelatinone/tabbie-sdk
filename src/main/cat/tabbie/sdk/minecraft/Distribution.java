@@ -95,22 +95,22 @@ public sealed interface Distribution permits Distribution.Java, Distribution.Bed
     }
 
     return switch (artifact) {
-      case Mod _ ->
+      case Mod mod ->
         new Artifact.Layout.Root(false, Path.of("mods"));
 
-      case Plugin _ when this instanceof Java.Manager ->
+      case Plugin plugin when this instanceof Java.Manager ->
         new Artifact.Layout.Root(false, Path.of("plugins"));
 
-      case Resourcepack _ ->
+      case Resourcepack resourcepack ->
         new Artifact.Layout.Root(false, Path.of("resourcepacks"));
 
-      case Datapack _ ->
+      case Datapack datapack ->
         new Artifact.Layout.World(true, Path.of("datapacks", artifact.artifactId().id().toString()));
 
-      case Behaviourpack _ ->
+      case Behaviourpack behaviourpack ->
         new Artifact.Layout.World(true, Path.of("behavior_packs", artifact.artifactId().id().toString()));
 
-      case Modpack _ when this instanceof Java.Launcher ->
+      case Modpack modpack when this instanceof Java.Launcher ->
         new Artifact.Layout.Root(true, Path.of("mods"));
 
       default -> {
