@@ -8,33 +8,39 @@ package cat.tabbie.sdk.album;
  */
 interface Observer<Observe, Transfer> {
 
-	/**
-	 * Observer that discards every notification.
-	 */
-	Observer<?, ?> NONE = new Observer<>() {
-	};
+  /**
+   * Observer that discards every notification.
+   */
+  @SuppressWarnings("rawtypes")
+  Observer NONE = new Observer<>() {
+  };
 
-	/**
-	 * Observe in-progress transfer statistics
-	 *
-	 * @param transfer transfer state
-	 */
-	default void transfer(Transfer transfer) {
-	}
+  @SuppressWarnings("unchecked")
+  static <Observe, Transfer> Observer<Observe, Transfer> none() {
+    return (Observer<Observe, Transfer>) NONE;
+  }
 
-	/**
-	 * Observe failed transfer verification of a capture
-	 *
-	 * @param failure failed exception
-	 */
-	default void failed(Exception failure) {
-	}
+  /**
+   * Observe in-progress transfer statistics
+   *
+   * @param transfer transfer state
+   */
+  default void transfer(Transfer transfer) {
+  }
 
-	/**
-	 * Observe complete transfer verification of a capture
-	 *
-	 * @param observe verified observation
-	 */
-	default void verified(Observe observe) {
-	}
+  /**
+   * Observe failed transfer verification of a capture
+   *
+   * @param failure failed exception
+   */
+  default void failed(Exception failure) {
+  }
+
+  /**
+   * Observe complete transfer verification of a capture
+   *
+   * @param observe verified observation
+   */
+  default void verified(Observe observe) {
+  }
 }

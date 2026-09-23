@@ -191,12 +191,11 @@ public sealed interface Intermediate<T> {
      *
      * @return context observer
      */
-    default Store.Observer observer() {
-      return Store.Observer.NONE;
+    default Observer<?, ?> observer() {
+      return Observer.NONE;
     }
 
-    record Default(@NonNull Path scratch, @NonNull Store.Observer observer) implements Context {
-
+    record Default(@NonNull Path scratch, @NonNull Observer<?, ?> observer) implements Context {
     }
   }
 }
