@@ -8,6 +8,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.OptionalLong;
 
+import cat.tabbie.sdk.merchant.Observer;
 import lombok.NonNull;
 
 /**

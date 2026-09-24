@@ -276,6 +276,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
           return read;
         }
 
+        @SuppressWarnings("unused")
         @Override
         public void close() throws IOException {
           try (InputStream input = in) {

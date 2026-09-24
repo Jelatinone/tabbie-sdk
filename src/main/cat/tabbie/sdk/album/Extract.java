@@ -2,6 +2,7 @@ package cat.tabbie.sdk.album;
 
 import java.io.IOException;
 
+import cat.tabbie.sdk.merchant.Observer;
 import lombok.NonNull;
 
 /**

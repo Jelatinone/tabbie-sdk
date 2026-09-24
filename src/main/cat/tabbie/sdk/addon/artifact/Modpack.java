@@ -6,7 +6,8 @@ import java.util.Set;
 import cat.tabbie.sdk.album.Image;
 import cat.tabbie.sdk.album.Intermediate;
 import cat.tabbie.sdk.album.Store;
-import cat.tabbie.sdk.api.Provider.Coordinate;
+import cat.tabbie.sdk.merchant.Installer;
+import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.minecraft.Label;
 import lombok.NonNull;
 
@@ -29,12 +30,12 @@ public sealed interface Modpack extends Artifact {
    * @param conflicts    external conflicts
    */
   record Default(
-    @NonNull Coordinate.File coordinates,
-    @NonNull String artifactName,
-    @NonNull Store store,
-    @NonNull Set<Label> labels,
-    @NonNull Set<Coordinate> depends,
-    @NonNull Set<Coordinate> conflicts) implements Modpack {
+      @NonNull Coordinate.File coordinates,
+      @NonNull String artifactName,
+      @NonNull Store store,
+      @NonNull Set<Label> labels,
+      @NonNull Set<Coordinate> depends,
+      @NonNull Set<Coordinate> conflicts) implements Modpack {
     /**
      * Copies collections and checks local declarations without reading content.
      *
@@ -46,11 +47,6 @@ public sealed interface Modpack extends Artifact {
       depends = Set.copyOf(depends);
       conflicts = Set.copyOf(conflicts);
       Artifact.validate(Modpack.class, coordinates, artifactName, store, labels, depends, conflicts);
-    }
-
-    @Override
-    public Intermediate<Set<Image<?>>> images(@NonNull Context context) throws IOException {
-      return Artifact.DEFAULT_ARTIST.paint(this, context);
     }
   }
 
@@ -66,13 +62,13 @@ public sealed interface Modpack extends Artifact {
    * @param artist       typed content description strategy
    */
   record Custom(
-    @NonNull Coordinate.File coordinates,
-    @NonNull String artifactName,
-    @NonNull Store store,
-    @NonNull Set<Label> labels,
-    @NonNull Set<Coordinate> depends,
-    @NonNull Set<Coordinate> conflicts,
-    @NonNull Artist<? super Modpack> artist) implements Modpack {
+      @NonNull Coordinate.File coordinates,
+      @NonNull String artifactName,
+      @NonNull Store store,
+      @NonNull Set<Label> labels,
+      @NonNull Set<Coordinate> depends,
+      @NonNull Set<Coordinate> conflicts,
+      @NonNull Installer<Artifact.Context> installer) implements Modpack {
     /**
      * Copies collections and checks local declarations without reading content.
      *
@@ -87,8 +83,8 @@ public sealed interface Modpack extends Artifact {
     }
 
     @Override
-    public Intermediate<Set<Image<?>>> images(@NonNull Context context) throws IOException {
-      return artist().paint(this, context);
+    public Intermediate<Set<Image<?>>> install(@NonNull Context context) throws IOException {
+      return installer().install(context);
     }
   }
 }

@@ -1,9 +1,11 @@
-package cat.tabbie.sdk.api;
+package cat.tabbie.sdk.merchant;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 import cat.tabbie.sdk.Identity;
+import cat.tabbie.sdk.api.Criteria;
+import cat.tabbie.sdk.api.Queryable;
 import lombok.NonNull;
 
 /**

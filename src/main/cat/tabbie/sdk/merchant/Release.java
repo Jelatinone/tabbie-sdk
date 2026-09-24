@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.api;
+package cat.tabbie.sdk.merchant;
 
 import java.time.Instant;
 import java.util.Comparator;
@@ -93,7 +93,7 @@ public interface Release<Content> {
    * jar, resource pack archive, or server jar. Content types that correspond to
    * provider files implement this so releases can check payload ownership.
    */
-  interface Payload {
+  interface Payload<Contextual extends Installer.Context> extends Installer<Contextual> {
 
     /**
      * Returns provider coordinates for this exact file.
@@ -145,7 +145,7 @@ public interface Release<Content> {
    *                                  payloads share file coordinates
    * @throws NullPointerException     when the content contains null
    */
-  static <Content extends Payload> Set<Content> validate(
+  static <Content extends Payload<?>> Set<Content> validate(
       @NonNull Provider.Coordinate.Build coordinates,
       @NonNull String releaseName,
       long releaseNumber,
