@@ -72,7 +72,7 @@ public interface Store extends AutoCloseable, Describe, Extract {
   }
 
   /**
-   * Releases store resources according to its documented lifetime. Artists
+   * Releases store resources according to its documented lifetime. Installers
    * never close caller-owned stores. Stateless sources need no cleanup.
    *
    * @throws IOException when resources cannot be released

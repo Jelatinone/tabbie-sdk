@@ -10,20 +10,21 @@ import java.util.stream.Stream;
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.album.*;
 import cat.tabbie.sdk.merchant.Installer;
-import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
+import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Label;
 import lombok.NonNull;
 
 /**
- * Provider-described content and its logical placement. Artists capture bytes
- * and describe changes without writing to the target installation filesystem.
- * Stores remain caller-owned. File coordinates identify the exact
+ * Provider-described content and its logical placement. Installers capture
+ * bytes and describe changes without writing to the target installation
+ * filesystem. Stores remain caller-owned. File coordinates identify the exact
  * provider-scoped payload; dependencies and conflicts name catalog coordinates
  * at any level, matched by {@link Coordinate#includes(Coordinate)}.
  */
-public interface Artifact extends Release.Payload<Artifact.Context> {
+public sealed interface Artifact extends Release.Payload<Artifact.Context>
+    permits Mod, Plugin, Datapack, Behaviourpack, Modpack, Resourcepack {
 
   /**
    * Stable artifact identity derived from the file coordinates, so equal
@@ -135,7 +136,7 @@ public interface Artifact extends Release.Payload<Artifact.Context> {
   }
 
   /**
-   * Requires an explicitly supported target before invoking an artist.
+   * Requires an explicitly supported target before invoking an installer.
    *
    * @param artifact source artifact
    * @param context  selected target

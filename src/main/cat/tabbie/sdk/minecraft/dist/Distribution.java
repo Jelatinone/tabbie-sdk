@@ -14,6 +14,7 @@ import cat.tabbie.sdk.addon.artifact.Plugin;
 import cat.tabbie.sdk.addon.artifact.Resourcepack;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.merchant.Release;
+import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Version;
@@ -124,12 +125,6 @@ public sealed interface Distribution permits Java, Bedrock {
         new Artifact.Layout.Root(
             true,
             Path.of("mods"));
-
-      default -> {
-        throw new IOException(String.format(
-            "Distribution has no default layout for %s artifact",
-            Artifact.class.getSimpleName()));
-      }
     };
   }
 
@@ -164,6 +159,18 @@ public sealed interface Distribution permits Java, Bedrock {
       labels = Set.copyOf(labels);
       content = Release.validate(coordinates, releaseName, releaseNumber, content);
       validate(labels);
+    }
+
+    /**
+     * Assesses this build's declared labels against a target.
+     *
+     * @param target selected runtime target
+     * @return declared support or unknown support
+     */
+    public Compatibility compatibility(@NonNull Label target) {
+      return labels.stream().anyMatch(label -> label.match(target))
+          ? Compatibility.SUPPORTED
+          : Compatibility.UNKNOWN;
     }
 
     /**

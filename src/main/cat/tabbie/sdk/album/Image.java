@@ -220,7 +220,7 @@ public sealed interface Image<State extends Image.Alteration> {
 
     if (!relativeMount.toString().isEmpty()
         && images.stream().anyMatch(image -> !image.path().startsWith(relativeMount))) {
-      throw new IllegalArgumentException("An artist destination escapes the context mount.");
+      throw new IllegalArgumentException("An installer destination escapes the context mount.");
     }
 
     return Set.copyOf(byPath.values());

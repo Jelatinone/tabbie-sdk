@@ -19,7 +19,7 @@ import lombok.NonNull;
 public sealed interface Behaviourpack extends Artifact {
 
   /**
-   * An artifact using the shared named-file and ZIP capture artist.
+   * An artifact using the shared named-file and ZIP capture installer.
    *
    * @param coordinates  exact provider file coordinates
    * @param artifactName non-blank display name
@@ -50,7 +50,8 @@ public sealed interface Behaviourpack extends Artifact {
   }
 
   /**
-   * An artifact whose content images are described by a caller-supplied artist.
+   * An artifact whose content images are described by a caller-supplied
+   * installer.
    *
    * @param coordinates  exact provider file coordinates
    * @param artifactName nonblank display name
@@ -58,7 +59,7 @@ public sealed interface Behaviourpack extends Artifact {
    * @param labels       nonempty supported targets
    * @param depends      external dependencies
    * @param conflicts    external conflicts
-   * @param artist       typed content description strategy
+   * @param installer    typed content description strategy
    */
   record Custom(
       @NonNull Coordinate.File coordinates,
