@@ -1,13 +1,14 @@
 package cat.tabbie.sdk.album;
 
-import java.nio.file.Path;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
+import cat.tabbie.sdk.schema.Relative;
+import cat.tabbie.sdk.schema.Package;
 import lombok.NonNull;
 
 /**
@@ -22,17 +23,11 @@ import lombok.NonNull;
 public sealed interface Image<State extends Image.Alteration> {
 
   /**
-   * Target path location, retained as supplied by the caller
-   *
-   * @return target path
-   */
-  Path path();
-
-  /**
    * Expected content or existence before the change
    *
    * @return expected content before
    */
+  @NonNull
   State before();
 
   /**
@@ -40,6 +35,7 @@ public sealed interface Image<State extends Image.Alteration> {
    *
    * @return described content after
    */
+  @NonNull
   State after();
 
   /**
@@ -47,6 +43,7 @@ public sealed interface Image<State extends Image.Alteration> {
    *
    * @return image reversed
    */
+  @NonNull
   Image<State> preimage();
 
   /**
@@ -57,7 +54,7 @@ public sealed interface Image<State extends Image.Alteration> {
    *
    * @return Resulting image
    */
-  static Image<File> create(@NonNull Path path, @NonNull Reference after) {
+  static Image<File> create(@NonNull Relative path, @NonNull Reference after) {
     return new Installation(new File.Absent(), new File.Present(after), path);
   }
 
@@ -71,7 +68,7 @@ public sealed interface Image<State extends Image.Alteration> {
    *
    * @return resulting image
    */
-  static Image<File> replace(Path path, Reference before, Reference after) {
+  static Image<File> replace(@NonNull Relative path, @NonNull Reference before, @NonNull Reference after) {
     return new Installation(new File.Present(before), new File.Present(after), path);
   }
 
@@ -83,7 +80,7 @@ public sealed interface Image<State extends Image.Alteration> {
    *
    * @return resulting image
    */
-  static Image<File> delete(@NonNull Path path, @NonNull Reference before) {
+  static Image<File> delete(@NonNull Relative path, @NonNull Reference before) {
     return new Installation(new File.Present(before), new File.Absent(), path);
   }
 
@@ -95,7 +92,7 @@ public sealed interface Image<State extends Image.Alteration> {
    *
    * @return resulting image
    */
-  static Image<Text> delete(@NonNull Path path, @NonNull String before) {
+  static Image<Text> delete(@NonNull Relative path, @NonNull String before) {
     return configure(path, new Text.Present(
         Chunk.diff(before, "").stream().map(Chunk::before).toList()), new Text.Absent());
   }
@@ -109,7 +106,7 @@ public sealed interface Image<State extends Image.Alteration> {
    *
    * @return resulting image
    */
-  static Image<Text> configure(@NonNull Path path, @NonNull Text before, @NonNull Text after) {
+  static Image<Text> configure(@NonNull Relative path, @NonNull Text before, @NonNull Text after) {
     return new Configuration(before, after, path);
   }
 
@@ -122,7 +119,7 @@ public sealed interface Image<State extends Image.Alteration> {
    *
    * @return resulting image
    */
-  static Image<Text> configure(@NonNull Path path, @NonNull List<Chunk> chunks) {
+  static Image<Text> configure(@NonNull Relative path, @NonNull List<Chunk> chunks) {
     return new Configuration(chunks, path);
   }
 
@@ -135,7 +132,7 @@ public sealed interface Image<State extends Image.Alteration> {
    *
    * @return resulting image
    */
-  static Image<Text> configure(@NonNull Path path, @NonNull String before, @NonNull String after) {
+  static Image<Text> configure(@NonNull Relative path, @NonNull String before, @NonNull String after) {
     return configure(path, Chunk.diff(before, after));
   }
 
@@ -151,7 +148,7 @@ public sealed interface Image<State extends Image.Alteration> {
    *
    * @return resulting image
    */
-  static Image<Text> configure(@NonNull Path path, @NonNull String before, @NonNull String after,
+  static Image<Text> configure(@NonNull Relative path, @NonNull String before, @NonNull String after,
       int contextLines) {
     return configure(path, Chunk.diff(before, after, contextLines));
   }
@@ -164,30 +161,31 @@ public sealed interface Image<State extends Image.Alteration> {
    *
    * @return resulting image
    */
-  static Image<Text> configure(@NonNull Path path, @NonNull String after) {
+  static Image<Text> configure(@NonNull Relative path, @NonNull String after) {
     return configure(path, new Text.Absent(), new Text.Present(
         Chunk.diff("", after).stream().map(Chunk::after).toList()));
   }
 
   /**
-   * Validates a logical relative path and normalizes internal dot segments.
-   * Empty paths name a mount itself. This does not inspect physical containment,
-   * symlinks, or target filesystem case/name restrictions; the agent checks
-   * those.
+   * Describes taking a claim on a package tabbie did not claim before.
    *
-   * @param path logical path
-   * @return normalized path contained within its mount
+   * @param pack package recipe to claim
+   *
+   * @return resulting image
    */
-  static Path relative(@NonNull Path path) {
-    Path normalized = path.normalize();
-    if (path.getRoot() != null || path.isAbsolute() || normalized.startsWith("..")) {
-      throw new IllegalArgumentException("A logical path must stay beneath its relative mount.");
-    }
-    if (!normalized.toString().isEmpty()) {
-      for (Path component : normalized)
-        Reference.validateFilename(component.toString());
-    }
-    return normalized;
+  static Image<Claim> provision(@NonNull Package pack) {
+    return new Provision(new Claim.Absent(), new Claim.Present(pack));
+  }
+
+  /**
+   * Describes taking a claim on a package tabbie did not claim before.
+   *
+   * @param pack package recipe to claim
+   *
+   * @return resulting image
+   */
+  static Image<Claim> deprovision(@NonNull Package pack) {
+    return new Provision(new Claim.Present(pack), new Claim.Absent());
   }
 
   /**
@@ -197,33 +195,39 @@ public sealed interface Image<State extends Image.Alteration> {
    * @return verified set of images
    * @throws IllegalArgumentException when generated images cannot be verified
    */
-  static Set<Image<?>> fence(@NonNull Collection<@NonNull ? extends Image<?>> images, Path mount)
-      throws IllegalArgumentException {
-
-    Path relativeMount = relative(mount);
-    Map<Path, Image<?>> byPath = new LinkedHashMap<>();
-
+  static void validate(@NonNull Collection<? extends Image<?>> images) {
+    Map<Relative, Image<?>> files = new LinkedHashMap<>();
+    Map<String, Image<?>> packages = new LinkedHashMap<>();
     for (Image<?> image : images) {
-      Path path = Objects.requireNonNull(image, "image").path();
-      if (path.toString().isEmpty() || !path.equals(relative(path)) || byPath.putIfAbsent(path, image) != null) {
-        throw new IllegalArgumentException("Images require unique normalized relative destinations");
+      Image<?> clash = switch (image) {
+        case Installation installation ->
+          files.putIfAbsent(installation.relative(), installation);
+        case Configuration configuration ->
+          files.putIfAbsent(configuration.relative(), configuration);
+        case Provision provision ->
+          packages.putIfAbsent(provision.name(), provision);
+      };
+      if (clash != null) {
+        throw new IllegalArgumentException("Images require unique targets: " + clash);
       }
     }
-
-    for (Path path : byPath.keySet()) {
-      for (Path parent = path.getParent(); parent != null; parent = parent.getParent()) {
-        if (byPath.containsKey(parent)) {
+    for (Relative file : files.keySet()) {
+      for (Relative parent = file.parent(); parent != null; parent = parent.parent()) {
+        if (files.containsKey(parent)) {
           throw new IllegalArgumentException("A file destination may not also be used as a directory");
         }
       }
     }
+  }
 
-    if (!relativeMount.toString().isEmpty()
-        && images.stream().anyMatch(image -> !image.path().startsWith(relativeMount))) {
-      throw new IllegalArgumentException("An installer destination escapes the context mount.");
-    }
-
-    return Set.copyOf(byPath.values());
+  /**
+   * Describes the change that undoes a set.
+   *
+   * @param images applied images
+   * @return immutable set of preimages
+   */
+  static Set<Image<?>> preimage(@NonNull Collection<? extends Image<?>> images) {
+    return images.stream().map(Image::preimage).collect(Collectors.toUnmodifiableSet());
   }
 
   /**
@@ -283,6 +287,15 @@ public sealed interface Image<State extends Image.Alteration> {
       }
     }
   }
+
+  sealed interface Claim extends Alteration {
+
+    record Absent() implements Claim {
+    }
+
+    record Present(@NonNull Package pkg) implements Claim {
+    }
+  }
 }
 
 /**
@@ -293,7 +306,8 @@ public sealed interface Image<State extends Image.Alteration> {
  * @param after  complete content or absence described after the change
  * @param path   target path retained as supplied
  */
-record Installation(@NonNull File before, @NonNull File after, @NonNull Path path) implements Image<Image.File> {
+record Installation(@NonNull File before, @NonNull File after, @NonNull Relative relative)
+    implements Image<Image.File> {
 
   /**
    * Rejects an absence-to-absence description.
@@ -308,7 +322,7 @@ record Installation(@NonNull File before, @NonNull File after, @NonNull Path pat
 
   @Override
   public Installation preimage() {
-    return new Installation(after, before, path);
+    return new Installation(after, before, relative);
   }
 }
 
@@ -323,7 +337,8 @@ record Installation(@NonNull File before, @NonNull File after, @NonNull Path pat
  * @param after  text expectations after the change
  * @param path   target path retained as supplied
  */
-record Configuration(@NonNull Text before, @NonNull Text after, @NonNull Path path) implements Image<Image.Text> {
+record Configuration(@NonNull Text before, @NonNull Text after, @NonNull Relative relative)
+    implements Image<Image.Text> {
 
   /**
    * Projects each authored chunk into corresponding before and after fragments.
@@ -331,9 +346,11 @@ record Configuration(@NonNull Text before, @NonNull Text after, @NonNull Path pa
    * @param chunks ordered authored chunks
    * @param path   target path
    */
-  public Configuration(@NonNull List<Chunk> chunks, @NonNull Path path) {
-    this(new Text.Present(chunks.stream().map(Chunk::before).toList()),
-        new Text.Present(chunks.stream().map(Chunk::after).toList()), path);
+  public Configuration(@NonNull List<Chunk> chunks, @NonNull Relative path) {
+    this(
+        new Text.Present(chunks.stream().map(Chunk::before).toList()),
+        new Text.Present(chunks.stream().map(Chunk::after).toList()),
+        path);
   }
 
   /**
@@ -347,7 +364,7 @@ record Configuration(@NonNull Text before, @NonNull Text after, @NonNull Path pa
 
   @Override
   public Image<Text> preimage() {
-    return new Configuration(after, before, path);
+    return new Configuration(after, before, relative);
   }
 
   /**
@@ -369,7 +386,9 @@ record Configuration(@NonNull Text before, @NonNull Text after, @NonNull Path pa
       Chunk.validateFragments(beforeText, afterText);
       return;
     }
-    Text.Present present = before instanceof Text.Present text ? text : (Text.Present) after;
+    Text.Present present = before instanceof Text.Present text
+        ? text
+        : (Text.Present) after;
     int end = 0;
     for (Chunk.Fragment fragment : present.fragments()) {
       if (fragment.range().start() != end) {
@@ -377,5 +396,27 @@ record Configuration(@NonNull Text before, @NonNull Text after, @NonNull Path pa
       }
       end = fragment.range().end();
     }
+  }
+}
+
+record Provision(@NonNull Claim before, @NonNull Claim after) implements Image<Image.Claim> {
+
+  public Provision {
+    if (before instanceof Claim.Absent && after instanceof Claim.Absent)
+      throw new IllegalArgumentException("Claims may not both be absent.");
+    if (before instanceof Claim.Present(Package a) && after instanceof Claim.Present(Package b)
+        && !a.name().equals(b.name()))
+      throw new IllegalArgumentException("A provision changes exactly one package.");
+  }
+
+  public String name() {
+    return (before instanceof Claim.Present(Package p)
+        ? p
+        : ((Claim.Present) after).pkg()).name();
+  }
+
+  @Override
+  public @NonNull Image<Claim> preimage() {
+    return new Provision(after, before);
   }
 }

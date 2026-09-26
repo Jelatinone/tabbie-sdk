@@ -1,7 +1,6 @@
 package cat.tabbie.sdk.minecraft.dist;
 
 import java.io.IOException;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Set;
 
@@ -18,6 +17,7 @@ import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Version;
+import cat.tabbie.sdk.schema.Relative;
 import lombok.NonNull;
 
 /**
@@ -102,29 +102,29 @@ public sealed interface Distribution permits Java, Bedrock {
 
     return switch (artifact) {
       case Mod mod ->
-        new Artifact.Layout.Root(
+        new Artifact.Layout(
             false,
-            Path.of("mods"));
+            Relative.root("mods"));
       case Plugin plugin ->
-        new Artifact.Layout.Root(
+        new Artifact.Layout(
             false,
-            Path.of("plugins"));
+            Relative.root("plugins"));
       case Resourcepack resourcepack ->
-        new Artifact.Layout.Root(
+        new Artifact.Layout(
             false,
-            Path.of("resourcepacks"));
+            Relative.root("resourcepacks"));
       case Datapack datapack ->
-        new Artifact.Layout.World(
+        new Artifact.Layout(
             true,
-            Path.of("datapacks", artifact.artifactId().id().toString()));
+            Relative.world("datapacks", artifact.artifactId().id().toString()));
       case Behaviourpack behaviourpack ->
-        new Artifact.Layout.World(
+        new Artifact.Layout(
             true,
-            Path.of("behavior_packs", artifact.artifactId().id().toString()));
+            Relative.world("behavior_packs", artifact.artifactId().id().toString()));
       case Modpack modpack ->
-        new Artifact.Layout.Root(
+        new Artifact.Layout(
             true,
-            Path.of("mods"));
+            Relative.root("mods"));
     };
   }
 

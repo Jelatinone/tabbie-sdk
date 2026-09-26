@@ -2,7 +2,6 @@ package cat.tabbie.sdk.addon.artifact;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -14,6 +13,7 @@ import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Label;
+import cat.tabbie.sdk.schema.Relative;
 import lombok.NonNull;
 
 /**
@@ -82,18 +82,25 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
   default Intermediate<Set<Image<?>>> install(@NonNull Context context) throws IOException {
     this.require(context);
     Layout layout = context.layout(this);
-    Path destination = context.resolve(layout);
+    Relative destination = layout.relative();
 
     Store store = context.store();
     Intermediate<Reference.Captured> retained = store.capture(store);
     if (layout.unpack()) {
       return retained
           .flatMap(archive -> Archive.DEFAULT.unpack(store, destination))
-          .map((images) -> Image.fence(images, destination));
+          .map((images) -> {
+            Image.validate(images);
+            return images;
+          });
     }
     return retained
-        .map(captured -> List.of(Image.create(destination.resolve(captured.fileName()), captured)))
-        .map((images) -> Image.fence(images, destination));
+        .map(captured -> Set.<Image<?>>of(
+            Image.create(destination.resolve(captured.fileName()), captured)))
+        .map(images -> {
+          Image.validate(images);
+          return images;
+        });
   }
 
   /**
@@ -179,22 +186,6 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
     }
 
     /**
-     * Binds a scoped layout to a normalized Den-relative destination.
-     *
-     * @param layout scoped destination
-     * @return Den-relative directory
-     * @throws IOException when a world layout has no selected world mount
-     */
-    default Path resolve(@NonNull Layout layout) throws IOException {
-      Path mount = Image.relative(contextRoot());
-      if (layout instanceof Layout.World) {
-        mount = mount
-            .resolve(Image.relative(worldRoot()));
-      }
-      return Image.relative(mount.resolve(layout.relativePath()));
-    }
-
-    /**
      * Selects an override or the distribution's default layout.
      *
      * @param artifact selected artifact
@@ -224,8 +215,8 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
        * Validates and normalizes both logical mounts without filesystem access.
        */
       public Default {
-        contextRoot = Image.relative(contextRoot);
-        worldRoot = Image.relative(worldRoot);
+        contextRoot = Relative.normalize(contextRoot);
+        worldRoot = Relative.normalize(worldRoot);
       }
 
     }
@@ -234,54 +225,7 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
   /**
    * Scoped directory; an unpacking layout names the exact extraction root.
    */
-  sealed interface Layout
-      permits Layout.Root, Layout.World {
+  record Layout(boolean unpack, Relative relative) {
 
-    /**
-     * Returns whether to capture ZIP entries instead of the original file.
-     *
-     * @return whether to capture ZIP entries instead of the original file
-     */
-    boolean unpack();
-
-    /**
-     * Returns normalized directory relative to the corresponding mount.
-     *
-     * @return normalized directory relative to the corresponding mount
-     */
-    @NonNull
-    Path relativePath();
-
-    /**
-     * Directory relative to the assembled Den/context root.
-     *
-     * @param unpack       whether to unpack the payload
-     * @param relativePath destination directory
-     */
-    record Root(boolean unpack, Path relativePath) implements Layout {
-
-      /**
-       * Validates and normalizes the mount-relative destination.
-       */
-      public Root {
-        relativePath = Image.relative(relativePath);
-      }
-    }
-
-    /**
-     * Directory relative to the selected world's mount.
-     *
-     * @param unpack       whether to unpack the payload
-     * @param relativePath destination directory
-     */
-    record World(boolean unpack, Path relativePath) implements Layout {
-
-      /**
-       * Validates and normalizes the world-relative destination.
-       */
-      public World {
-        relativePath = Image.relative(relativePath);
-      }
-    }
   }
 }

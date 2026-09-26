@@ -18,6 +18,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 
+import cat.tabbie.sdk.schema.Relative;
 import lombok.NonNull;
 
 /**
@@ -67,9 +68,8 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * @return unevaluated image preparation
    */
   public <S extends Store & Extract> Intermediate<Set<Image<?>>> unpack(@NonNull S store,
-      @NonNull Path destination) {
-    Path root = Image.relative(destination);
-    return inspect(store).flatMap(found -> new Unpack<>(store, root, found));
+      @NonNull Relative destination) {
+    return inspect(store).flatMap(found -> new Unpack<>(store, destination, found));
   }
 
   /**
@@ -162,17 +162,18 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * @param destination logical extraction directory
    * @param entries     inspected file entries
    */
-  record Unpack<S extends Store & Extract>(S store, Path destination, List<Entry> entries)
+  record Unpack<S extends Store & Extract>(S store, Relative destination, List<Entry> entries)
       implements Intermediate.Step<Set<Image<?>>> {
     @Override
     public Set<Image<?>> collapse(Intermediate.Context context) throws IOException {
-      List<Image<?>> images = new ArrayList<>();
+      Set<Image<?>> images = new HashSet<>();
       for (Entry entry : entries()) {
         Reference.Captured captured = store.capture(entry)
             .collapse(context);
         images.add(Image.create(destination.resolve(decode(entry.path())), captured));
       }
-      return Image.fence(images, destination);
+      Image.validate(images);
+      return images;
     }
   }
 
