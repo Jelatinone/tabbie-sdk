@@ -4,10 +4,10 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Set;
 
-import cat.tabbie.sdk.album.Extract;
-import cat.tabbie.sdk.album.Image;
-import cat.tabbie.sdk.album.Intermediate;
-import cat.tabbie.sdk.album.Store;
+import cat.tabbie.sdk.album.repository.Extract;
+import cat.tabbie.sdk.album.repository.Store;
+import cat.tabbie.sdk.album.revision.Image;
+import cat.tabbie.sdk.album.revision.Intermediate;
 import lombok.NonNull;
 
 /**

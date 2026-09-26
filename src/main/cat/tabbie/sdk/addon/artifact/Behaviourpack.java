@@ -3,9 +3,9 @@ package cat.tabbie.sdk.addon.artifact;
 import java.io.IOException;
 import java.util.Set;
 
-import cat.tabbie.sdk.album.Image;
-import cat.tabbie.sdk.album.Intermediate;
-import cat.tabbie.sdk.album.Store;
+import cat.tabbie.sdk.album.repository.Store;
+import cat.tabbie.sdk.album.revision.Image;
+import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.minecraft.Label;

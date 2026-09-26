@@ -1,5 +1,4 @@
-package cat.tabbie.sdk.minecraft.dist;
-
+package cat.tabbie.sdk.minecraft.distribution;
 
 import java.io.IOException;
 import java.util.Set;

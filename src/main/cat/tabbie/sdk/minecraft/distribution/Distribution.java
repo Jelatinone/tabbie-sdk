@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.minecraft.dist;
+package cat.tabbie.sdk.minecraft.distribution;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -17,7 +17,7 @@ import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Version;
-import cat.tabbie.sdk.schema.Relative;
+import cat.tabbie.sdk.platform.Relative;
 import lombok.NonNull;
 
 /**

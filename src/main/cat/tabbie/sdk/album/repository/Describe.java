@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.album;
+package cat.tabbie.sdk.album.repository;
 
 import java.io.IOException;
 import java.io.InputStream;

@@ -1,5 +1,4 @@
-package cat.tabbie.sdk.minecraft.dist;
-
+package cat.tabbie.sdk.minecraft.distribution;
 
 import java.io.IOException;
 import java.util.Set;
@@ -243,7 +242,7 @@ sealed interface Java extends Distribution {
     @Override
     default Set<Class<? extends Artifact>> capabilities() {
       return Set.of(Plugin.class, Datapack.class, Resourcepack.Java.class,
-        Modpack.class);
+          Modpack.class);
     }
   }
 }

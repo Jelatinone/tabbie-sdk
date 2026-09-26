@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.merchant;
+package cat.tabbie.sdk.api;
 
 /**
  * Releases this store's resources according to its documented lifetime.

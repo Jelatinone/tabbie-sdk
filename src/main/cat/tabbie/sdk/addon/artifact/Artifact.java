@@ -7,13 +7,18 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 import cat.tabbie.sdk.Identity;
-import cat.tabbie.sdk.album.*;
+import cat.tabbie.sdk.album.repository.Archive;
+import cat.tabbie.sdk.album.repository.Extract;
+import cat.tabbie.sdk.album.repository.Reference;
+import cat.tabbie.sdk.album.repository.Store;
+import cat.tabbie.sdk.album.revision.Image;
+import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Label;
-import cat.tabbie.sdk.schema.Relative;
+import cat.tabbie.sdk.platform.Relative;
 import lombok.NonNull;
 
 /**

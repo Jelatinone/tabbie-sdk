@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.album;
+package cat.tabbie.sdk.album.repository;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -8,7 +8,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.OptionalLong;
 
-import cat.tabbie.sdk.merchant.Observer;
+import cat.tabbie.sdk.album.revision.Intermediate;
+import cat.tabbie.sdk.api.Observer;
 import lombok.NonNull;
 
 /**

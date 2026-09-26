@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.schema;
+package cat.tabbie.sdk.platform;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import cat.tabbie.sdk.album.Intermediate;
+import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.api.Response;
 import lombok.NonNull;
 

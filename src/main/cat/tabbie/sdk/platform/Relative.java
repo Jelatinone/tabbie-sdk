@@ -1,10 +1,10 @@
-package cat.tabbie.sdk.schema;
+package cat.tabbie.sdk.platform;
 
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.StringJoiner;
 
-import cat.tabbie.sdk.album.Reference;
+import cat.tabbie.sdk.album.repository.Reference;
 import lombok.NonNull;
 
 public sealed interface Relative {

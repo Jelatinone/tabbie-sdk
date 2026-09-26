@@ -1,9 +1,8 @@
-package cat.tabbie.sdk.schema;
+package cat.tabbie.sdk.platform;
 
 import java.util.List;
 
-import cat.tabbie.sdk.schema.Package.Manager;
-
+import cat.tabbie.sdk.platform.Package.Manager;
 import lombok.NonNull;
 
 /**
@@ -29,16 +28,7 @@ public record Host(@NonNull Platform platform, @NonNull List<Manager> managers) 
    * @return this JVM's host
    */
   public static Host local() {
-    return Local.HOST;
-  }
-
-  /**
-   * Defers detection until first use, so constructing a {@code Host} for a
-   * remote machine never probes the local one.
-   */
-  private static final class Local {
-
-    private static final Host HOST = new Host(Platform.local(),
+    return new Host(Platform.local(),
         Manager.ALL.stream().filter(Manager::available).toList());
   }
 }

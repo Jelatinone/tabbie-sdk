@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.album;
+package cat.tabbie.sdk.album.repository;
 
 import java.io.FilterInputStream;
 import java.io.IOException;
@@ -18,7 +18,9 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 
-import cat.tabbie.sdk.schema.Relative;
+import cat.tabbie.sdk.album.revision.Image;
+import cat.tabbie.sdk.album.revision.Intermediate;
+import cat.tabbie.sdk.platform.Relative;
 import lombok.NonNull;
 
 /**

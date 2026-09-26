@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.album;
+package cat.tabbie.sdk.album.revision;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -8,8 +8,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import cat.tabbie.sdk.album.Chunk.Change.Line;
-import cat.tabbie.sdk.album.Chunk.Change.Revision;
+import cat.tabbie.sdk.album.revision.Chunk.Change.Line;
+import cat.tabbie.sdk.album.revision.Chunk.Change.Revision;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NonNull;

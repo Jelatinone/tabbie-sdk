@@ -1,7 +1,7 @@
 package cat.tabbie.sdk.minecraft;
 
 import cat.tabbie.sdk.addon.artifact.Artifact;
-import cat.tabbie.sdk.minecraft.dist.Distribution;
+import cat.tabbie.sdk.minecraft.distribution.Distribution;
 import lombok.NonNull;
 
 /**

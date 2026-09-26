@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.album;
+package cat.tabbie.sdk.album.repository;
 
 import java.nio.file.Path;
 import java.security.MessageDigest;

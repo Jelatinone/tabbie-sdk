@@ -1,11 +1,11 @@
-package cat.tabbie.sdk.minecraft.dist;
+package cat.tabbie.sdk.minecraft.distribution;
 
 import java.io.IOException;
 import java.util.Set;
 
 import cat.tabbie.sdk.Identity;
-import cat.tabbie.sdk.album.Intermediate;
-import cat.tabbie.sdk.album.Store;
+import cat.tabbie.sdk.album.repository.Store;
+import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Label;

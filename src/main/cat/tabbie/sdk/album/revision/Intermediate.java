@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.album;
+package cat.tabbie.sdk.album.revision;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-import cat.tabbie.sdk.merchant.Observer;
+import cat.tabbie.sdk.api.Observer;
 import lombok.NonNull;
 
 /**
