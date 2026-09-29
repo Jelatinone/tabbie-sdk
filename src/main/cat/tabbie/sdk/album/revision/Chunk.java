@@ -106,6 +106,23 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
   }
 
   /**
+   * Describes complete text as fragments from line zero; empty text has none.
+   *
+   * @param text complete text
+   * @return immutable fragments, empty for empty text
+   */
+  public static List<Fragment> fragmentsOf(@NonNull String text) {
+    List<Line> lines = linesOf(text);
+    return lines.isEmpty() ? List.of() : List.of(new Fragment(lines, new Range(0, lines.size())));
+  }
+
+  public static List<Chunk> compose(
+      @NonNull List<Chunk> first,
+      @NonNull List<Chunk> second) {
+    return null;
+  }
+
+  /**
    * Finds a deterministic shortest insertion/deletion script with three unchanged
    * context lines on each side. Touching context windows merge.
    *
@@ -142,6 +159,55 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
       throw new IllegalArgumentException("Context line count must be non-negative.");
     }
     return before.equals(after) ? List.of() : new Diff(linesOf(before), linesOf(after), contextLines).chunks();
+  }
+
+  /**
+   * Pairs an original fragment with its resulting fragment. The complete script
+   * is kept, so unchanged lines between edits, or an unchanged pair, become
+   * context.
+   *
+   * @param before original fragment
+   * @param after  resulting fragment
+   * @return chunk spanning both fragments' ranges
+   */
+  public static Chunk between(@NonNull Fragment before, @NonNull Fragment after) {
+    return new Chunk(new Diff(before.lines(), after.lines(), 0).changes(), before.range(), after.range());
+  }
+
+  /**
+   * Pairs corresponding fragments by index, one chunk for each pair.
+   *
+   * @param before original fragments in file order
+   * @param after  resulting fragments in file order
+   * @return immutable chunks in file order
+   * @throws IllegalArgumentException when fragments overlap or unchanged gaps
+   *                                  differ
+   */
+  public static List<Chunk> between(@NonNull List<Fragment> before, @NonNull List<Fragment> after) {
+    validateFragments(before, after);
+    return IntStream.range(0, before.size())
+        .mapToObj(index -> between(before.get(index), after.get(index)))
+        .toList();
+  }
+
+  /**
+   * Describes creating complete text from nothing. Every chunk inserts at the
+   * empty original side's only boundary, line zero.
+   *
+   * @param after complete resulting text in file order
+   * @return immutable insertion-only chunks, one for each fragment
+   * @throws IllegalArgumentException when fragments leave a gap
+   */
+  public static List<Chunk> create(@NonNull List<Fragment> after) {
+    validateComplete(after);
+    return after.stream()
+        .map(fragment -> new Chunk(
+            fragment.lines().stream()
+                .map(line -> new Change(line, Revision.INSERTION))
+                .toList(),
+            new Range(0, 0),
+            fragment.range()))
+        .toList();
   }
 
   /**
@@ -217,6 +283,23 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
         chunks.stream()
             .map(Chunk::after)
             .toList());
+  }
+
+  /**
+   * Checks that one file side describes complete text from line zero without
+   * gaps, as creating a whole file requires.
+   *
+   * @param fragments fragments in file order
+   * @throws IllegalArgumentException when a fragment leaves a gap
+   */
+  public static void validateComplete(@NonNull List<Fragment> fragments) {
+    int end = 0;
+    for (Fragment fragment : fragments) {
+      if (fragment.range().start() != end) {
+        throw new IllegalArgumentException("File creation must describe complete text without gaps.");
+      }
+      end = fragment.range().end();
+    }
   }
 
   /**
