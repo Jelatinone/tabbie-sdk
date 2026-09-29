@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import cat.tabbie.sdk.album.repository.Reference;
 import cat.tabbie.sdk.platform.Package;
 import cat.tabbie.sdk.platform.Relative;
+import cat.tabbie.sdk.platform.Package.Manager;
 import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
@@ -27,384 +28,430 @@ import lombok.experimental.FieldDefaults;
  */
 public sealed interface Image<State extends Image.Alteration> {
 
-  /**
-   * Target this image changes
-   *
-   * @return changed file or package
-   */
-  @NonNull
-  Target target();
+	/**
+	 * Target this image changes
+	 *
+	 * @return changed file or package
+	 */
+	@NonNull
+	Target target();
 
-  /**
-   * Expected existence, content, or claim before the change
-   *
-   * @return expected state before
-   */
-  @NonNull
-  State before();
+	/**
+	 * Expected existence, content, or claim before the change
+	 *
+	 * @return expected state before
+	 */
+	@NonNull
+	State before();
 
-  /**
-   * Described existence, content, or claim after the change
-   *
-   * @return described state after
-   */
-  @NonNull
-  State after();
+	/**
+	 * Described existence, content, or claim after the change
+	 *
+	 * @return described state after
+	 */
+	@NonNull
+	State after();
 
-  /**
-   * Image with its before and after states exchanged
-   *
-   * @return image reversed
-   */
-  @NonNull
-  Image<State> preimage();
+	/**
+	 * Image with its before and after states exchanged
+	 *
+	 * @return image reversed
+	 */
+	@NonNull
+	Image<State> preimage();
 
-  /**
-   * Describes creation of a file from retained content, including zero bytes.
-   *
-   * @param path  target file
-   * @param after retained content
-   *
-   * @return resulting image
-   */
-  static Image<File> create(@NonNull Relative path, @NonNull Reference after) {
-    return new Installation(new File.Absent(), new File.Present(after), new Target.File(path));
-  }
+	/**
+	 * Describes creation of a file from retained content, including zero bytes.
+	 *
+	 * @param path  target file
+	 * @param after retained content
+	 *
+	 * @return resulting image
+	 */
+	static Image<File> create(@NonNull Relative path, @NonNull Reference after) {
+		return new Installation(new File.Absent(), new File.Present(after), new Target.File(path));
+	}
 
-  /**
-   * Describes replacement of a file deleted and succeeded by another file
-   * created.
-   *
-   * @param path   target file
-   * @param before retained content before
-   * @param after  retained content after
-   *
-   * @return resulting image
-   */
-  static Image<File> replace(@NonNull Relative path, @NonNull Reference before, @NonNull Reference after) {
-    return new Installation(new File.Present(before), new File.Present(after), new Target.File(path));
-  }
+	/**
+	 * Describes replacement of a file deleted and succeeded by another file
+	 * created.
+	 *
+	 * @param path   target file
+	 * @param before retained content before
+	 * @param after  retained content after
+	 *
+	 * @return resulting image
+	 */
+	static Image<File> replace(@NonNull Relative path, @NonNull Reference before, @NonNull Reference after) {
+		return new Installation(new File.Present(before), new File.Present(after), new Target.File(path));
+	}
 
-  /**
-   * Describes deletion of a file whose complete content matches the reference.
-   *
-   * @param path   target file
-   * @param before retained content before
-   *
-   * @return resulting image
-   */
-  static Image<File> delete(@NonNull Relative path, @NonNull Reference before) {
-    return new Installation(new File.Present(before), new File.Absent(), new Target.File(path));
-  }
+	/**
+	 * Describes deletion of a file whose complete content matches the reference.
+	 *
+	 * @param path   target file
+	 * @param before retained content before
+	 *
+	 * @return resulting image
+	 */
+	static Image<File> delete(@NonNull Relative path, @NonNull Reference before) {
+		return new Installation(new File.Present(before), new File.Absent(), new Target.File(path));
+	}
 
-  /**
-   * Describes changes to an existing file between explicit fragment states. The
-   * fragment lists pair up into chunks.
-   *
-   * @param path   target file
-   * @param before text before
-   * @param after  text after
-   *
-   * @return resulting image
-   */
-  static Image<Text> configure(@NonNull Relative path, @NonNull Text before, @NonNull Text after) {
-    return new Configuration(before, after, new Target.File(path));
-  }
+	/**
+	 * Describes changes to an existing file between explicit fragment states. The
+	 * fragment lists pair up into chunks.
+	 *
+	 * @param path   target file
+	 * @param before text before
+	 * @param after  text after
+	 *
+	 * @return resulting image
+	 */
+	static Image<Text> configure(@NonNull Relative path, @NonNull Text before, @NonNull Text after) {
+		return new Configuration(before, after, new Target.File(path));
+	}
 
-  /**
-   * Describes changes to an existing file. Each chunk contributes a fragment on
-   * each side; the chunks' insertion/deletion ordering is not retained.
-   *
-   * @param path   target file
-   * @param chunks changed chunks
-   *
-   * @return resulting image
-   */
-  static Image<Text> configure(@NonNull Relative path, @NonNull List<Chunk> chunks) {
-    return new Configuration(chunks, new Target.File(path));
-  }
+	/**
+	 * Describes changes to an existing file. Each chunk contributes a fragment on
+	 * each side; the chunks' insertion/deletion ordering is not retained.
+	 *
+	 * @param path   target file
+	 * @param chunks changed chunks
+	 *
+	 * @return resulting image
+	 */
+	static Image<Text> configure(@NonNull Relative path, @NonNull List<Chunk> chunks) {
+		return new Configuration(chunks, new Target.File(path));
+	}
 
-  /**
-   * Describes text differences with three surrounding context lines.
-   *
-   * @param path   target file
-   * @param before text before
-   * @param after  text after
-   *
-   * @return resulting image
-   */
-  static Image<Text> configure(@NonNull Relative path, @NonNull String before, @NonNull String after) {
-    return configure(path, Chunk.diff(before, after));
-  }
+	/**
+	 * Describes text differences with three surrounding context lines.
+	 *
+	 * @param path   target file
+	 * @param before text before
+	 * @param after  text after
+	 *
+	 * @return resulting image
+	 */
+	static Image<Text> configure(@NonNull Relative path, @NonNull String before, @NonNull String after) {
+		return configure(path, Chunk.diff(before, after));
+	}
 
-  /**
-   * Retains only the differing regions and their context, not complete content
-   * expectations. Equal inputs produce empty fragment lists: the file must
-   * exist, but no particular content is described.
-   *
-   * @param path         target file
-   * @param before       text before
-   * @param after        text after
-   * @param contextLines number of context lines to keep
-   *
-   * @return resulting image
-   */
-  static Image<Text> configure(@NonNull Relative path, @NonNull String before, @NonNull String after,
-      int contextLines) {
-    return configure(path, Chunk.diff(before, after, contextLines));
-  }
+	/**
+	 * Retains only the differing regions and their context, not complete content
+	 * expectations. Equal inputs produce empty fragment lists: the file must
+	 * exist, but no particular content is described.
+	 *
+	 * @param path         target file
+	 * @param before       text before
+	 * @param after        text after
+	 * @param contextLines number of context lines to keep
+	 *
+	 * @return resulting image
+	 */
+	static Image<Text> configure(@NonNull Relative path, @NonNull String before, @NonNull String after,
+			int contextLines) {
+		return configure(path, Chunk.diff(before, after, contextLines));
+	}
 
-  /**
-   * Describes taking a claim on a package tabbie did not claim before.
-   *
-   * @param pack package recipe to claim
-   *
-   * @return resulting image
-   */
-  static Image<Claim> provision(@NonNull Package pack) {
-    return new Provision(new Claim.Absent(), new Claim.Present(pack), new Target.Package(pack.name()));
-  }
+	/**
+	 * Describes taking a claim on a package tabbie did not claim before.
+	 *
+	 * @param pack package recipe to claim
+	 *
+	 * @return resulting image
+	 */
+	static Image<Claim> provision(@NonNull Package pack) {
+		return new Provision(new Claim.Absent(), new Claim.Present(), new Target.Pack(pack));
+	}
 
-  /**
-   * Describes releasing tabbie's claim on a package claimed with this recipe.
-   * Supply the recipe as it was claimed, so the release uninstalls the
-   * specification that was actually installed.
-   *
-   * @param pack package recipe as claimed
-   *
-   * @return resulting image
-   */
-  static Image<Claim> deprovision(@NonNull Package pack) {
-    return new Provision(new Claim.Present(pack), new Claim.Absent(), new Target.Package(pack.name()));
-  }
+	/**
+	 * Describes taking a claim on a package tabbie did not claim before.
+	 *
+	 * @param pack      package recipe as claimed
+	 * @param install   install options
+	 * @param uninstall undo options
+	 *
+	 * @return resulting image
+	 */
+	static Image<Claim> provision(@NonNull Package pack, @NonNull Map<Manager, String> install,
+			@NonNull Map<Manager, String> undo) {
+		return new Provision(new Claim.Absent(undo), new Claim.Present(install), new Target.Pack(pack));
+	}
 
-  /**
-   * Checks that images can be applied in any order: every file destination and
-   * every package appears once, and no file destination is also used as a
-   * directory under the same mount.
-   *
-   * @param images generated images
-   * @throws IllegalArgumentException when generated images cannot be applied in
-   *                                  any order
-   */
-  static void validate(@NonNull Collection<? extends Image<?>> images) {
-    Map<Relative, Image<?>> files = new LinkedHashMap<>();
-    Map<String, Image<?>> packages = new LinkedHashMap<>();
-    for (Image<?> image : images) {
-      Image<?> clash = switch (image) {
-        case Installation installation ->
-          files.putIfAbsent(installation.target().relative(), installation);
-        case Configuration configuration ->
-          files.putIfAbsent(configuration.target().relative(), configuration);
-        case Provision provision ->
-          packages.putIfAbsent(provision.name(), provision);
-      };
-      if (clash != null) {
-        throw new IllegalArgumentException("Images require unique targets: " + clash);
-      }
-    }
-    for (Relative file : files.keySet()) {
-      for (Relative parent = file.parent(); parent != null; parent = parent.parent()) {
-        if (files.containsKey(parent)) {
-          throw new IllegalArgumentException("A file destination may not also be used as a directory");
-        }
-      }
-    }
-  }
+	/**
+	 * Describes releasing tabbie's claim on a package claimed with this recipe.
+	 * 
+	 * @param pack package recipe as claimed
+	 *
+	 * @return resulting image
+	 */
+	static Image<Claim> deprovision(@NonNull Package pack) {
+		return new Provision(new Claim.Present(), new Claim.Absent(), new Target.Pack(pack));
+	}
 
-  /**
-   * Describes the change that undoes a set. The preimages of a valid set are
-   * valid: they change the same targets.
-   *
-   * @param images applied images
-   * @return immutable set of preimages
-   */
-  static Set<Image<?>> preimage(@NonNull Collection<? extends Image<?>> images) {
-    return images.stream().map(Image::preimage).collect(Collectors.toUnmodifiableSet());
-  }
+	/**
+	 * Describes releasing tabbie's claim on a package claimed with this recipe.
+	 * 
+	 * @param pack      package recipe as claimed
+	 * @param uninstall install options
+	 * @param undo      undo options
+	 * 
+	 * @return resulting image
+	 */
+	static Image<Claim> deprovision(@NonNull Package pack, @NonNull Map<Manager, String> uninstall,
+			@NonNull Map<Manager, String> undo) {
+		return new Provision(new Claim.Present(undo), new Claim.Absent(uninstall), new Target.Pack(pack));
+	}
 
-  /**
-   * Composes two changes of one target applied one after the other. A change
-   * followed by its exact preimage cancels. Whole files and claims compose into
-   * one change from the first's before state to the second's after state. Text
-   * changes compose only where their chunks combine, because fragments do not
-   * describe the complete content between them. An installation and a
-   * configuration of the same file stay sequential, because folding them would
-   * mean reading the retained content.
-   *
-   * @param first  earlier change
-   * @param second later change, whose before state must equal the first's
-   *               after state
-   * @return combined change, or empty when the pair has no net effect
-   * @throws IllegalArgumentException when targets differ or states are
-   *                                  discontinuous
-   * @throws IrreducibleException     when text changes cannot be combined, or
-   *                                  one file is changed by different kinds of
-   *                                  image
-   */
-  static Optional<Image<?>> compose(
-      @NonNull Image<?> first,
-      @NonNull Image<?> second) {
+	/**
+	 * Checks that images can be applied in any order: every file destination and
+	 * every package appears once, and no file destination is also used as a
+	 * directory under the same mount.
+	 *
+	 * @param images generated images
+	 * @throws IllegalArgumentException when generated images cannot be applied in
+	 *                                  any order
+	 */
+	static void validate(@NonNull Collection<? extends Image<?>> images) {
+		Map<Relative, Image<?>> files = new LinkedHashMap<>();
+		Map<Package, Image<?>> packages = new LinkedHashMap<>();
+		for (Image<?> image : images) {
+			Image<?> clash = switch (image) {
+				case Installation installation ->
+					files.putIfAbsent(
+							installation.target().relative(), installation);
+				case Configuration configuration ->
+					files.putIfAbsent(
+							configuration.target().relative(), configuration);
+				case Provision provision ->
+					packages.putIfAbsent(
+							provision.target().pkg(), provision);
+			};
+			if (clash != null) {
+				throw new IllegalArgumentException("Images require unique targets: " + clash);
+			}
+		}
+		for (Relative file : files.keySet()) {
+			for (Relative parent = file.parent(); parent != null; parent = parent.parent()) {
+				if (files.containsKey(parent)) {
+					throw new IllegalArgumentException("A file destination may not also be used as a directory");
+				}
+			}
+		}
+	}
 
-    // Changes of different targets
-    if (!first.target().equals(second.target())) {
-      throw new IllegalArgumentException(
-          "Only changes of the same target compose: %s and %s".formatted(first.target(), second.target()));
-    }
+	/**
+	 * Describes the change that undoes a set. The preimages of a valid set are
+	 * valid: they change the same targets.
+	 *
+	 * @param images applied images
+	 * @return immutable set of preimages
+	 */
+	static Set<Image<?>> preimage(@NonNull Collection<? extends Image<?>> images) {
+		return images.stream().map(Image::preimage).collect(Collectors.toUnmodifiableSet());
+	}
 
-    // An installation and a configuration of one file cannot be folded without
-    // reading the retained content.
-    if (first.getClass() != second.getClass()) {
-      throw new IrreducibleException(
-          "Changes of %s by different kinds of image must stay sequential".formatted(first.target()));
-    }
+	/**
+	 * Composes two changes of one target applied one after the other. A change
+	 * followed by its exact preimage cancels. Whole files and claims compose into
+	 * one change from the first's before state to the second's after state. Text
+	 * changes compose only where their chunks combine, because fragments do not
+	 * describe the complete content between them. An installation and a
+	 * configuration of the same file stay sequential, because folding them would
+	 * mean reading the retained content.
+	 *
+	 * @param first  earlier change
+	 * @param second later change, whose before state must equal the first's
+	 *               after state
+	 * @return combined change, or empty when the pair has no net effect
+	 * @throws IllegalArgumentException when targets differ or states are
+	 *                                  discontinuous
+	 * @throws IrreducibleException     when text changes cannot be combined, or
+	 *                                  one file is changed by different kinds of
+	 *                                  image
+	 */
+	static Optional<Image<?>> compose(
+			@NonNull Image<?> first,
+			@NonNull Image<?> second) {
 
-    // Discontinuity mismatch
-    if (!first.after().equals(second.before())) {
-      throw new IllegalArgumentException(
-          "Changes are discontinuous at %s".formatted(first.target()));
-    }
+		// Must be similar targets
+		if (!first.target().equals(second.target())) {
+			throw new IllegalArgumentException(
+					"Only changes of the same target compose: %s and %s".formatted(first.target(), second.target()));
+		}
 
-    // Effects are undone: the second restores the first's before state, as
-    // every exact preimage does.
-    if (first.before().equals(second.after())) {
-      return Optional.empty();
-    }
+		// Installation, Configuration, Provision may not be cross-composed
+		if (first.getClass() != second.getClass()) {
+			throw new IrreducibleException(
+					"Changes of %s by different kinds of image must stay sequential".formatted(first.target()));
+		}
 
-    // Changes of one kind compose within that kind.
-    return switch (first) {
-      case Installation earlier ->
-        Optional.of(new Installation(
-            earlier.before(),
-            ((Installation) second).after(),
-            earlier.target()));
+		// Second has a discontinuity error with first
+		if (!first.after().equals(second.before())) {
+			throw new IllegalArgumentException(
+					"Changes are discontinuous at %s".formatted(first.target()));
+		}
 
-      case Provision earlier ->
-        Optional.of(new Provision(
-            earlier.before(),
-            ((Provision) second).after(), earlier.target()));
+		// Second is a preimage of first
+		if (first.before().equals(second.after())) {
+			return Optional.empty();
+		}
 
-      case Configuration earlier ->
-        earlier.compose((Configuration) second).map(Image.class::cast);
-    };
-  }
+		return switch (first) {
+			// Collapse [P -> A -> P] or [A -> P -> A]
+			case Installation earlier ->
+				Optional.of(new Installation(earlier.before(), ((Installation) second).after(), earlier.target()));
 
-  /**
-   * Folds sequentially applied sets into the minimal set with the same net
-   * effect. Targets whose changes cancel out disappear.
-   *
-   * @apiNote Folding replaces the images a consumer applied. A consumer that
-   *          persisted install outcomes per applied provision, to decide
-   *          whether a release uninstalls, must look them up by package name
-   *          rather than by the folded image.
-   *
-   * @param changes sets in application order, each individually valid
-   * @return immutable valid net change
-   * @throws IllegalArgumentException when a set is invalid, changes are
-   *                                  discontinuous, or the net change is order
-   *                                  dependent and must stay sequential, such
-   *                                  as a file replaced by a directory of the
-   *                                  same name
-   * @throws IrreducibleException     when text changes cannot be composed, or
-   *                                  one file is changed by different kinds of
-   *                                  image
-   */
-  static Set<Image<?>> reduce(@NonNull List<? extends Collection<? extends Image<?>>> changes) {
-    Map<Target, Image<?>> net = new LinkedHashMap<>();
-    for (Collection<? extends Image<?>> change : changes) {
-      validate(change);
-      for (Image<?> image : change) {
-        Target target = image.target();
-        Image<?> previous = net.remove(target);
-        if (previous == null) {
-          net.put(target, image);
-        } else {
-          compose(previous, image).ifPresent(composed -> net.put(target, composed));
-        }
-      }
-    }
-    validate(net.values());
-    return Set.copyOf(net.values());
-  }
+			// Collapse [P -> A -> P] or [A -> P -> A]
+			case Provision earlier ->
+				Optional.of(new Provision(earlier.before(), ((Provision) second).after(), earlier.target()));
 
-  /**
-   * Describes the target of this operation
-   */
-  sealed interface Target {
+			// Collapse Concurrent [P -> P] chunks
+			case Configuration earlier -> {
+				List<Chunk> composed = Chunk.compose(earlier.chunks(), ((Configuration) second).chunks());
+				yield composed.isEmpty()
+						? Optional.empty()
+						: Optional.of(new Configuration(composed, earlier.target())).map(Image.class::cast);
+			}
+		};
+	}
 
-    /**
-     * A file, by its path relative to the mount.
-     *
-     * @param relative target path
-     */
-    record File(Relative relative) implements Target {
-    }
+	/**
+	 * Folds sequentially applied sets into the minimal set with the same net
+	 * effect. Targets whose changes cancel out disappear.
+	 *
+	 * @apiNote Folding replaces the images a consumer applied. A consumer that
+	 *          persisted install outcomes per applied provision, to decide
+	 *          whether a release uninstalls, must look them up by package name
+	 *          rather than by the folded image.
+	 *
+	 * @param changes sets in application order, each individually valid
+	 * @return immutable valid net change
+	 * @throws IllegalArgumentException when a set is invalid, changes are
+	 *                                  discontinuous, or the net change is order
+	 *                                  dependent and must stay sequential, such
+	 *                                  as a file replaced by a directory of the
+	 *                                  same name
+	 * @throws IrreducibleException     when text changes cannot be composed, or
+	 *                                  one file is changed by different kinds of
+	 *                                  image
+	 */
+	static Set<Image<?>> reduce(@NonNull List<? extends Collection<? extends Image<?>>> changes) {
+		Map<Target, Image<?>> net = new LinkedHashMap<>();
+		for (Collection<? extends Image<?>> change : changes) {
+			validate(change);
+			for (Image<?> image : change) {
+				Target target = image.target();
+				Image<?> previous = net.remove(target);
+				if (previous == null) {
+					net.put(target, image);
+				} else {
+					compose(previous, image).ifPresent(composed -> net.put(target, composed));
+				}
+			}
+		}
+		validate(net.values());
+		return Set.copyOf(net.values());
+	}
 
-    /**
-     * A package, by name.
-     *
-     * @param pkg package name
-     */
-    record Package(String pkg) implements Target {
-    }
-  }
+	/**
+	 * Describes the target of this operation
+	 */
+	sealed interface Target {
 
-  /**
-   * Describes the underlying state a change expects or produces: a file's
-   * existence, a text file's content, or a package claim.
-   */
-  sealed interface Alteration {
-  }
+		/**
+		 * A file, by its relative path
+		 *
+		 * @param relative target path
+		 */
+		record File(Relative relative) implements Target {
+		}
 
-  /**
-   * Complete file-content expectations, distinguished from absence.
-   */
-  sealed interface File extends Alteration {
+		/**
+		 * A package, by its mapped install specifications
+		 *
+		 * @param pkg package
+		 */
+		record Pack(Package pkg) implements Target {
+		}
+	}
 
-    /**
-     * Assertion that no file exists at the image path.
-     */
-    record Absent() implements File {
-    }
+	/**
+	 * Describes the underlying state a change expects or produces: a file's
+	 * existence, a text file's content, or a package claim.
+	 */
+	sealed interface Alteration {
+	}
 
-    /**
-     * Assertion of complete retained file content, including zero bytes.
-     *
-     * @param reference named captured content
-     */
-    record Present(@NonNull Reference reference) implements File {
-    }
-  }
+	/**
+	 * Complete file-content expectations, distinguished from absence.
+	 */
+	sealed interface File extends Alteration {
 
-  /**
-   * Selected ordered ranges of an existing text file, rather than a
-   * complete-file snapshot. An empty fragment list asserts existence without
-   * asserting any particular content.
-   *
-   * @param fragments immutable copied ranges, possibly empty
-   */
-  record Text(@NonNull List<Chunk.Fragment> fragments) implements Alteration {
+		/**
+		 * Assertion that no file exists at the image path.
+		 */
+		record Absent() implements File {
+		}
 
-    /**
-     * Copies and validates fragment order and line termination.
-     *
-     * @throws IllegalArgumentException when fragments overlap or have invalid
-     *                                  termination
-     */
-    public Text {
-      fragments = List.copyOf(fragments);
-      Chunk.validateFragments(fragments);
-    }
-  }
+		/**
+		 * Assertion of complete retained file content, including zero bytes.
+		 *
+		 * @param reference named captured content
+		 */
+		record Present(@NonNull Reference reference) implements File {
+		}
+	}
 
-  sealed interface Claim extends Alteration {
+	/**
+	 * Selected ordered ranges of an existing text file, rather than a
+	 * complete-file snapshot. An empty fragment list asserts existence without
+	 * asserting any particular content.
+	 *
+	 * @param fragments immutable copied ranges, possibly empty
+	 */
+	record Text(@NonNull List<Chunk.Fragment> fragments) implements Alteration {
 
-    record Absent() implements Claim {
-    }
+		/**
+		 * Copies and validates fragment order and line termination.
+		 *
+		 * @throws IllegalArgumentException when fragments overlap or have invalid
+		 *                                  termination
+		 */
+		public Text {
+			fragments = List.copyOf(fragments);
+			Chunk.validateFragments(fragments);
+		}
+	}
 
-    record Present(@NonNull Package pkg) implements Claim {
-    }
-  }
+	sealed interface Claim extends Alteration {
+
+		record Absent(
+				@NonNull Map<Package.Manager, String> uninstallOption) implements Claim {
+
+			public Absent() {
+				this(Map.of());
+			}
+
+			public Absent {
+				uninstallOption = Map.copyOf(uninstallOption);
+			}
+		}
+
+		record Present(
+				@NonNull Map<Package.Manager, String> installOption) implements Claim {
+
+			public Present() {
+				this(Map.of());
+			}
+
+			public Present {
+				installOption = Map.copyOf(installOption);
+			}
+		}
+	}
 }
 
 /**
@@ -415,24 +462,25 @@ public sealed interface Image<State extends Image.Alteration> {
  * @param after  complete content or absence described after the change
  * @param target target file
  */
-record Installation(@NonNull File before, @NonNull File after, @NonNull Target.File target)
-    implements Image<Image.File> {
+record Installation(
+		@NonNull File before, @NonNull File after, @NonNull Target.File target)
+		implements Image<Image.File> {
 
-  /**
-   * Rejects an absence-to-absence description.
-   *
-   * @throws IllegalArgumentException when both sides are absent
-   */
-  public Installation {
-    if (before instanceof File.Absent && after instanceof File.Absent) {
-      throw new IllegalArgumentException("Files may not both be absent!");
-    }
-  }
+	/**
+	 * Rejects an absence-to-absence description.
+	 *
+	 * @throws IllegalArgumentException when both sides are absent
+	 */
+	public Installation {
+		if (before instanceof File.Absent && after instanceof File.Absent) {
+			throw new IllegalArgumentException("Files may not both be absent!");
+		}
+	}
 
-  @Override
-  public Installation preimage() {
-    return new Installation(after, before, target);
-  }
+	@Override
+	public Installation preimage() {
+		return new Installation(after, before, target);
+	}
 }
 
 /**
@@ -444,93 +492,70 @@ record Installation(@NonNull File before, @NonNull File after, @NonNull Target.F
  * @param target target file
  */
 record Configuration(
-    @NonNull List<Chunk> chunks,
-    @NonNull Target.File target)
-    implements Image<Image.Text> {
+		@NonNull List<Chunk> chunks, @NonNull Target.File target)
+		implements Image<Image.Text> {
 
-  /**
-   * Copies and validates the chunks.
-   */
-  public Configuration {
-    chunks = List.copyOf(chunks);
-    Chunk.validateChunks(chunks);
-  }
+	/**
+	 * Copies and validates the chunks.
+	 */
+	public Configuration {
+		chunks = List.copyOf(chunks);
+		Chunk.validateChunks(chunks);
+	}
 
-  /**
-   * Describes the change between two fragment states of an existing file.
-   *
-   * @param before text before
-   * @param after  text after
-   * @param target target file
-   */
-  public Configuration(
-      @NonNull Text before,
-      @NonNull Text after,
-      @NonNull Target.File target) {
+	/**
+	 * Describes the change between two fragment states of an existing file.
+	 *
+	 * @param before text before
+	 * @param after  text after
+	 * @param target target file
+	 */
+	public Configuration(
+			@NonNull Text before, @NonNull Text after, @NonNull Target.File target) {
 
-    this(Chunk.between(before.fragments(), after.fragments()), target);
-  }
+		this(Chunk.between(before.fragments(), after.fragments()), target);
+	}
 
-  @Override
-  public Text before() {
-    return new Text(
-        chunks.stream()
-            .map(Chunk::before)
-            .toList());
-  }
+	@Override
+	public Text before() {
+		return new Text(
+				chunks.stream()
+						.map(Chunk::before)
+						.toList());
+	}
 
-  @Override
-  public Text after() {
-    return new Text(
-        chunks.stream()
-            .map(Chunk::after)
-            .toList());
-  }
+	@Override
+	public Text after() {
+		return new Text(
+				chunks.stream()
+						.map(Chunk::after)
+						.toList());
+	}
 
-  @Override
-  public Configuration preimage() {
-    return new Configuration(
-        chunks.stream()
-            .map(Chunk::invert)
-            .toList(),
-        target);
-  }
-
-  /**
-   * Composes this configuration with a later one of the same file.
-   *
-   * @param later configuration applied after this one
-   * @return composed configuration, or empty when the changes cancel out
-   */
-  public Optional<Configuration> compose(@NonNull Configuration later) {
-    List<Chunk> composed = Chunk.compose(chunks, later.chunks());
-    return composed.isEmpty()
-        ? Optional.empty()
-        : Optional.of(new Configuration(composed, target));
-  }
+	@Override
+	public Configuration preimage() {
+		return new Configuration(
+				chunks.stream()
+						.map(Chunk::invert)
+						.toList(),
+				target);
+	}
 }
 
-record Provision(@NonNull Claim before, @NonNull Claim after, @NonNull Target.Package target)
-    implements Image<Image.Claim> {
+record Provision(@NonNull Claim before, @NonNull Claim after, @NonNull Target.Pack target)
+		implements Image<Image.Claim> {
 
-  public Provision {
-    if (before instanceof Claim.Absent && after instanceof Claim.Absent)
-      throw new IllegalArgumentException("Claims may not both be absent.");
-    if (before instanceof Claim.Present(Package a) && after instanceof Claim.Present(Package b)
-        && !a.name().equals(b.name()))
-      throw new IllegalArgumentException("A provision changes exactly one package.");
-  }
+	public Provision {
+		if (before instanceof Claim.Absent && after instanceof Claim.Absent) {
+			throw new IllegalArgumentException("A provision changes at least one package");
+		}
 
-  public String name() {
-    return (before instanceof Claim.Present(Package p)
-        ? p
-        : ((Claim.Present) after).pkg()).name();
-  }
+	}
 
-  @Override
-  public @NonNull Image<Claim> preimage() {
-    return new Provision(after, before, target);
-  }
+	@Override
+	public @NonNull Image<Claim> preimage() {
+		return new Provision(after, before, target);
+	}
 }
 
 /**
@@ -541,28 +566,28 @@ record Provision(@NonNull Claim before, @NonNull Claim after, @NonNull Target.Pa
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 final class IrreducibleException extends IllegalStateException {
 
-  /**
-   * Serialization version.
-   */
-  @Serial
-  static long serialVersionUID = 1L;
+	/**
+	 * Serialization version.
+	 */
+	@Serial
+	static long serialVersionUID = 1L;
 
-  /**
-   * Reports changes that cannot be folded.
-   *
-   * @param message description naming the target
-   */
-  public IrreducibleException(String message) {
-    super(message);
-  }
+	/**
+	 * Reports changes that cannot be folded.
+	 *
+	 * @param message description naming the target
+	 */
+	public IrreducibleException(String message) {
+		super(message);
+	}
 
-  /**
-   * Reports changes that cannot be folded, with the failure that revealed it.
-   *
-   * @param message   description naming the target
-   * @param throwable underlying failure
-   */
-  public IrreducibleException(String message, Throwable throwable) {
-    super(message, throwable);
-  }
+	/**
+	 * Reports changes that cannot be folded, with the failure that revealed it.
+	 *
+	 * @param message   description naming the target
+	 * @param throwable underlying failure
+	 */
+	public IrreducibleException(String message, Throwable throwable) {
+		super(message, throwable);
+	}
 }

@@ -85,7 +85,7 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
 
 	@Override
 	default Intermediate<Set<Image<?>>> install(@NonNull Context context) throws IOException {
-		this.require(context);
+		require(context);
 		Layout layout = context.layout(this);
 		Relative destination = layout.relative();
 
