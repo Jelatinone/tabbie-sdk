@@ -14,40 +14,42 @@ import lombok.NonNull;
  * @param <Result>    returned item type
  */
 public interface Queryable<Criterion, Result> {
-  /**
-   * Derives existence from the count unless overridden.
-   *
-   * @param query existence request
-   * @return true or false when known, or empty when the count is unavailable
-   */
-  default Optional<Boolean> query(@NonNull Query.Exists<Criterion> query) {
-    return query(new Query.Count<>(query.criteria())).map(value -> value > 0);
-  }
+	/**
+	 * Derives existence from the count unless overridden.
+	 *
+	 * @param query existence request
+	 * @return true or false when known, or empty when the count is unavailable
+	 */
+	default Optional<Boolean> query(@NonNull Query.Exists<Criterion> query) {
+		return query(new Query.Count<>(query.criteria())).map(value -> value > 0L);
+	}
 
-  /**
-   * Counts all matching results by default. Remote providers may override this
-   * to avoid fetching every result.
-   *
-   * @param query count request
-   * @return known count including zero, or empty when unavailable
-   */
-  default Optional<Long> query(@NonNull Query.Count<Criterion> query) {
-    return Optional.of((long) query(new Query.Several<>(query.criteria())).size());
-  }
+	/**
+	 * Counts all matching results by default. Remote providers may override this
+	 * to avoid fetching every result.
+	 *
+	 * @param query count request
+	 * @return known count including zero, or empty when unavailable
+	 */
+	default Optional<Long> query(@NonNull Query.Count<Criterion> query) {
+		return query(new Query.Several<>(query.criteria())).map((c) -> (long) c.size());
+	}
 
-  /**
-   * Requests one item; providers document ordering when several items match.
-   *
-   * @param query singular request
-   * @return selected item, or empty when none matches
-   */
-  Optional<Result> query(Query.Singular<Criterion> query);
+	/**
+	 * Requests one item; providers document ordering when several items match.
+	 *
+	 * @param query singular request
+	 * @return selected item, or empty when none matches
+	 */
+	default Optional<Result> query(Query.Singular<Criterion> query) {
+		return query(new Query.Several<>(query.criteria())).flatMap((c) -> c.stream().findAny());
+	}
 
-  /**
-   * Requests a collection honoring the explicit limit, if present.
-   *
-   * @param query collection request
-   * @return matching items, empty when none match
-   */
-  Collection<Result> query(Query.Several<Criterion> query);
+	/**
+	 * Requests a collection honoring the explicit limit, if present.
+	 *
+	 * @param query collection request
+	 * @return matching items, empty when none match
+	 */
+	Optional<Collection<Result>> query(Query.Several<Criterion> query);
 }
