@@ -16,7 +16,7 @@ public sealed interface Relative {
   Relative resolve(Path relativePath);
 
   /**
-   * 
+   *
    * @param path
    * @return
    */
@@ -25,7 +25,7 @@ public sealed interface Relative {
   }
 
   /**
-   * 
+   *
    * @param path
    * @param add
    * @return
@@ -35,7 +35,7 @@ public sealed interface Relative {
   }
 
   /**
-   * 
+   *
    * @param path
    * @return
    */
@@ -44,7 +44,7 @@ public sealed interface Relative {
   }
 
   /**
-   * 
+   *
    * @param path
    * @param add
    * @return

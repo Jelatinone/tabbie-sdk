@@ -93,7 +93,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    */
   record Inspect(Store store, Archive limits) implements Intermediate.Step<List<Entry>> {
     @Override
-    public List<Entry> collapse(Intermediate.Context context) throws IOException {
+    public List<Entry> collapse(Step.Context context) throws IOException {
       Reference.Pending pending = store.of();
       if (pending.expectedSize() != null && pending.expectedSize() > limits.archiveBytes()) {
         throw new IOException("ZIP byte limit exceeded.");
@@ -167,7 +167,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
   record Unpack<S extends Store & Extract>(S store, Relative destination, List<Entry> entries)
       implements Intermediate.Step<Set<Image<?>>> {
     @Override
-    public Set<Image<?>> collapse(Intermediate.Context context) throws IOException {
+    public Set<Image<?>> collapse(Step.Context context) throws IOException {
       Set<Image<?>> images = new HashSet<>();
       for (Entry entry : entries()) {
         Reference.Captured captured = store.capture(entry)

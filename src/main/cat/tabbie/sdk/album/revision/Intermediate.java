@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
+import cat.tabbie.sdk.album.revision.Intermediate.Step.Effect;
 import cat.tabbie.sdk.api.Observer;
 import lombok.NonNull;
 
@@ -27,7 +28,7 @@ public sealed interface Intermediate<T> {
    * @return collapsed result
    * @throws IOException when a declared effect fails
    */
-  T collapse(Context context) throws IOException;
+  T collapse(Step.Context context) throws IOException;
 
   /**
    * Describes an already available value.
@@ -36,8 +37,19 @@ public sealed interface Intermediate<T> {
    * @param value available result
    * @return constant intermediate
    */
-  static <T> Intermediate<T> value(T value) {
+  static <T> Intermediate<T> of(T value) {
     return new Value<>(value);
+  }
+
+  /**
+   * Describes one effect performed only during collapse.
+   *
+   * @param <T>    result type
+   * @param action effect using the collapsing context
+   * @return effectful intermediate
+   */
+  static <T> Intermediate<T> of(@NonNull Action<T> action) {
+    return new Effect<>(action);
   }
 
   /**
@@ -48,7 +60,7 @@ public sealed interface Intermediate<T> {
    * @return mapped intermediate
    */
   default <R> Intermediate<R> map(@NonNull Function<? super T, ? extends R> mapper) {
-    return new Mapped<>(this, mapper);
+    return new Transform<>(this, mapper);
   }
 
   /**
@@ -59,7 +71,29 @@ public sealed interface Intermediate<T> {
    * @return dependent intermediate
    */
   default <R> Intermediate<R> flatMap(@NonNull Function<? super T, ? extends Intermediate<R>> mapper) {
-    return new Flat<>(this, mapper);
+    return new Compress<>(this, mapper);
+  }
+
+  /**
+   * Describes an effect performed only after this intermediate succeeds.
+   *
+   * @param <R>    result type
+   * @param action effect using the collapsing context
+   * @return chained intermediate producing the effect's result
+   */
+  default <R> Intermediate<R> then(@NonNull Action<R> action) {
+    return flatMap(ignored -> of(action));
+  }
+
+  /**
+   * Describes work performed only after this intermediate succeeds.
+   *
+   * @param <R>  result type
+   * @param next subsequent work
+   * @return chained intermediate producing the subsequent result
+   */
+  default <R> Intermediate<R> then(@NonNull Intermediate<R> next) {
+    return flatMap(ignored -> next);
   }
 
   /**
@@ -69,8 +103,48 @@ public sealed interface Intermediate<T> {
    * @param elements ordered intermediates
    * @return intermediate producing an immutable result list
    */
-  static <T> Intermediate<List<T>> sequence(@NonNull List<? extends Intermediate<? extends T>> elements) {
-    return new Sequence<>(elements);
+  static <T> Intermediate<List<T>> group(@NonNull List<? extends Intermediate<? extends T>> elements) {
+    return new Cluster<>(elements);
+  }
+
+  /**
+   * Combines independent intermediates that must all succeed.
+   *
+   * @param <T>      element type
+   * @param elements independent intermediates
+   * @return intermediate producing an immutable result list in supplied order
+   */
+  static <T> Intermediate<List<T>> all(@NonNull List<? extends Intermediate<? extends T>> elements) {
+    return new All<>(elements);
+  }
+
+  /**
+   * Combines alternatives of which one must succeed, such as mirrors.
+   *
+   * @param <T>          result type
+   * @param alternatives nonempty alternatives in preference order
+   * @return intermediate producing the first successful result
+   */
+  static <T> Intermediate<T> any(@NonNull List<? extends Intermediate<? extends T>> alternatives) {
+    return new Any<>(alternatives);
+  }
+
+  /**
+   * An effect performed with the collapsing context.
+   *
+   * @param <T> result type
+   */
+  @FunctionalInterface
+  interface Action<T> {
+
+    /**
+     * Performs the effect.
+     *
+     * @param context collapsing context
+     * @return effect result
+     * @throws IOException when the effect fails
+     */
+    T run(@NonNull Step.Context context) throws IOException;
   }
 
   /**
@@ -82,7 +156,7 @@ public sealed interface Intermediate<T> {
   record Value<T>(T value) implements Intermediate<T> {
 
     @Override
-    public T collapse(Context context) {
+    public T collapse(Step.Context context) {
       return value;
     }
   }
@@ -97,12 +171,12 @@ public sealed interface Intermediate<T> {
    * @param source prerequisite
    * @param mapper transformation
    */
-  record Mapped<S, T>(
+  record Transform<S, T>(
       @NonNull Intermediate<S> source,
       @NonNull Function<? super S, ? extends T> mapper) implements Intermediate<T> {
 
     @Override
-    public T collapse(Context context) throws IOException {
+    public T collapse(Step.Context context) throws IOException {
       return mapper.apply(source.collapse(context));
     }
   }
@@ -115,11 +189,11 @@ public sealed interface Intermediate<T> {
    * @param source prerequisite
    * @param mapper dependent intermediate factory
    */
-  record Flat<S, T>(@NonNull Intermediate<S> source,
+  record Compress<S, T>(@NonNull Intermediate<S> source,
       @NonNull Function<? super S, ? extends Intermediate<T>> mapper) implements Intermediate<T> {
 
     @Override
-    public T collapse(Context context) throws IOException {
+    public T collapse(Step.Context context) throws IOException {
       return mapper.apply(source.collapse(context)).collapse(context);
     }
   }
@@ -130,22 +204,85 @@ public sealed interface Intermediate<T> {
    * @param <T>      element type
    * @param elements ordered intermediates
    */
-  record Sequence<T>(@NonNull List<? extends Intermediate<? extends T>> elements)
+  record Cluster<T>(@NonNull List<? extends Intermediate<? extends T>> elements)
       implements Intermediate<List<T>> {
 
     /**
      * Copies intermediates without evaluating them.
      */
-    public Sequence {
+    public Cluster {
       elements = List.copyOf(elements);
     }
 
     @Override
-    public List<T> collapse(Context context) throws IOException {
+    public List<T> collapse(Step.Context context) throws IOException {
       List<T> results = new ArrayList<>(elements.size());
       for (Intermediate<? extends T> element : elements)
         results.add(element.collapse(context));
       return List.copyOf(results);
+    }
+  }
+
+  /**
+   * Independent intermediates that must all succeed. This implementation
+   * collapses them one after another and stops at the first failure; an
+   * interpreter may collapse them concurrently against a thread-safe context.
+   *
+   * @param <T>      element type
+   * @param elements independent intermediates
+   */
+  record All<T>(@NonNull List<? extends Intermediate<? extends T>> elements)
+      implements Intermediate<List<T>> {
+
+    /**
+     * Copies intermediates without evaluating them.
+     */
+    public All {
+      elements = List.copyOf(elements);
+    }
+
+    @Override
+    public List<T> collapse(@NonNull Step.Context context) throws IOException {
+      return new Cluster<T>(elements).collapse(context);
+    }
+  }
+
+  /**
+   * Alternatives collapsed in preference order until one succeeds. When every
+   * alternative fails, the first failure is thrown with the others suppressed.
+   *
+   * @param <T>          result type
+   * @param alternatives nonempty alternatives in preference order
+   */
+  record Any<T>(@NonNull List<? extends Intermediate<? extends T>> alternatives) implements Intermediate<T> {
+
+    /**
+     * Copies alternatives without evaluating them.
+     *
+     * @throws IllegalArgumentException when no alternative is supplied
+     */
+    public Any {
+      alternatives = List.copyOf(alternatives);
+      if (alternatives.isEmpty()) {
+        throw new IllegalArgumentException("At least one alternative is required.");
+      }
+    }
+
+    @Override
+    public T collapse(@NonNull Step.Context context) throws IOException {
+      IOException failure = null;
+      for (Intermediate<? extends T> alternative : alternatives) {
+        try {
+          return alternative.collapse(context);
+        } catch (IOException attempt) {
+          if (failure == null) {
+            failure = attempt;
+          } else {
+            failure.addSuppressed(attempt);
+          }
+        }
+      }
+      throw failure;
     }
   }
 
@@ -172,31 +309,45 @@ public sealed interface Intermediate<T> {
           ? String.format("%s:%s", enclosing.getSimpleName(), clazz.getSimpleName())
           : clazz.getSimpleName();
     }
-  }
-
-  /**
-   * Caller-owned capabilities available while collapsing work.
-   */
-  interface Context {
 
     /**
-     * Supplies an existing execution-owned directory outside managed targets
-     * for temporary files.
+     * One effect performed with the collapsing context.
      *
-     * @return scratch directory
+     * @param <T>    result type
+     * @param action effect
      */
-    Path scratch();
+    record Effect<T>(@NonNull Action<T> action) implements Step<T> {
 
-    /**
-     * Supplies an observer of intermediate steps.
-     *
-     * @return context observer
-     */
-    default Observer<?, ?> observer() {
-      return Observer.NONE;
+      @Override
+      public T collapse(Step.Context context) throws IOException {
+        return null;
+      }
     }
 
-    record Default(@NonNull Path scratch, @NonNull Observer<?, ?> observer) implements Context {
+    /**
+     * Caller-owned capabilities available while collapsing work.
+     */
+    interface Context {
+
+      /**
+       * Supplies an existing execution-owned directory outside managed targets
+       * for temporary files.
+       *
+       * @return scratch directory
+       */
+      Path scratch();
+
+      /**
+       * Supplies an observer of intermediate steps.
+       *
+       * @return context observer
+       */
+      default Observer<?, ?> observer() {
+        return Observer.NONE;
+      }
+
+      record Default(@NonNull Path scratch, @NonNull Observer<?, ?> observer) implements Context {
+      }
     }
   }
 }

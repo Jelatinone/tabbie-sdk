@@ -93,7 +93,7 @@ public interface Store extends AutoCloseable, Describe, Extract {
       Observer<? super Reference.Captured, ? super Transfer> observer)
       implements Intermediate.Step<Reference> {
     @Override
-    public Reference collapse(Intermediate.Context context) throws IOException {
+    public Reference collapse(Step.Context context) throws IOException {
       return digest(pending, source, observer);
     }
   }
@@ -107,7 +107,7 @@ public interface Store extends AutoCloseable, Describe, Extract {
       Observer<? super Reference.Captured, ? super Transfer> observer)
       implements Intermediate.Step<Reference.Captured> {
     @Override
-    public Reference.Captured collapse(Intermediate.Context context) throws IOException {
+    public Reference.Captured collapse(Step.Context context) throws IOException {
       try (InputStream input = source.open()) {
         return digest(source.of(), input, observer);
       }

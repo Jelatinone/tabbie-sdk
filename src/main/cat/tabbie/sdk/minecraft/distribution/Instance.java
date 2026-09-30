@@ -13,66 +13,65 @@ import lombok.NonNull;
 
 public interface Instance extends Release.Payload<Installer.Context> {
 
-	/**
-	 * Stable artifact identity derived from the file coordinates, so equal
-	 * coordinates always yield the same identity across processes.
-	 *
-	 * @return artifact identity
-	 */
-	default Identity<Instance> artifactId() {
-		return Identity.create(coordinates().canonical());
-	}
+  /**
+   * Stable artifact identity derived from the file coordinates, so equal
+   * coordinates always yield the same identity across processes.
+   *
+   * @return artifact identity
+   */
+  default Identity<Instance> artifactId() {
+    return Identity.create(coordinates().canonical());
+  }
 
-	/**
-	 * Human-readable canonical artifact name
-	 *
-	 * @return artifact name
-	 */
-	@NonNull
-	String artifactName();
+  /**
+   * Human-readable canonical artifact name
+   *
+   * @return artifact name
+   */
+  @NonNull
+  String artifactName();
 
-	/**
-	 * Delegated storage receiving capture/open calls
-	 *
-	 * @return delegated storage
-	 */
-	Store store();
+  /**
+   * Delegated storage receiving capture/open calls
+   *
+   * @return delegated storage
+   */
+  Store store();
 
-	/**
-	 * Declares support for the entire artifact.
-	 *
-	 * @return immutable, nonempty supported targets
-	 */
-	@NonNull
-	Set<Label> labels();
+  /**
+   * Declares support for the entire artifact.
+   *
+   * @return immutable, nonempty supported targets
+   */
+  @NonNull
+  Set<Label> labels();
 
-	/**
-	 * Allocate and initialize (starts) the instance
-	 *
-	 * @return void
-	 * @throws IOException when capture or layout resolution fails
-	 */
-	@NonNull
-	Intermediate<Void> allocate() throws IOException;
+  /**
+   * Allocate and initialize (starts) the instance
+   *
+   * @return void
+   * @throws IOException when capture or layout resolution fails
+   */
+  @NonNull
+  Intermediate<Void> allocate() throws IOException;
 
-	/**
-	 * Deallocate and deinitialize (stops) the instance
-	 *
-	 * @return void
-	 * @throws IOException when capture or layout resolution fails
-	 */
-	@NonNull
-	Intermediate<Void> deallocate() throws IOException;
+  /**
+   * Deallocate and deinitialize (stops) the instance
+   *
+   * @return void
+   * @throws IOException when capture or layout resolution fails
+   */
+  @NonNull
+  Intermediate<Void> deallocate() throws IOException;
 
-	/**
-	 * Reallocate and reinitialize (restart) the instance
-	 *
-	 * @return void
-	 * @throws IOException when capture or layout resolution fails
-	 */
-	@NonNull
-	default Intermediate<Void> reallocate() throws IOException {
-		// TODO: #thenDo or equivalent
-		return null;
-	}
+  /**
+   * Reallocate and reinitialize (restart) the instance
+   *
+   * @return void
+   * @throws IOException when capture or layout resolution fails
+   */
+  @NonNull
+  default Intermediate<Void> reallocate() throws IOException {
+    return deallocate().then(allocate());
+  }
 }

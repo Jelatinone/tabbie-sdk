@@ -101,26 +101,42 @@ public sealed interface Distribution permits Java, Bedrock {
     }
 
     return switch (artifact) {
+
+      // Mod (.jar) -> /mods
       case Mod mod ->
         new Artifact.Layout(
             false,
             Relative.root("mods"));
+
+      // Plugin .jar -> /plugins
       case Plugin plugin ->
         new Artifact.Layout(
             false,
             Relative.root("plugins"));
-      case Resourcepack resourcepack ->
+
+      // Resource Pack (.zip) -> /resourcepacks | /resource_packs
+      case Resourcepack.Java resourcepack ->
         new Artifact.Layout(
             false,
             Relative.root("resourcepacks"));
+      case Resourcepack.Bedrock resourcepack ->
+        new Artifact.Layout(
+            true,
+            Relative.root("resource_packs"));
+
+      // Datapack (.zip) -> /datapacks
       case Datapack datapack ->
         new Artifact.Layout(
             true,
             Relative.world("datapacks", artifact.artifactId().id().toString()));
+
+      // Behaviourpack (.mcpack) -> /behavior_packs
       case Behaviourpack behaviourpack ->
         new Artifact.Layout(
             true,
             Relative.world("behavior_packs", artifact.artifactId().id().toString()));
+
+      // Modpack (.toml; .zip; .mrpack) -> /mods
       case Modpack modpack ->
         new Artifact.Layout(
             true,
