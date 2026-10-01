@@ -7,48 +7,48 @@ import lombok.NonNull;
 
 /**
  * Selection inputs interpreted by a provider. A duration's meaning, such as a
- * time window, belongs to the concrete provider; this interface does not impose
- * timeout or caching behavior.
+ * cache lifetime, belongs to the concrete provider; this interface does not
+ * impose timeout or caching behavior.
  *
  * @param <Identifier> direct item identity type
  */
 public interface Criteria<Identifier> {
 
-  /**
-   * Optional direct item identity
-   *
-   * @return item identity
-   */
-  Optional<Identifier> identifier();
+	/**
+	 * Optional direct item identity.
+	 *
+	 * @return item identity
+	 */
+	Optional<Identifier> identifier();
 
-  /**
-   * optional provider query duration (TTL)
-   *
-   * @return query duration
-   */
-  Optional<Duration> duration();
+	/**
+	 * Optional provider-interpreted duration.
+	 *
+	 * @return query duration
+	 */
+	Optional<Duration> duration();
 
-  /**
-   * Selects an item by identity.
-   *
-   * @param <Identifier> identity type
-   * @param id           item identity
-   * @return criteria containing only the identity
-   */
-  static <Identifier> Criteria<Identifier> identifier(@NonNull Identifier id) {
-    return new Implicit<>(Optional.of(id), Optional.empty());
-  }
+	/**
+	 * Selects an item by identity.
+	 *
+	 * @param <Identifier> identity type
+	 * @param id           item identity
+	 * @return criteria containing only the identity
+	 */
+	static <Identifier> Criteria<Identifier> identifier(@NonNull Identifier id) {
+		return new Implicit<>(Optional.of(id), Optional.empty());
+	}
 
-  /**
-   * Supplies a duration for a provider to interpret.
-   *
-   * @param <Identifier> identity type
-   * @param duration     provider-defined duration
-   * @return criteria containing only the duration
-   */
-  static <Identifier> Criteria<Identifier> duration(@NonNull Duration duration) {
-    return new Implicit<>(Optional.empty(), Optional.of(duration));
-  }
+	/**
+	 * Supplies a duration for a provider to interpret.
+	 *
+	 * @param <Identifier> identity type
+	 * @param duration     provider-defined duration
+	 * @return criteria containing only the duration
+	 */
+	static <Identifier> Criteria<Identifier> duration(@NonNull Duration duration) {
+		return new Implicit<>(Optional.empty(), Optional.of(duration));
+	}
 }
 
 /**
@@ -59,5 +59,5 @@ public interface Criteria<Identifier> {
  * @param duration     optional provider-defined duration
  */
 record Implicit<Identifier>(@NonNull Optional<Identifier> identifier,
-    @NonNull Optional<Duration> duration) implements Criteria<Identifier> {
+		@NonNull Optional<Duration> duration) implements Criteria<Identifier> {
 }
