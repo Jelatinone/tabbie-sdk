@@ -6,26 +6,29 @@ import java.io.InputStream;
 import lombok.NonNull;
 
 /**
- * A reusable, inspectable description of how to produce derived bytes.
- * Describing performs no I/O; {@link #open} is repeatable and independent
- * of any prior inspection, so a description can be reopened later without
- * retaining an open handle to whatever it was derived from.
+ * The source role: a reusable, inspectable description of how to obtain
+ * bytes. Providers describe artifact content this way; retention backends
+ * describe retained content this way too. Describing performs no I/O;
+ * {@link #open} is repeatable and independent of any prior inspection, so a
+ * description can be reopened later without retaining an open handle to
+ * whatever it was derived from.
  */
 public interface Describe {
 
-  /**
-   * Describes this store's own primary content without opening it.
-   *
-   * @return expected identity of this store's primary content
-   */
-  Reference.Pending of();
+	/**
+	 * Describes the content without opening it.
+	 *
+	 * @return expected identity of the content
+	 */
+	@NonNull
+	Reference.Pending of();
 
-  /**
-   * Opens provider-designated primary content, when the store has one.
-   *
-   * @return independent stream at position zero, owned by the caller
-   * @throws IOException when no primary content is designated or readable
-   */
-  @NonNull
-  InputStream open() throws IOException;
+	/**
+	 * Opens the described content.
+	 *
+	 * @return independent stream at position zero, owned by the caller
+	 * @throws IOException when the content is not readable
+	 */
+	@NonNull
+	InputStream open() throws IOException;
 }
