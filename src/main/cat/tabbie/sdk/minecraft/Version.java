@@ -2,6 +2,7 @@ package cat.tabbie.sdk.minecraft;
 
 import java.time.Instant;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 import lombok.NonNull;
@@ -36,7 +37,7 @@ public sealed interface Version
    * @return time of release
    */
   @NonNull
-  Instant releaseDate();
+  Optional<Instant> releaseDate();
 
   /**
    * Compares edition and normalized identifier independently of release metadata.
@@ -59,13 +60,34 @@ public sealed interface Version
   record Java(
       @NonNull String id,
       @NonNull Java.Release releaseType,
-      @NonNull Instant releaseDate) implements Version {
+      @NonNull Optional<Instant> releaseDate) implements Version {
 
     /**
      * Normalizes the edition-specific identifier.
      */
     public Java {
       id = normalize(id);
+    }
+
+    /**
+     * Describes a veeersion with a known release intent.
+     * 
+     * @param id          canonical identifier
+     * @param releaseType edition-specific release classification
+     * @param releaseDate known release instance
+     */
+    public Java(@NonNull String id, @NonNull Java.Release releaseType, @NonNull Instant releaseDate) {
+      this(id, releaseType, Optional.of(releaseDate));
+    }
+
+    /**
+     * Describes a veeersion with a known release intent.
+     * 
+     * @param id          canonical identifier
+     * @param releaseType edition-specific release classification
+     */
+    public Java(@NonNull String id, @NonNull Java.Release releaseType) {
+      this(id, releaseType, Optional.empty());
     }
 
     /**
@@ -109,13 +131,34 @@ public sealed interface Version
   record Bedrock(
       @NonNull String id,
       @NonNull Bedrock.Release releaseType,
-      @NonNull Instant releaseDate) implements Version {
+      @NonNull Optional<Instant> releaseDate) implements Version {
 
     /**
      * Normalizes the edition-specific identifier.
      */
     public Bedrock {
       id = normalize(id);
+    }
+
+    /**
+     * Describes a veeersion with a known release intent.
+     * 
+     * @param id          canonical identifier
+     * @param releaseType edition-specific release classification
+     * @param releaseDate known release instance
+     */
+    public Bedrock(@NonNull String id, @NonNull Bedrock.Release releaseType, @NonNull Instant releaseDate) {
+      this(id, releaseType, Optional.of(releaseDate));
+    }
+
+    /**
+     * Describes a veeersion with a known release intent.
+     * 
+     * @param id          canonical identifier
+     * @param releaseType edition-specific release classification
+     */
+    public Bedrock(@NonNull String id, @NonNull Bedrock.Release releaseType) {
+      this(id, releaseType, Optional.empty());
     }
 
     /**

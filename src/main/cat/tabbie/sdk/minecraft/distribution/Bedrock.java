@@ -1,12 +1,18 @@
 package cat.tabbie.sdk.minecraft.distribution;
 
-import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
-import cat.tabbie.sdk.addon.artifact.*;
+import cat.tabbie.sdk.addon.artifact.Artifact;
+import cat.tabbie.sdk.addon.artifact.Behaviourpack;
+import cat.tabbie.sdk.addon.artifact.Modpack;
+import cat.tabbie.sdk.addon.artifact.Plugin;
+import cat.tabbie.sdk.addon.artifact.Resourcepack;
 import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Version;
-import lombok.AllArgsConstructor;
+import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
 
@@ -14,120 +20,149 @@ import lombok.experimental.FieldDefaults;
  * Bedrock runtime families. Game versions and concrete runtime releases are
  * described and resolved separately from these stateless family values.
  */
-sealed interface Bedrock extends Distribution {
+public sealed interface Bedrock extends Distribution permits Bedrock.Of, Bedrock.Manager {
 
+  /**
+   * Enumerates every Bedrock distribution value. A new family must be added
+   * here as well as to the {@code permits} clause.
+   *
+   * @return immutable distributions, in family then declaration order
+   */
+  static List<Bedrock> values() {
+    return Stream.<Bedrock[]>of(Of.values(), Manager.Of.values())
+        .flatMap(Arrays::stream)
+        .toList();
+  }
+
+  /**
+   * Supports clients and dedicated servers unless a family narrows it.
+   *
+   * @return immutable environments
+   */
   @Override
   default Set<Environment> environments() {
     return Set.of(Environment.CLIENT, Environment.SERVER);
   }
 
+  /**
+   * Accepts behaviour packs, Bedrock resource packs, and modpacks unless a
+   * family declares otherwise.
+   *
+   * @return immutable capabilities
+   */
   @Override
   default Set<Class<? extends Artifact>> capabilities() {
     return Set.of(Behaviourpack.class, Resourcepack.Bedrock.class, Modpack.class);
   }
 
+  /**
+   * Accepts Bedrock Edition game versions unless a family narrows them.
+   *
+   * @param version discovered game version
+   * @return whether the version belongs to Bedrock Edition
+   */
   @Override
   default boolean applicable(@NonNull Version version) {
     return Version.Bedrock.applicable(version);
   }
 
   /**
-   * Canonical lookup aliases. Each delegates behavior to its concrete record,
-   * but remains a distinct value for equality and label matching.
+   * Unmodified Bedrock Edition runtimes.
    */
-  @AllArgsConstructor
-  @FieldDefaults(makeFinal = true)
+  @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
   enum Of implements Bedrock {
 
     /**
-     * Canonical alias of {@link Bedrock.Native}.
+     * Unmodified Bedrock Edition runtime: the game client, or Bedrock
+     * Dedicated Server. Uses every edition default.
      */
-    BEDROCK_NATIVE(new Bedrock.Native()),
+    NATIVE("bedrock:native");
+
+    String id;
 
     /**
-     * Canonical alias of {@link Bedrock.Endstone}.
+     * Of constructor
+     * 
+     * @param id identifier
      */
-    ENDSTONE(new Bedrock.Endstone()),
+    Of(String id) {
+      Distribution.validate(id);
+      this.id = id;
+    }
+
     /**
-     * Canonical alias of {@link Bedrock.PowerNukkitX}.
+     * Returns the stable, case-sensitive namespaced identifier.
+     *
+     * @return identifier such as {@code bedrock:native}
      */
-    POWER_NUKKITX(new Bedrock.PowerNukkitX());
-
-    @NonNull
-    Distribution distribution;
-
     @Override
     public String id() {
-      return distribution.id();
-    }
-
-    @Override
-    public Set<Environment> environments() {
-      return distribution.environments();
-    }
-
-    @Override
-    public Set<Class<? extends Artifact>> capabilities() {
-      return distribution.capabilities();
-    }
-
-    @Override
-    public boolean applicable(@NonNull Version version) {
-      return distribution.applicable(version);
-    }
-
-    @Override
-    public Artifact.Layout layout(@NonNull Artifact artifact, @NonNull Artifact.Context context) throws IOException {
-      return distribution.layout(artifact, context);
+      return id;
     }
   }
 
   /**
-   * Native runtime family; exact releases are provider-resolved.
+   * Server-only Bedrock runtimes that load plugins in place of behaviour packs.
    */
-  record Native() implements Bedrock {
+  sealed interface Manager extends Bedrock permits Manager.Of {
 
-    @Override
-    public String id() {
-      return "bedrock:native";
-    }
-  }
-
-  /**
-   * Endstone runtime family; exact releases are provider-resolved.
-   */
-  record Endstone() implements Manager {
-
-    @Override
-    public String id() {
-      return "bedrock:endstone";
-    }
-  }
-
-  /**
-   * PowerNukkitX runtime family; exact releases are provider-resolved.
-   */
-  record PowerNukkitX() implements Manager {
-
-    @Override
-    public String id() {
-      return "bedrock:powernukkitx";
-    }
-  }
-
-  /**
-   * Bedrock plugin manager servers.
-   */
-  sealed interface Manager extends Bedrock {
-
+    /**
+     * Supports dedicated servers only.
+     *
+     * @return immutable environments
+     */
     @Override
     default Set<Environment> environments() {
       return Set.of(Environment.SERVER);
     }
 
+    /**
+     * Accepts plugins, Bedrock resource packs, and modpacks.
+     *
+     * @return immutable capabilities
+     */
     @Override
     default Set<Class<? extends Artifact>> capabilities() {
       return Set.of(Plugin.class, Resourcepack.Bedrock.class, Modpack.class);
+    }
+
+    /**
+     * Canonical plugin-server values.
+     */
+    @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+    enum Of implements Manager {
+
+      /**
+       * Endstone plugin server.
+       */
+      ENDSTONE("bedrock:endstone"),
+
+      /**
+       * PowerNukkitX plugin server.
+       */
+      POWER_NUKKIT_X("bedrock:powernukkitx");
+
+      String id;
+
+      /**
+       * Of constructor
+       * 
+       * @param id identifier
+       */
+      Of(String id) {
+        Distribution.validate(id);
+        this.id = id;
+      }
+
+      /**
+       * Returns the stable, case-sensitive namespaced identifier.
+       *
+       * @return identifier such as {@code bedrock:endstone}
+       */
+      @Override
+      public String id() {
+        return id;
+      }
     }
   }
 }

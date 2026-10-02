@@ -1,12 +1,14 @@
 package cat.tabbie.sdk.minecraft.distribution;
 
-import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import cat.tabbie.sdk.addon.artifact.*;
 import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Version;
-import lombok.AllArgsConstructor;
+import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
 
@@ -14,86 +16,18 @@ import lombok.experimental.FieldDefaults;
  * Java runtime families. Game versions and concrete runtime releases are
  * described and resolved separately from these stateless family values.
  */
-sealed interface Java extends Distribution {
+sealed interface Java extends Distribution permits Java.Launcher, Java.Manager, Java.Of {
 
   /**
-   * Canonical lookup aliases. Each delegates behavior to its concrete record,
-   * but remains a distinct value for equality and label matching.
+   * Enumerates every Java distribution value. A new family must be added here
+   * as well as to the {@code permits} clause.
+   *
+   * @return immutable distributions, in family then declaration order
    */
-  @AllArgsConstructor
-  @FieldDefaults(makeFinal = true)
-  enum Of implements Java {
-
-    /**
-     * Canonical alias of {@link Java.Native}.
-     */
-    JAVA_NATIVE(new Java.Native()),
-
-    /**
-     * Canonical alias of {@link Java.Fabric}.
-     */
-    FABRIC(new Java.Fabric()),
-    /**
-     * Canonical alias of {@link Java.Quilt}.
-     */
-    QUILT(new Java.Quilt()),
-    /**
-     * Canonical alias of {@link Java.Forge}.
-     */
-    FORGE(new Java.Forge()),
-    /**
-     * Canonical alias of {@link Java.NeoForge}.
-     */
-    NEO_FORGE(new Java.NeoForge()),
-
-    /**
-     * Canonical alias of {@link Java.CraftBukkit}.
-     */
-    CRAFT_BUKKIT(new Java.CraftBukkit()),
-    /**
-     * Canonical alias of {@link Java.Spigot}.
-     */
-    SPIGOT(new Java.Spigot()),
-    /**
-     * Canonical alias of {@link Java.Paper}.
-     */
-    PAPER(new Java.Paper()),
-    /**
-     * Canonical alias of {@link Java.Purpur}.
-     */
-    PURPUR(new Java.Purpur()),
-    /**
-     * Canonical alias of {@link Java.Folia}.
-     */
-    FOLIA(new Java.Folia());
-
-    @NonNull
-    Distribution distribution;
-
-    @Override
-    public String id() {
-      return distribution.id();
-    }
-
-    @Override
-    public Set<Environment> environments() {
-      return distribution.environments();
-    }
-
-    @Override
-    public Set<Class<? extends Artifact>> capabilities() {
-      return distribution.capabilities();
-    }
-
-    @Override
-    public boolean applicable(@NonNull Version version) {
-      return distribution.applicable(version);
-    }
-
-    @Override
-    public Artifact.Layout layout(@NonNull Artifact artifact, @NonNull Artifact.Context context) throws IOException {
-      return distribution.layout(artifact, context);
-    }
+  static List<Java> values() {
+    return Stream.<Java[]>of(Of.values(), Launcher.Of.values(), Manager.Of.values())
+        .flatMap(Arrays::stream)
+        .toList();
   }
 
   @Override
@@ -112,116 +46,68 @@ sealed interface Java extends Distribution {
   }
 
   /**
-   * Native runtime family; exact releases are provider-resolved.
+   * Unmodified Java Edition runtimes.
    */
-  record Native() implements Java {
+  @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+  enum Of implements Java {
 
-    @Override
-    public String id() {
-      return "java:native";
+    NATIVE("java:native");
+
+    String id;
+
+    /**
+     * Of constructor
+     * 
+     * @param id identifier
+     */
+    Of(String id) {
+      Distribution.validate(id);
+      this.id = id;
     }
-  }
-
-  /**
-   * Fabric runtime family; exact releases are provider-resolved.
-   */
-  record Fabric() implements Java.Launcher {
 
     @Override
     public String id() {
-      return "java:fabric";
-    }
-  }
-
-  /**
-   * Quilt runtime family; exact releases are provider-resolved.
-   */
-  record Quilt() implements Java.Launcher {
-
-    @Override
-    public String id() {
-      return "java:quilt";
-    }
-  }
-
-  /**
-   * Forge runtime family; exact releases are provider-resolved.
-   */
-  record Forge() implements Java.Launcher {
-    @Override
-    public String id() {
-      return "java:forge";
-    }
-  }
-
-  /**
-   * NeoForge runtime family; exact releases are provider-resolved.
-   */
-  record NeoForge() implements Java.Launcher {
-    @Override
-    public String id() {
-      return "java:neoforge";
-    }
-  }
-
-  /**
-   * CraftBukkit runtime family; exact releases are provider-resolved.
-   */
-  record CraftBukkit() implements Java.Manager {
-    @Override
-    public String id() {
-      return "java:craftbukkit";
-    }
-  }
-
-  /**
-   * Spigot runtime family; exact releases are provider-resolved.
-   */
-  record Spigot() implements Java.Manager {
-
-    @Override
-    public String id() {
-      return "java:spigot";
-    }
-  }
-
-  /**
-   * Paper runtime family; exact releases are provider-resolved.
-   */
-  record Paper() implements Java.Manager {
-
-    @Override
-    public String id() {
-      return "java:paper";
-    }
-  }
-
-  /**
-   * Purpur runtime family; exact releases are provider-resolved.
-   */
-  record Purpur() implements Java.Manager {
-
-    @Override
-    public String id() {
-      return "java:purpur";
-    }
-  }
-
-  /**
-   * Folia runtime family; exact releases are provider-resolved.
-   */
-  record Folia() implements Java.Manager {
-
-    @Override
-    public String id() {
-      return "java:folia";
+      return id;
     }
   }
 
   /**
    * Java loaders supporting mods on clients and dedicated servers.
    */
-  sealed interface Launcher extends Java {
+  sealed interface Launcher extends Java permits Launcher.Of {
+
+    /**
+     * Canonical mod-loader values.
+     */
+    @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+    enum Of implements Launcher {
+
+      FABRIC("java:fabric"),
+
+      QUILT("java:quilt"),
+
+      FORGE("java:forge"),
+
+      NEO_FORGE("java:neoforge");
+
+      String id;
+
+      /**
+       * Of constructor
+       * 
+       * @param id identifier
+       */
+      Of(String id) {
+        Distribution.validate(id);
+        this.id = id;
+      }
+
+      @Override
+      public String id() {
+        return id;
+      }
+
+    }
 
     @Override
     default Set<Class<? extends Artifact>> capabilities() {
@@ -230,9 +116,44 @@ sealed interface Java extends Distribution {
   }
 
   /**
-   * Java plugin manager servers.
+   * Server-only Java runtimes that load plugins.
    */
-  sealed interface Manager extends Java {
+  sealed interface Manager extends Java permits Manager.Of {
+
+    /**
+     * Canonical plugin-server values.
+     */
+    @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+    enum Of implements Manager {
+
+      CRAFT_BUKKIT("java:craftbukkit"),
+
+      SPIGOT("java:spigot"),
+
+      PAPER("java:paper"),
+
+      PURPUR("java:purpur"),
+
+      FOLIA("java:folia");
+
+      String id;
+
+      /**
+       * Of constructor
+       * 
+       * @param id identifier
+       */
+      Of(String id) {
+        Distribution.validate(id);
+        this.id = id;
+      }
+
+      @Override
+      public String id() {
+        return id;
+      }
+
+    }
 
     @Override
     default Set<Environment> environments() {
@@ -241,8 +162,7 @@ sealed interface Java extends Distribution {
 
     @Override
     default Set<Class<? extends Artifact>> capabilities() {
-      return Set.of(Plugin.class, Datapack.class, Resourcepack.Java.class,
-          Modpack.class);
+      return Set.of(Plugin.class, Datapack.class, Resourcepack.Java.class, Modpack.class);
     }
   }
 }
