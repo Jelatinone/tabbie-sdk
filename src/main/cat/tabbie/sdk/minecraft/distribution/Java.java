@@ -51,6 +51,9 @@ sealed interface Java extends Distribution permits Java.Launcher, Java.Manager, 
   @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
   enum Of implements Java {
 
+		/**
+		 * Native
+		 */
     NATIVE("java:native");
 
     String id;
@@ -82,12 +85,24 @@ sealed interface Java extends Distribution permits Java.Launcher, Java.Manager, 
     @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
     enum Of implements Launcher {
 
+			/**
+			 * Fabric
+			 */
       FABRIC("java:fabric"),
 
+			/**
+			 * Quilt
+			 */
       QUILT("java:quilt"),
 
+			/**
+			 * Forge
+			 */
       FORGE("java:forge"),
 
+			/**
+			 * Neo-Forge
+			 */
       NEO_FORGE("java:neoforge");
 
       String id;
@@ -126,14 +141,29 @@ sealed interface Java extends Distribution permits Java.Launcher, Java.Manager, 
     @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
     enum Of implements Manager {
 
+			/**
+			 * Craft-Bukkit
+			 */
       CRAFT_BUKKIT("java:craftbukkit"),
 
+			/**
+			 * Spigot
+			 */
       SPIGOT("java:spigot"),
 
+			/**
+			 * Paper
+			 */
       PAPER("java:paper"),
 
+			/**
+			 * Purpur
+			 */
       PURPUR("java:purpur"),
 
+			/**
+			 * Folia
+			 */
       FOLIA("java:folia");
 
       String id;
@@ -162,7 +192,7 @@ sealed interface Java extends Distribution permits Java.Launcher, Java.Manager, 
 
     @Override
     default Set<Class<? extends Artifact>> capabilities() {
-      return Set.of(Plugin.class, Datapack.class, Resourcepack.Java.class, Modpack.class);
+      return Set.of(Plugin.class, Datapack.class, Resourcepack.Java.class);
     }
   }
 }

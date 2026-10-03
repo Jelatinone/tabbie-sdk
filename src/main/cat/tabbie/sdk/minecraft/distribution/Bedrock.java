@@ -73,8 +73,7 @@ public sealed interface Bedrock extends Distribution permits Bedrock.Of, Bedrock
   enum Of implements Bedrock {
 
     /**
-     * Unmodified Bedrock Edition runtime: the game client, or Bedrock
-     * Dedicated Server. Uses every edition default.
+		 * Native
      */
     NATIVE("bedrock:native");
 
@@ -133,14 +132,29 @@ public sealed interface Bedrock extends Distribution permits Bedrock.Of, Bedrock
     enum Of implements Manager {
 
       /**
-       * Endstone plugin server.
+       * Endstone
        */
       ENDSTONE("bedrock:endstone"),
 
+			/**
+			 * Cloudburst-server
+			 */
+			CLOUDBURST("bedrock:cloudburst"),
+
+			/**
+			 * Cloudburst-nukkit
+			 */
+			CLOUDBURST_NUKKIT("bedrock:cloudburst-nukkit"),
+
+			/**
+			 * Nukkit-MOT
+			 */
+			MOT_NUKKIT("bedrock:nukkit-mot"),
+
       /**
-       * PowerNukkitX plugin server.
+       * Power-Nukkit-X
        */
-      POWER_NUKKIT_X("bedrock:powernukkitx");
+      POWER_NUKKIT("bedrock:power-nukkit");
 
       String id;
 

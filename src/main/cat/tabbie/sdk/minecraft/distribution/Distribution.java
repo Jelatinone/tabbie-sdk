@@ -160,14 +160,11 @@ public sealed interface Distribution permits Java, Bedrock {
             Relative.root("plugins"));
 
       // Resource pack (.zip) -> resourcepacks/ on clients; servers deliver packs
-      case Resourcepack.Java resourcepack -> {
-        if (environment == Environment.SERVER) {
-          throw new IOException("Server resource-pack delivery requires an explicit layout override.");
-        }
-        yield new Artifact.Layout(
-            false,
-            Relative.root("resourcepacks"));
-      }
+      case Resourcepack.Java resourcepack -> 
+				new Artifact.Layout(
+						false,
+						Relative.root("resourcepacks"));
+      
 
       // Resource pack (.mcpack) -> resource_packs/<id>/
       case Resourcepack.Bedrock resourcepack ->
@@ -187,14 +184,11 @@ public sealed interface Distribution permits Java, Bedrock {
             Relative.world("behavior_packs", directory));
 
       // Self-contained modpack (.zip) -> context root, on mod loaders only
-      case Modpack modpack -> {
-        if (!supports(Mod.class)) {
-          throw new IOException("Modpacks on distributions without mod loading require an explicit layout override.");
-        }
-        yield new Artifact.Layout(
+      case Modpack modpack -> 
+				new Artifact.Layout(
             true,
             Relative.root());
-      }
+      
     };
   }
 
