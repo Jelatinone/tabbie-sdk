@@ -207,8 +207,8 @@ public sealed interface Distribution permits Java, Bedrock {
 			@NonNull String releaseName,
 			@NonNull Instant releaseDate,
 			long releaseNumber,
-			@NonNull Instance content,
-			@NonNull Set<Package> packages) implements Release<Instance> {
+			@NonNull Set<Byproduct> content,
+			@NonNull Set<Package> packages) implements Release<Byproduct> {
 
 		/**
 		 * Checks shared release invariants and that the instance is a file of this
@@ -218,7 +218,7 @@ public sealed interface Distribution permits Java, Bedrock {
 		 */
 		public Build {
 			Release.validate(releaseName, releaseNumber);
-			Release.Payload.validate(coordinates, Set.of(content));
+			Release.Payload.validate(coordinates, content);
 			packages = Set.copyOf(packages);
 		}
 	}
