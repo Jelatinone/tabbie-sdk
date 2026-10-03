@@ -1,14 +1,12 @@
 package cat.tabbie.sdk.addon.artifact;
 
-import java.io.IOException;
 import java.util.Set;
 
-import cat.tabbie.sdk.album.repository.Store;
-import cat.tabbie.sdk.album.revision.Image;
-import cat.tabbie.sdk.album.revision.Intermediate;
+import cat.tabbie.sdk.album.repository.Describe;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.minecraft.Label;
+import cat.tabbie.sdk.minecraft.Parity;
 import lombok.NonNull;
 
 /**
@@ -16,85 +14,80 @@ import lombok.NonNull;
  * support for one does not imply support for the other.
  */
 public sealed interface Resourcepack extends Artifact {
+
   /**
    * Java resource content. Client placement has a common default; server
    * resource-pack delivery requires an explicit caller layout.
    */
   sealed interface Java extends Resourcepack {
+
     /**
      * An artifact using the shared named-file and ZIP capture installer.
      *
      * @param coordinates  exact provider file coordinates
-     * @param artifactName nonblank display name
-     * @param store        caller-owned source store
+     * @param artifactName non-blank display name
+     * @param source       provider-owned content description
      * @param labels       nonempty supported targets
-     * @param depends      external dependencies
-     * @param conflicts    external conflicts
+     * @param parity       multiplayer side parity
+     * @param relations    catalog relationships, one per coordinate
      */
     record Default(
         @NonNull Coordinate.File coordinates,
         @NonNull String artifactName,
-        @NonNull Store store,
+        @NonNull Describe source,
         @NonNull Set<Label> labels,
-        @NonNull Set<Coordinate> depends,
-        @NonNull Set<Coordinate> conflicts) implements Java {
+        @NonNull Parity parity,
+        @NonNull Set<Relation> relations) implements Java {
       /**
        * Copies collections and checks local declarations without reading content.
        *
-       * @throws IllegalArgumentException when declared support or relationships are
+       * @throws IllegalArgumentException when declared support or relations are
        *                                  invalid
        */
       public Default {
         labels = Set.copyOf(labels);
-        depends = Set.copyOf(depends);
-        conflicts = Set.copyOf(conflicts);
-        Artifact.validate(Java.class, coordinates, artifactName, store, labels, depends, conflicts);
+        relations = Set.copyOf(relations);
+        Artifact.validate(Java.class, coordinates, artifactName, labels, relations);
       }
     }
 
     /**
      * An artifact whose content images are described by a caller-supplied
-     * installer.
+     * installer, checked like the shared installer's.
      *
      * @param coordinates  exact provider file coordinates
-     * @param artifactName nonblank display name
-     * @param store        caller-owned source store
+     * @param artifactName non-blank display name
+     * @param source       provider-owned content description
      * @param labels       nonempty supported targets
-     * @param depends      external dependencies
-     * @param conflicts    external conflicts
+     * @param parity       multiplayer side parity
+     * @param relations    catalog relationships, one per coordinate
      * @param installer    typed content description strategy
      */
     record Custom(
         @NonNull Coordinate.File coordinates,
         @NonNull String artifactName,
-        @NonNull Store store,
+        @NonNull Describe source,
         @NonNull Set<Label> labels,
-        @NonNull Set<Coordinate> depends,
-        @NonNull Set<Coordinate> conflicts,
-        @NonNull Installer<Artifact.Context> installer) implements Java {
+        @NonNull Parity parity,
+        @NonNull Set<Relation> relations,
+        @NonNull Installer<Artifact.Context> installer) implements Java, Artifact.Custom {
       /**
        * Copies collections and checks local declarations without reading content.
        *
-       * @throws IllegalArgumentException when declared support or relationships are
+       * @throws IllegalArgumentException when declared support or relations are
        *                                  invalid
        */
       public Custom {
         labels = Set.copyOf(labels);
-        depends = Set.copyOf(depends);
-        conflicts = Set.copyOf(conflicts);
-        Artifact.validate(Java.class, coordinates, artifactName, store, labels, depends, conflicts);
-      }
-
-      @Override
-      public Intermediate<Set<Image<?>>> install(@NonNull Context context) throws IOException {
-        return installer().install(context);
+        relations = Set.copyOf(relations);
+        Artifact.validate(Java.class, coordinates, artifactName, labels, relations);
       }
     }
   }
 
   /**
    * Bedrock resource content requiring activation metadata at integration time.
-   * Placement is selected explicitly by the caller.
+   * By default each pack unpacks beneath its own directory.
    */
   sealed interface Bedrock extends Resourcepack {
 
@@ -102,69 +95,62 @@ public sealed interface Resourcepack extends Artifact {
      * An artifact using the shared named-file and ZIP capture installer.
      *
      * @param coordinates  exact provider file coordinates
-     * @param artifactName nonblank display name
-     * @param store        caller-owned source store
+     * @param artifactName non-blank display name
+     * @param source       provider-owned content description
      * @param labels       nonempty supported targets
-     * @param depends      external dependencies
-     * @param conflicts    external conflicts
+     * @param parity       multiplayer side parity
+     * @param relations    catalog relationships, one per coordinate
      */
     record Default(
         @NonNull Coordinate.File coordinates,
         @NonNull String artifactName,
-        @NonNull Store store,
+        @NonNull Describe source,
         @NonNull Set<Label> labels,
-        @NonNull Set<Coordinate> depends,
-        @NonNull Set<Coordinate> conflicts) implements Bedrock {
+        @NonNull Parity parity,
+        @NonNull Set<Relation> relations) implements Bedrock {
       /**
        * Copies collections and checks local declarations without reading content.
        *
-       * @throws IllegalArgumentException when declared support or relationships are
+       * @throws IllegalArgumentException when declared support or relations are
        *                                  invalid
        */
       public Default {
         labels = Set.copyOf(labels);
-        depends = Set.copyOf(depends);
-        conflicts = Set.copyOf(conflicts);
-        Artifact.validate(Bedrock.class, coordinates, artifactName, store, labels, depends, conflicts);
+        relations = Set.copyOf(relations);
+        Artifact.validate(Bedrock.class, coordinates, artifactName, labels, relations);
       }
     }
 
     /**
      * An artifact whose content images are described by a caller-supplied
-     * installer.
+     * installer, checked like the shared installer's.
      *
      * @param coordinates  exact provider file coordinates
-     * @param artifactName nonblank display name
-     * @param store        caller-owned source store
+     * @param artifactName non-blank display name
+     * @param source       provider-owned content description
      * @param labels       nonempty supported targets
-     * @param depends      external dependencies
-     * @param conflicts    external conflicts
+     * @param parity       multiplayer side parity
+     * @param relations    catalog relationships, one per coordinate
      * @param installer    typed content description strategy
      */
     record Custom(
         @NonNull Coordinate.File coordinates,
         @NonNull String artifactName,
-        @NonNull Store store,
+        @NonNull Describe source,
         @NonNull Set<Label> labels,
-        @NonNull Set<Coordinate> depends,
-        @NonNull Set<Coordinate> conflicts,
-        @NonNull Installer<Artifact.Context> installer) implements Bedrock {
+        @NonNull Parity parity,
+        @NonNull Set<Relation> relations,
+        @NonNull Installer<Artifact.Context> installer) implements Bedrock, Artifact.Custom {
       /**
        * Copies collections and checks local declarations without reading content.
        *
-       * @throws IllegalArgumentException when declared support or relationships are
+       * @throws IllegalArgumentException when declared support or relations are
        *                                  invalid
        */
       public Custom {
         labels = Set.copyOf(labels);
-        depends = Set.copyOf(depends);
-        conflicts = Set.copyOf(conflicts);
-        Artifact.validate(Bedrock.class, coordinates, artifactName, store, labels, depends, conflicts);
-      }
-
-      @Override
-      public Intermediate<Set<Image<?>>> install(@NonNull Context context) throws IOException {
-        return installer().install(context);
+        relations = Set.copyOf(relations);
+        Artifact.validate(Bedrock.class, coordinates, artifactName, labels, relations);
       }
     }
   }

@@ -2,7 +2,6 @@ package cat.tabbie.sdk.minecraft.distribution;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -18,8 +17,8 @@ import cat.tabbie.sdk.addon.artifact.Resourcepack;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Environment;
-import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Version;
+import cat.tabbie.sdk.platform.Package;
 import cat.tabbie.sdk.platform.Relative;
 import lombok.NonNull;
 
@@ -42,8 +41,8 @@ public sealed interface Distribution permits Java, Bedrock {
    */
   static List<Distribution> values() {
     return Stream.<Distribution>concat(
-        Arrays.stream(Java.Of.values()),
-        Arrays.stream(Bedrock.Of.values()))
+        Java.values().stream(),
+        Bedrock.values().stream())
         .toList();
   }
 
@@ -61,18 +60,20 @@ public sealed interface Distribution permits Java, Bedrock {
   }
 
   /**
-   * Checks that an identifier belongs to the Bedrock namespace, so a mistyped
-   * constant fails when its enum loads rather than when a persisted lock is
-   * read.
+   * Checks that an identifier belongs to the Bedrock or Java namespaces, so a
+   * mistyped constant fails when its enum loads rather than when a persisted lock
+   * is read.
    *
    * @param id candidate identifier
    * @return the identifier
-   * @throws IllegalArgumentException when it is not {@code bedrock:} followed
+   * @throws IllegalArgumentException when it is not {@code bedrock:} or
+   *                                  {@code java:} followed
    *                                  by lowercase letters and digits
    */
   static void validate(@NonNull String id) {
-    if (!id.matches("bedrock:[a-z0-9]+")) {
-      throw new IllegalArgumentException(String.format("%s is not a Bedrock distribution identifier.", id));
+    if (!id.matches("(bedrock|java):[a-z0-9]+")) {
+      throw new IllegalArgumentException(
+          String.format("%s is not a distribution identifier.", id));
     }
   }
 
@@ -198,69 +199,34 @@ public sealed interface Distribution permits Java, Bedrock {
   }
 
   /**
-   * A published distribution release with target-selected variants. Each
-   * variant names the instances installed together for its labels; every one
-   * of them must declare every label of that variant, and no two variants may
-   * claim the same target.
+   * A published distribution release of one instance, run for every target the
+   * instance declares in {@link Instance#labels()}.
    *
    * @param coordinates   exact release coordinates
    * @param releaseName   non-blank display name
    * @param releaseDate   publication instant
    * @param releaseNumber positive provider-assigned release number
-   * @param variants      nonempty target selections
-   * @param content       nonempty immutable published instances with distinct
-   *                      file coordinates
+   * @param content       instance published as a file of this release
+   * @param packages      system packages the instance requires
    */
   record Build(
       @NonNull Coordinate.Build coordinates,
       @NonNull String releaseName,
       @NonNull Instant releaseDate,
       long releaseNumber,
-      @NonNull Variant content,
-      @NonNull Set<Package> packages) implements Release<Build.Variant> {
+      @NonNull Instance content,
+      @NonNull Set<Package> packages) implements Release<Instance> {
 
+    /**
+     * Checks shared release invariants and that the instance is a file of this
+     * release, then copies the packages.
+     *
+     * @throws IllegalArgumentException when publication invariants are violated
+     */
     public Build {
       Release.validate(releaseName, releaseNumber);
+      Release.Payload.validate(coordinates, Set.of(content));
       packages = Set.copyOf(packages);
-    }
-
-    /**
-     * Creates a build whose single variant installs every instance for every
-     * label.
-     *
-     * @param coordinates   exact release coordinates
-     * @param releaseName   non-blank display name
-     * @param releaseDate   publication instant
-     * @param releaseNumber positive provider-assigned release number
-     * @param labels        nonempty targets advertised for the entire build
-     * @param content       nonempty instances, each declaring every label
-     * @return universal build
-     */
-    public static Build of(
-        @NonNull Coordinate.Build coordinates,
-        @NonNull String releaseName,
-        @NonNull Instant releaseDate,
-        long releaseNumber,
-        @NonNull Set<Label> labels,
-        @NonNull Instance instance,
-        @NonNull Set<Package> packages) {
-      return new Build(coordinates, releaseName, releaseDate, releaseNumber,
-          new Variant(labels, instance), packages);
-    }
-
-    /**
-     * The instance run for a set of targets.
-     *
-     * @param labels   nonempty targets selecting this variant
-     * @param instance instance run for those targets
-     */
-    public record Variant(@NonNull Set<Label> labels, @NonNull Instance instance) {
-      public Variant {
-        labels = Set.copyOf(labels);
-        if (labels.isEmpty()) {
-          throw new IllegalArgumentException("A variant needs at least one label.");
-        }
-      }
     }
   }
 }
