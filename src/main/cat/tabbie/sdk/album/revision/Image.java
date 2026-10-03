@@ -597,7 +597,8 @@ public sealed interface Image<State extends Image.Alteration> {
 				case Claim.Present(var paths) -> paths;
 			};
 
-			if (Collections.disjoint(uninstall.keySet(), install.keySet())) {
+			if (!uninstall.isEmpty() && !install.isEmpty()
+					&& Collections.disjoint(uninstall.keySet(), install.keySet())) {
 				throw new IllegalArgumentException("There must be at least one valid install-uninstall path");
 			}
 		}

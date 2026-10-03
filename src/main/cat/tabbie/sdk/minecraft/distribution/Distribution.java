@@ -71,7 +71,7 @@ public sealed interface Distribution permits Java, Bedrock {
 	 *                                  by lowercase letters and digits
 	 */
 	static void validate(@NonNull String id) {
-		if (!id.matches("(bedrock|java):[a-z0-9]+")) {
+		if (!id.matches("(bedrock|java):[a-z0-9]+(-[a-z0-9]+)*")) {
 			throw new IllegalArgumentException(
 					String.format("%s is not a distribution identifier.", id));
 		}
