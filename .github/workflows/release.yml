@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: maven-central
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Match tag to version
+        id: version
+        run: |
+          version=$(./gradlew -q properties --property version | sed -n 's/^version: //p')
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the project version; expected v$version."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # signing.required makes a missing key fail this step instead of producing an unsigned bundle.
+      - name: Build signed bundle
+        env:
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASSWORD }}
+        run: ./gradlew check centralBundle
+
+      # USER_MANAGED stops at VALIDATED: a maintainer presses Publish in the Central Portal, because
+      # Central versions can never be changed or deleted. Switch to AUTOMATIC once releases are trusted.
+      - name: Upload to Central Portal
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          auth=$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 -w0)
+          echo "::add-mask::$auth"
+          api=https://central.sonatype.com/api/v1/publisher
+
+          if ! id=$(curl --fail-with-body --silent --show-error -X POST \
+              "$api/upload?publishingType=USER_MANAGED&name=tabbie-sdk-$VERSION" \
+              -H "Authorization: Bearer $auth" \
+              -F "bundle=@build/central/tabbie-sdk-$VERSION-bundle.zip"); then
+            echo "$id"
+            exit 1
+          fi
+          echo "Uploaded deployment $id"
+
+          for _ in $(seq 90); do
+            if ! status=$(curl --fail-with-body --silent --show-error -X POST \
+                "$api/status?id=$id" -H "Authorization: Bearer $auth"); then
+              echo "$status"
+              exit 1
+            fi
+            state=$(jq -r .deploymentState <<< "$status")
+            echo "Deployment $id is $state"
+            case $state in
+              VALIDATED)
+                echo "::notice::tabbie-sdk $VERSION passed validation. Publish deployment $id at https://central.sonatype.com/publishing/deployments"
+                exit 0 ;;
+              PUBLISHING | PUBLISHED)
+                exit 0 ;;
+              FAILED)
+                jq . <<< "$status"
+                exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::Deployment $id did not finish validating within 15 minutes."
+          exit 1
