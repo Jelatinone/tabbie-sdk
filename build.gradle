@@ -1,10 +1,10 @@
 plugins {
   id 'java-library'
+  id 'maven-publish'
+  id 'signing'
   id 'com.diffplug.spotless' version '8.1.0'
+  id 'io.freefair.lombok' version '9.2.0'
 }
-
-group = 'cat.tabbie'
-version = '0.1.0'
 
 sourceSets {
   main {
@@ -12,6 +12,9 @@ sourceSets {
   }
   test {
     java.srcDirs = ['src/test']
+  }
+  consumer {
+    java.srcDirs = ['src/consumer']
   }
 }
 
@@ -23,6 +26,12 @@ java {
   toolchain {
     languageVersion = JavaLanguageVersion.of(25)
   }
+  withSourcesJar()
+  withJavadocJar()
+}
+
+lombok {
+  version = '1.18.42'
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -34,25 +43,139 @@ tasks.withType(Javadoc).configureEach {
   options.tags('apiNote:a:API Note:', 'implSpec:a:Implementation Requirements:', 'implNote:a:Implementation Note:')
 }
 
-check.dependsOn(javadoc)
+// Javadoc needs delomboked sources to see Lombok-generated accessors, but delombok drops the Javadoc
+// of enum constants that have bodies, so only files declaring accessors are documented from its output.
+def mainSources = file('src/main')
+def accessors = ~/@(Getter|Setter|With|Builder|Value|Data)\b/
+def declaresAccessors = { FileTreeElement element ->
+  new File(mainSources, element.path).text.find(accessors) != null
+}
+
+tasks.named('javadoc', Javadoc) {
+  source = sourceSets.main.java.matching {
+    exclude { !it.directory && declaresAccessors(it) }
+  } + files(tasks.named('delombok')).asFileTree.matching {
+    include { it.directory || declaresAccessors(it) }
+  }
+}
+
+tasks.named('jar', Jar) {
+  manifest {
+    attributes('Automatic-Module-Name': 'cat.tabbie.sdk')
+  }
+}
 
 dependencies {
-  compileOnly('org.projectlombok:lombok:1.18.42')
-  annotationProcessor('org.projectlombok:lombok:1.18.42')
-
   testImplementation(platform('org.junit:junit-bom:5.10.2'))
   testImplementation('org.junit.jupiter:junit-jupiter')
   testRuntimeOnly('org.junit.platform:junit-platform-launcher')
 
-  testCompileOnly('org.projectlombok:lombok:1.18.42')
-  testAnnotationProcessor('org.projectlombok:lombok:1.18.42')
+  consumerImplementation(files(tasks.named('jar')))
+  consumerImplementation(platform('org.junit:junit-bom:5.10.2'))
+  consumerImplementation('org.junit.jupiter:junit-jupiter')
+  consumerRuntimeOnly('org.junit.platform:junit-platform-launcher')
+}
+
+// The consumer source set sees the SDK the way a provider does: the built jar, without Lombok.
+configurations.named('consumerCompileOnly') {
+  setExtendsFrom([])
+}
+configurations.named('consumerAnnotationProcessor') {
+  setExtendsFrom([])
+}
+
+tasks.named('compileConsumerJava', JavaCompile) {
+  options.compilerArgs.addAll(['-Xlint:all', '-Werror'])
+}
+
+def consumerTest = tasks.register('consumerTest', Test) {
+  description = 'Runs the consumer tests against the built jar.'
+  group = LifecycleBasePlugin.VERIFICATION_GROUP
+  testClassesDirs = sourceSets.consumer.output.classesDirs
+  classpath = sourceSets.consumer.runtimeClasspath
+  shouldRunAfter(tasks.named('test'))
 }
 
 tasks.withType(Test).configureEach {
   useJUnitPlatform()
 }
 
+tasks.named('check') {
+  dependsOn(tasks.named('javadoc'), consumerTest)
+}
+
+def stagingRepo = layout.buildDirectory.dir('staging-repo')
+
+publishing {
+  publications {
+    sdk(MavenPublication) {
+      from components.java
+      pom {
+        name = 'Tabbie SDK'
+        description = 'Provider-facing contracts for the Tabbie Minecraft installation manager.'
+        url = 'https://github.com/Jelatinone/tabbie-sdk'
+        licenses {
+          license {
+            name = 'Apache-2.0'
+            url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+          }
+        }
+        developers {
+          developer {
+            id = 'jelatinone'
+            name = 'Cody Washington'
+          }
+        }
+        scm {
+          url = 'https://github.com/Jelatinone/tabbie-sdk'
+          connection = 'scm:git:https://github.com/Jelatinone/tabbie-sdk.git'
+          developerConnection = 'scm:git:ssh://git@github.com/Jelatinone/tabbie-sdk.git'
+        }
+      }
+    }
+  }
+  repositories {
+    maven {
+      name = 'staging'
+      url = stagingRepo
+    }
+  }
+}
+
+signing {
+  def signingKey = providers.gradleProperty('signingKey').filter { !it.blank }.orNull
+  if (signingKey != null) {
+    useInMemoryPgpKeys(signingKey, providers.gradleProperty('signingPassword').orNull)
+  }
+  // Dry runs may publish unsigned; a Central bundle must be signed.
+  required = { gradle.taskGraph.hasTask(':centralBundle') }
+  sign(publishing.publications.sdk)
+}
+
+// Start each staging publish empty, so a bundle never carries files from an earlier run.
+def cleanStagingRepo = tasks.register('cleanStagingRepo', Delete) {
+  delete(stagingRepo)
+}
+
+tasks.named('publishSdkPublicationToStagingRepository') {
+  dependsOn(cleanStagingRepo)
+}
+
+tasks.register('centralBundle', Zip) {
+  description = 'Packs the signed staging publication into a Central Portal upload bundle.'
+  group = PublishingPlugin.PUBLISH_TASK_GROUP
+  dependsOn(tasks.named('publishAllPublicationsToStagingRepository'))
+  from(stagingRepo) {
+    // The version directory only; Central generates maven-metadata.xml itself.
+    include("cat/tabbie/tabbie-sdk/${version}/**")
+  }
+  archiveFileName = "tabbie-sdk-${version}-bundle.zip"
+  destinationDirectory = layout.buildDirectory.dir('central')
+}
+
 spotless {
+  enforceCheck = false
+
   java {
     target 'src/**/*.java'
     targetExclude 'src/**/external/**/*.java'
@@ -75,4 +198,3 @@ spotless {
     endWithNewline()
   }
 }
-build.dependsOn(spotlessApply)
