@@ -68,13 +68,27 @@ public interface Addon {
 	Set<Build> builds();
 
 	/**
-	 * Exposes the most recent build declaration owned by this addon.
+	 * Exposes the most recent build owned by this addon on any channel.
 	 *
-	 * @return build with a distinct identity, maybe empty.
+	 * @return latest build, or empty when no build is known
 	 */
 	@NonNull
 	default Optional<Build> latest() {
 		return builds().stream().max(Release.PUBLICATION_ORDER);
+	}
+
+	/**
+	 * Exposes the most recent build on an accepted channel, such as the latest
+	 * stable build for an update.
+	 *
+	 * @param channels accepted channels
+	 * @return latest accepted build, or empty when none is known
+	 */
+	@NonNull
+	default Optional<Build> latest(@NonNull Set<Provider.Coordinate.Channel> channels) {
+		return builds().stream()
+				.filter(build -> channels.contains(build.coordinates().channel()))
+				.max(Release.PUBLICATION_ORDER);
 	}
 
 	/**
@@ -172,42 +186,6 @@ public interface Addon {
 					&& assessments.stream().allMatch(result -> result == Compatibility.SUPPORTED)
 							? Compatibility.SUPPORTED
 							: Compatibility.UNKNOWN;
-		}
-
-		/**
-		 * The artifacts of a build and the targets they support together. Every
-		 * artifact must explicitly support every label, while artifacts may
-		 * declare additional supported targets.
-		 *
-		 * @param labels    nonempty targets advertised for the entire build
-		 * @param artifacts nonempty artifacts installed together
-		 */
-		public record Content(@NonNull Set<Label> labels, @NonNull Set<Artifact> artifacts) {
-
-			/**
-			 * Copies and checks the advertised labels and artifacts.
-			 *
-			 * @throws IllegalArgumentException when labels or artifacts are empty, an
-			 *                                  artifact does not support every label,
-			 *                                  or artifacts conflict with each other
-			 */
-			public Content {
-				labels = Set.copyOf(labels);
-				artifacts = Set.copyOf(artifacts);
-				if (labels.isEmpty() || artifacts.isEmpty()) {
-					throw new IllegalArgumentException("A build needs supported labels and artifacts.");
-				}
-				Set<Artifact> selected = artifacts;
-				if (selected.stream().anyMatch(artifact -> artifact.conflicts().stream()
-						.anyMatch(conflict -> selected.stream().anyMatch(other -> conflict.includes(other.coordinates()))))) {
-					throw new IllegalArgumentException("Build artifacts conflict with each other.");
-				}
-				Set<Label> declared = labels;
-				if (selected.stream().anyMatch(artifact -> declared.stream()
-						.anyMatch(label -> label.compatibility(artifact) != Compatibility.SUPPORTED))) {
-					throw new IllegalArgumentException("Every build artifact must support every declared label.");
-				}
-			}
 		}
 	}
 }

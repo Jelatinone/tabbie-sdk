@@ -1,7 +1,6 @@
 package cat.tabbie.sdk.merchant;
 
 import java.io.IOException;
-import java.util.Optional;
 import java.util.Set;
 
 import cat.tabbie.sdk.album.repository.Extract;
@@ -72,15 +71,13 @@ public interface Installer<Contextual extends Installer.Context> {
 		Relative.Root contextRoot();
 
 		/**
-		 * Returns the selected world mount relative to the context mount, when a
-		 * world is bound.
+		 * Returns the world mount as a world-scoped anchor for installer-built
+		 * paths. Resolving paths beneath it requires a bound {@link #worldRoot()}.
 		 *
-		 * @return world mount, or empty when no world is bound
+		 * @return world mount itself
 		 */
 		@NonNull
-		default Optional<Relative.Root> worldRoot() {
-			return Optional.empty();
-		}
+		Relative.World worldRoot();
 
 		/**
 		 * Resolves a scoped logical path to a path relative to the installation's
@@ -94,11 +91,10 @@ public interface Installer<Contextual extends Installer.Context> {
 		 */
 		default Relative.Root resolve(@NonNull Relative relative) {
 			return switch (relative) {
-				case Relative.Root root -> contextRoot().resolve(root.components());
+				case Relative.Root root -> contextRoot()
+						.resolve(root.components());
 				case Relative.World world -> contextRoot()
-						.resolve(worldRoot()
-								.orElseThrow(() -> new IllegalArgumentException("World-scoped content requires a bound world."))
-								.components())
+						.resolve(worldRoot().components())
 						.resolve(world.components());
 			};
 		}

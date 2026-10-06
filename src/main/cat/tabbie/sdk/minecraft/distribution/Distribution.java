@@ -1,7 +1,6 @@
 package cat.tabbie.sdk.minecraft.distribution;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -14,11 +13,8 @@ import cat.tabbie.sdk.addon.artifact.Mod;
 import cat.tabbie.sdk.addon.artifact.Modpack;
 import cat.tabbie.sdk.addon.artifact.Plugin;
 import cat.tabbie.sdk.addon.artifact.Resourcepack;
-import cat.tabbie.sdk.merchant.Provider.Coordinate;
-import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Version;
-import cat.tabbie.sdk.platform.Package;
 import cat.tabbie.sdk.platform.Relative;
 import lombok.NonNull;
 
@@ -160,10 +156,15 @@ public sealed interface Distribution permits Java, Bedrock {
 						Relative.root("plugins"));
 
 			// Resource pack (.zip) -> resourcepacks/ on clients; servers deliver packs
-			case Resourcepack.Java resourcepack ->
-				new Artifact.Layout(
+			case Resourcepack.Java resourcepack -> {
+				if (environment == Environment.SERVER) {
+					throw new IOException(String.format(
+							"Distribution %s has no default server resource-pack delivery; supply a layout.", id()));
+				}
+				yield new Artifact.Layout(
 						false,
 						Relative.root("resourcepacks"));
+			}
 
 			// Resource pack (.mcpack) -> resource_packs/<id>/
 			case Resourcepack.Bedrock resourcepack ->
@@ -183,43 +184,16 @@ public sealed interface Distribution permits Java, Bedrock {
 						Relative.world("behavior_packs", directory));
 
 			// Self-contained modpack (.zip) -> context root, on mod loaders only
-			case Modpack modpack ->
-				new Artifact.Layout(
+			case Modpack modpack -> {
+				if (!(this instanceof Java.Launcher)) {
+					throw new IOException(String.format(
+							"Distribution %s has no default modpack placement; supply a layout.", id()));
+				}
+				yield new Artifact.Layout(
 						true,
-						Relative.root("mods"));
+						Relative.root());
+			}
 
 		};
-	}
-
-	/**
-	 * A published distribution release of one instance, run for every target the
-	 * instance declares in {@link Instance#labels()}.
-	 *
-	 * @param coordinates   exact release coordinates
-	 * @param releaseName   non-blank display name
-	 * @param releaseDate   publication instant
-	 * @param releaseNumber positive provider-assigned release number
-	 * @param content       instance published as a file of this release
-	 * @param packages      system packages the instance requires
-	 */
-	record Build(
-			@NonNull Coordinate.Build coordinates,
-			@NonNull String releaseName,
-			@NonNull Instant releaseDate,
-			long releaseNumber,
-			@NonNull Set<Byproduct> content,
-			@NonNull Set<Package> packages) implements Release<Byproduct> {
-
-		/**
-		 * Checks shared release invariants and that the instance is a file of this
-		 * release, then copies the packages.
-		 *
-		 * @throws IllegalArgumentException when publication invariants are violated
-		 */
-		public Build {
-			Release.validate(releaseName, releaseNumber);
-			Release.Payload.validate(coordinates, content);
-			packages = Set.copyOf(packages);
-		}
 	}
 }

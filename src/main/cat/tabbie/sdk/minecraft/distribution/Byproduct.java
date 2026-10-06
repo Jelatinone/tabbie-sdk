@@ -2,6 +2,7 @@ package cat.tabbie.sdk.minecraft.distribution;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import cat.tabbie.sdk.Identity;
@@ -10,7 +11,9 @@ import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.platform.Command;
+import cat.tabbie.sdk.platform.Platform;
 import cat.tabbie.sdk.platform.Relative;
+import cat.tabbie.sdk.platform.Toolchain;
 import lombok.NonNull;
 
 /**
@@ -57,7 +60,58 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
 	@NonNull
 	Set<Label> labels();
 
+	/**
+	 * Returns the machine platforms this byproduct runs on, such as a native
+	 * server built for one operating system.
+	 *
+	 * @return immutable platforms, empty for every platform
+	 */
+	@NonNull
+	default Set<Platform> platforms() {
+		return Set.of();
+	}
+
+	/**
+	 * Checks whether this byproduct supports a target on a platform.
+	 *
+	 * @param target   selected target
+	 * @param platform target machine platform
+	 * @return whether a label matches the target and the platform is accepted
+	 */
+	default boolean supports(@NonNull Label target, @NonNull Platform platform) {
+		return labels().stream().anyMatch(label -> label.match(target))
+				&& (platforms().isEmpty() || platforms().contains(platform));
+	}
+
+	/**
+	 * Checks declarations before a byproduct is published.
+	 *
+	 * @param byproductName candidate display name
+	 * @param labels        candidate targets
+	 * @throws IllegalArgumentException when the name is blank, there are no
+	 *                                  labels, or labels span distributions
+	 */
+	static void validate(@NonNull String byproductName, @NonNull Set<Label> labels) {
+		if (byproductName.isBlank() || labels.isEmpty()) {
+			throw new IllegalArgumentException("A byproduct needs a non-blank name and targets.");
+		}
+		if (labels.stream().map(Label::distribution).distinct().count() != 1) {
+			throw new IllegalArgumentException("A byproduct serves exactly one distribution.");
+		}
+	}
+
 	non-sealed interface Executable extends Byproduct {
+
+		/**
+		 * Returns the toolchain the started program needs, which the executor
+		 * provisions and binds through {@link Command.Argument.Binary}.
+		 *
+		 * @return required toolchain, or empty for a native program
+		 */
+		@NonNull
+		default Optional<Toolchain> toolchain() {
+			return Optional.empty();
+		}
 
 		/**
 		 * Describes how to start this instance in a context, without starting it.
@@ -68,7 +122,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
 		 * @return start arrangement
 		 */
 		@NonNull
-		Allocate allocate(@NonNull Installer.Context context);
+		Allocate allocate(@NonNull Context context);
 
 		/**
 		 * Describes how to stop this instance in a context, without stopping it. The
@@ -79,7 +133,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
 		 * @return stop arrangement
 		 */
 		@NonNull
-		Deallocate deallocate(@NonNull Installer.Context context);
+		Deallocate deallocate(@NonNull Context context);
 
 		/**
 		 * A declarative start arrangement an executor carries out.
@@ -179,5 +233,24 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
 	non-sealed interface Nonexecutable extends Byproduct {
 
 		// Is there any implementation needed here?
+	}
+
+	interface Context extends Installer.Context {
+
+		/**
+		 * Maximum memory bound during
+		 * {@link Byproduct.Executable#allocate(cat.tabbie.sdk.merchant.Installer.Context)
+		 * allocation}
+		 * 
+		 * @return maximum memory bound, optional
+		 */
+		Optional<Long> maximumMemory();
+
+		/**
+		 * Optional user-arguments passed in at runtime
+		 * 
+		 * @return runtime options
+		 */
+		Map<String, String> runtimeOptions();
 	}
 }

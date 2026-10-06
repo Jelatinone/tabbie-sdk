@@ -161,6 +161,9 @@ public sealed interface Image<State extends Image.Alteration> {
 	 * @param pack package recipe to claim
 	 *
 	 * @return resulting image
+	 * 
+	 * @apiNote This factory makes no claims on the install and uninstall pathways,
+	 *          {@link #provision(Package, Map, Map)} is always preferred.
 	 */
 	static Image<Claim> provision(@NonNull Package pack) {
 		return new Provision(new Claim.Absent(), new Claim.Present(), new Target.Pack(pack));
@@ -187,6 +190,9 @@ public sealed interface Image<State extends Image.Alteration> {
 	 * @param pack package recipe as claimed
 	 *
 	 * @return resulting image
+	 * 
+	 * @apiNote This factory makes no claims on the install and uninstall pathways,
+	 *          {@link #deprovision(Package, Map, Map)} is always preferred.
 	 */
 	static Image<Claim> deprovision(@NonNull Package pack) {
 		return new Provision(new Claim.Present(), new Claim.Absent(), new Target.Pack(pack));
@@ -290,8 +296,9 @@ public sealed interface Image<State extends Image.Alteration> {
 					"Changes of %s by different kinds of image must stay sequential".formatted(first.target()));
 		}
 
-		// Second has a discontinuity error with first
-		if (!first.after().equals(second.before())) {
+		// Second has a discontinuity error with first. Text changes describe only
+		// selected regions, so Chunk.compose checks their agreement instead.
+		if (!(first instanceof Configuration) && !first.after().equals(second.before())) {
 			throw new IllegalArgumentException(
 					"Changes are discontinuous at %s".formatted(first.target()));
 		}

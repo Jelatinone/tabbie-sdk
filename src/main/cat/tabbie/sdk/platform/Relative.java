@@ -210,8 +210,7 @@ public sealed interface Relative permits Relative.Root, Relative.World {
 	 */
 	static void validateFilename(@NonNull String fileName) {
 		if (fileName.isBlank() || fileName.equals(".") || fileName.equals("..")
-				|| fileName.chars().anyMatch(character -> character < 32 || "<>:\"/\\|?*".indexOf(character) >= 0)
-				|| Path.of(fileName).isAbsolute() || Path.of(fileName).getNameCount() != 1) {
+				|| fileName.chars().anyMatch(character -> character < 32 || "<>:\"/\\|?*".indexOf(character) >= 0)) {
 			throw new IllegalArgumentException("Expected a non-blank single filename.");
 		}
 	}

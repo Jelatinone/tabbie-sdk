@@ -15,9 +15,9 @@ import lombok.NonNull;
  * Target compatibility, installation layout, and dependency resolution belong
  * to the content type or the implementing release, not to this contract.
  *
- * <p>
- * Implementations are expected to be records whose compact constructors call
- * one of the {@code validate} helpers and assign the returned content set.
+ * Implementations are expected to be records whose compact constructors copy
+ * their collections and then call {@link #validate(String, long)} and
+ * {@link Payload#validate(Provider.Coordinate.Build, Set)}.
  *
  * @param <Content> released content item type
  */

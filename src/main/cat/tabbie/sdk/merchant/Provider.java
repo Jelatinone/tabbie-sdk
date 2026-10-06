@@ -77,7 +77,7 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 	 * @return the project, or empty when it no longer exists
 	 */
 	default Intermediate<Optional<Result>> resolve(@NonNull Coordinate.Project coordinates) {
-		return Intermediate.of(new Query.Singular<Search>(Search.of(coordinates))).map(this::query);
+		return Intermediate.of(ignored -> query(new Query.Singular<>(Search.of(coordinates))));
 	}
 
 	/**
@@ -87,7 +87,7 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 	 * @return the release, or empty when it no longer exists
 	 */
 	default Intermediate<Optional<Published>> resolve(@NonNull Coordinate.Build coordinates) {
-		return Intermediate.of(new Query.Singular<Search>(Search.of(coordinates))).map(releases()::query);
+		return Intermediate.of(ignored -> releases().query(new Query.Singular<>(Search.of(coordinates))));
 	}
 
 	/**
@@ -97,7 +97,7 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 	 * @return the containing release, or empty when it no longer exists
 	 */
 	default Intermediate<Optional<Published>> resolve(@NonNull Coordinate.File coordinates) {
-		return Intermediate.of(new Query.Singular<Search>(Search.of(coordinates))).map(releases()::query);
+		return Intermediate.of(ignored -> releases().query(new Query.Singular<>(Search.of(coordinates))));
 	}
 
 	/**
@@ -306,6 +306,7 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 		default boolean includes(@NonNull Coordinate other) {
 			return switch (this) {
 				case Project project -> project.equals(other.project());
+				case Channel channel -> channel.equals(other) || other instanceof Build build && build.equals(build.channel());
 				case Build build -> build.equals(other) || other instanceof File file && build.equals(file.build());
 				case File file -> file.equals(other);
 			};
@@ -323,7 +324,8 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 		default String canonical() {
 			return switch (this) {
 				case Project project -> project.providerId().id() + "/" + encode(project.key());
-				case Build build -> build.project().canonical() + "/" + encode(build.key());
+				case Channel channel -> channel.project().canonical() + "/" + encode(channel.key());
+				case Build build -> build.channel().canonical() + "/" + encode(build.key());
 				case File file -> file.build().canonical() + "/" + encode(file.key());
 			};
 		}
@@ -338,16 +340,23 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 		 */
 		static Coordinate parse(@NonNull String canonical) {
 			String[] parts = canonical.split("/", -1);
-			if (parts.length < 2 || parts.length > 4) {
+			if (parts.length < 2 || parts.length > 5) {
 				throw new IllegalArgumentException("Not canonical coordinate text: " + canonical);
 			}
 			Identity<Provider<?, ?>> providerId = Identity.create(UUID.fromString(parts[0]));
 			Project project = new Project(providerId, decode(parts[1]));
-			Coordinate result = parts.length == 2
-					? project
-					: parts.length == 3
-							? project.build(decode(parts[2]))
-							: project.build(decode(parts[2])).file(decode(parts[3]));
+			Coordinate result = switch (parts.length) {
+				case 2:
+					yield project;
+				case 3:
+					yield project.channel(decode(parts[2]));
+				case 4:
+					yield project.channel(decode(parts[2])).build(decode(parts[3]));
+				case 5:
+					yield project.channel(decode(parts[2])).build(decode(parts[3])).file(decode(parts[4]));
+				default:
+					throw new IllegalArgumentException("Not canonical coordinate text: " + canonical);
+			};
 			if (!result.canonical().equals(canonical)) {
 				throw new IllegalArgumentException("Not canonical coordinate text: " + canonical);
 			}
@@ -377,8 +386,40 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 			/**
 			 * Addresses an exact release of this project.
 			 *
-			 * @param buildKey exact release key
+			 * @param channelKey exact channel key
 			 * @return release coordinates
+			 * @throws IllegalArgumentException when the key is blank
+			 */
+			public Channel channel(@NonNull String channelKey) {
+				return new Channel(this, channelKey);
+			}
+		}
+
+		/**
+		 * A provider release channel.
+		 *
+		 * @param project owning project
+		 * @param key     exact channel key
+		 */
+		record Channel(@NonNull Project project, @NonNull String key) implements Coordinate {
+
+			/**
+			 * Validates the channel key.
+			 */
+			public Channel {
+				validate(key);
+			}
+
+			@Override
+			public Identity<Provider<?, ?>> providerId() {
+				return project.providerId();
+			}
+
+			/**
+			 * Addresses an exact payload of this release.
+			 *
+			 * @param buildKey provider file key, not necessarily a filesystem name
+			 * @return file coordinates
 			 * @throws IllegalArgumentException when the key is blank
 			 */
 			public Build build(@NonNull String buildKey) {
@@ -392,7 +433,7 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 		 * @param project owning project
 		 * @param key     exact release key
 		 */
-		record Build(@NonNull Project project, @NonNull String key) implements Coordinate {
+		record Build(@NonNull Channel channel, @NonNull String key) implements Coordinate {
 
 			/**
 			 * Validates the release key.
@@ -403,7 +444,7 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 
 			@Override
 			public Identity<Provider<?, ?>> providerId() {
-				return project.providerId();
+				return channel.providerId();
 			}
 
 			/**
@@ -415,6 +456,15 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 			 */
 			public File file(@NonNull String fileKey) {
 				return new File(this, fileKey);
+			}
+
+			/**
+			 * Returns the project owning this payload's release.
+			 *
+			 * @return owning project
+			 */
+			public Project project() {
+				return channel().project();
 			}
 		}
 
