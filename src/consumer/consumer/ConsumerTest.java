@@ -107,7 +107,7 @@ class ConsumerTest {
 	void distributionProvider_describesARunnableServer() throws IOException {
 		ServerCatalog catalog = new ServerCatalog();
 		Byproduct.Context context = new Byproduct.Context.Default(PAPER_SERVER, LINUX, new Retention(), Relative.root(),
-				Relative.world("world"), Optional.of(2048L), Map.of());
+				Relative.world("world"), Optional.of(2048L << 20), Map.of());
 
 		Product paper = catalog.query(new Query.Singular<>(Provider.Search.of(catalog.project("paper")))).orElseThrow();
 		Collection<Product.Build> page = collapse(catalog.builds(paper.coordinates(), Set.of(PAPER_SERVER), 1));
@@ -293,8 +293,8 @@ class ConsumerTest {
 		@Override
 		public Allocate allocate(Byproduct.Context context) {
 			List<Command.Token> memory = context.maximumMemory()
-					.<List<Command.Token>>map(megabytes -> List.of(new Command.Option("-Xmx",
-							new Command.Argument.Literal(megabytes + "M"), Command.Option.Style.JOINED)))
+					.<List<Command.Token>>map(bytes -> List.of(new Command.Option("-Xmx",
+							new Command.Argument.Literal((bytes >> 20) + "M"), Command.Option.Style.JOINED)))
 					.orElse(List.of());
 			Command command = new Command(new Command.Argument.Binary(toolchain().orElseThrow()), memory)
 					.with(List.of(new Command.Argument.Literal("-jar"),

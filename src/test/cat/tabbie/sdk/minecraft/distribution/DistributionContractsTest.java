@@ -187,7 +187,7 @@ class DistributionContractsTest {
 	void executable_describesHowItStartsAndStops_withoutRunningAnything() {
 		ServerJar server = ServerJar.of("server", Set.of());
 		Byproduct.Context context = new Byproduct.Context.Default(PAPER_SERVER, PLATFORM, new MockRetention(),
-				Relative.root("servers", "lobby"), WORLD, Optional.of(4096L), Map.of());
+				Relative.root("servers", "lobby"), WORLD, Optional.of(4L << 30), Map.of());
 		Command.Resolver resolver = new Command.Resolver() {
 
 			@Override
@@ -206,7 +206,7 @@ class DistributionContractsTest {
 
 		Byproduct.Executable.Allocate.Managed managed = assertInstanceOf(Byproduct.Executable.Allocate.Managed.class,
 				start);
-		assertEquals(List.of(Path.of("jdk", "bin", "java").toString(), "-Xmx4096", "-jar",
+		assertEquals(List.of(Path.of("jdk", "bin", "java").toString(), "-Xmx" + (4L << 30), "-jar",
 				Path.of("srv", "servers", "lobby", "server.jar").toString(), "--nogui"), managed.command().render(resolver));
 		assertEquals(new Byproduct.Executable.Deallocate.Input("stop", Duration.ofSeconds(30)), stop);
 	}
