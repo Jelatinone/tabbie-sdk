@@ -1,5 +1,6 @@
 package cat.tabbie.sdk.merchant;
 
+import java.io.IOException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -107,12 +108,15 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 	 * @param project project coordinates minted by this provider
 	 * @param targets targets to filter by, empty for every release
 	 * @param limit   positive maximum release count
-	 * @return matching releases
+	 * @return matching releases, possibly none; collapsing fails with an
+	 *         {@link IOException} when the provider cannot list them
+	 * @throws IllegalArgumentException when the limit is not positive
 	 */
 	default Intermediate<Collection<Published>> builds(@NonNull Coordinate.Project project, @NonNull Set<Label> targets,
 			int limit) {
-		return Intermediate.of(new Query.Several<Search>(Search.of(project).withTargets(targets), limit))
-				.map(q -> releases().query(q).orElseThrow());
+		Query.Several<Search> query = new Query.Several<>(Search.of(project).withTargets(targets), limit);
+		return Intermediate.of(ignored -> releases().query(query)
+				.orElseThrow(() -> new IOException("Provider could not list releases of " + project.canonical())));
 	}
 
 	/**
@@ -252,20 +256,22 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 	}
 
 	/**
-	 * Provider-scoped catalog coordinates. These values carry enough provider
-	 * information to query the same project, release, or file again. They contain
-	 * no credentials, provider instances, or transport assumptions. Keys are
-	 * opaque to everything except the owning provider.
+	 * Provider-scoped catalog coordinates, nested project, channel, release, and
+	 * file. These values carry enough provider information to query the same
+	 * project, channel, release, or file again. They contain no credentials,
+	 * provider instances, or transport assumptions. Keys are opaque to everything
+	 * except the owning provider.
 	 *
 	 * <p>
 	 * Typical mappings:
 	 * <ul>
-	 * <li>Mojang: project {@code minecraft}, build {@code 1.21.1}, file
-	 * {@code client}</li>
-	 * <li>Paper: project {@code paper}, build {@code 1.21.1-130}, file
-	 * {@code server}</li>
-	 * <li>Modrinth: project ID, version ID, file hash or name</li>
-	 * <li>CurseForge: project ID, file ID, file ID (one file per release)</li>
+	 * <li>Mojang: project {@code minecraft}, channel {@code release}, build
+	 * {@code 1.21.1}, file {@code client}</li>
+	 * <li>Paper: project {@code paper}, channel {@code default}, build
+	 * {@code 1.21.1-130}, file {@code server}</li>
+	 * <li>Modrinth: project ID, version type, version ID, file hash or name</li>
+	 * <li>CurseForge: project ID, release type, file ID, file ID (one file per
+	 * release)</li>
 	 * </ul>
 	 */
 	sealed interface Coordinate {
@@ -296,9 +302,10 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 
 		/**
 		 * Checks whether the other coordinate is this coordinate or addressed beneath
-		 * it. A project includes its releases and their files, a release includes
-		 * its files, and a file includes only itself. Dependency and conflict
-		 * declarations match candidate content by this rule.
+		 * it. A project includes its channels, releases, and files; a channel
+		 * includes its releases and their files; a release includes its files; and
+		 * a file includes only itself. Dependency and conflict declarations match
+		 * candidate content by this rule.
 		 *
 		 * @param other candidate coordinate
 		 * @return whether this coordinate includes the other
@@ -306,7 +313,9 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 		default boolean includes(@NonNull Coordinate other) {
 			return switch (this) {
 				case Project project -> project.equals(other.project());
-				case Channel channel -> channel.equals(other) || other instanceof Build build && build.equals(build.channel());
+				case Channel channel -> channel.equals(other)
+						|| other instanceof Build build && channel.equals(build.channel())
+						|| other instanceof File file && channel.equals(file.build().channel());
 				case Build build -> build.equals(other) || other instanceof File file && build.equals(file.build());
 				case File file -> file.equals(other);
 			};
@@ -314,8 +323,8 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 
 		/**
 		 * Returns stable, unambiguous text of the form
-		 * {@code provider/project[/build[/file]]}, with the provider UUID followed
-		 * by each key URL-encoded as UTF-8. Equal coordinates, and only equal
+		 * {@code provider/project[/channel[/build[/file]]]}, with the provider UUID
+		 * followed by each key URL-encoded as UTF-8. Equal coordinates, and only equal
 		 * coordinates, share canonical text, so it is suitable for persistence and
 		 * for deriving identities with {@link Identity#create(String)}.
 		 *
@@ -335,7 +344,7 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 		 * canonical text is accepted, so parsing and printing round-trip exactly.
 		 *
 		 * @param canonical canonical coordinate text
-		 * @return project, release, or file coordinates
+		 * @return project, channel, release, or file coordinates
 		 * @throws IllegalArgumentException when the text is not canonical
 		 */
 		static Coordinate parse(@NonNull String canonical) {
@@ -384,10 +393,10 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 			}
 
 			/**
-			 * Addresses an exact release of this project.
+			 * Addresses a release channel of this project.
 			 *
 			 * @param channelKey exact channel key
-			 * @return release coordinates
+			 * @return channel coordinates
 			 * @throws IllegalArgumentException when the key is blank
 			 */
 			public Channel channel(@NonNull String channelKey) {
@@ -396,7 +405,7 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 		}
 
 		/**
-		 * A provider release channel.
+		 * A provider release channel, such as stable or beta releases of a project.
 		 *
 		 * @param project owning project
 		 * @param key     exact channel key
@@ -416,10 +425,10 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 			}
 
 			/**
-			 * Addresses an exact payload of this release.
+			 * Addresses an exact release published on this channel.
 			 *
-			 * @param buildKey provider file key, not necessarily a filesystem name
-			 * @return file coordinates
+			 * @param buildKey exact release key
+			 * @return release coordinates
 			 * @throws IllegalArgumentException when the key is blank
 			 */
 			public Build build(@NonNull String buildKey) {
@@ -430,7 +439,7 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 		/**
 		 * An exact provider release.
 		 *
-		 * @param project owning project
+		 * @param channel owning channel
 		 * @param key     exact release key
 		 */
 		record Build(@NonNull Channel channel, @NonNull String key) implements Coordinate {
@@ -459,7 +468,7 @@ public interface Provider<Result, Published extends Release<?>> extends Queryabl
 			}
 
 			/**
-			 * Returns the project owning this payload's release.
+			 * Returns the project owning this release's channel.
 			 *
 			 * @return owning project
 			 */

@@ -68,6 +68,8 @@ public sealed interface Relative permits Relative.Root, Relative.World {
 	 *
 	 * @param children single-name components
 	 * @return descendant path of the same kind
+	 * @throws IllegalArgumentException when a component is not a single
+	 *                                  portable filename
 	 */
 	default Relative resolve(@NonNull List<String> children) {
 		List<String> joined = new ArrayList<>(components());
@@ -80,6 +82,7 @@ public sealed interface Relative permits Relative.Root, Relative.World {
 	 *
 	 * @param child relative path that stays beneath this path
 	 * @return descendant path of the same kind
+	 * @throws IllegalArgumentException when the path is absolute or escapes
 	 */
 	default Relative resolve(@NonNull Path child) {
 		return resolve(normalize(child));
@@ -243,6 +246,11 @@ public sealed interface Relative permits Relative.Root, Relative.World {
 		public Root resolve(@NonNull List<String> children) {
 			return (Root) Relative.super.resolve(children);
 		}
+
+		@Override
+		public Root resolve(@NonNull Path child) {
+			return (Root) Relative.super.resolve(child);
+		}
 	}
 
 	/**
@@ -261,6 +269,21 @@ public sealed interface Relative permits Relative.Root, Relative.World {
 		@Override
 		public World with(@NonNull List<String> components) {
 			return new World(components);
+		}
+
+		@Override
+		public World resolve(@NonNull String... children) {
+			return (World) Relative.super.resolve(children);
+		}
+
+		@Override
+		public World resolve(@NonNull List<String> children) {
+			return (World) Relative.super.resolve(children);
+		}
+
+		@Override
+		public World resolve(@NonNull Path child) {
+			return (World) Relative.super.resolve(child);
 		}
 	}
 }

@@ -8,7 +8,8 @@ import lombok.NonNull;
 /**
  * A local or remote read capability. Implementations return non-null containers
  * and distinguish an absent item from a failed request; failures must not be
- * disguised as empty results.
+ * disguised as empty results. A collection with no items means nothing
+ * matched; an empty {@link Optional} means the request could not be answered.
  *
  * @param <Criterion> provider-specific selection criteria
  * @param <Result>    returned item type
@@ -48,7 +49,8 @@ public interface Queryable<Criterion, Result> {
    * Requests one item; providers document ordering when several items match.
    *
    * @param query singular request
-   * @return selected item, or empty when none matches
+   * @return selected item, or empty when none matches or the request could not
+   *         be answered
    *
    * @apiNote Default implementation always opportunistically takes first result
    *          found via {@link #query(cat.tabbie.sdk.api.Query.Several) several}
@@ -62,7 +64,8 @@ public interface Queryable<Criterion, Result> {
    * Requests a collection honoring the explicit limit, if present.
    *
    * @param query collection request
-   * @return matching items, empty when none match
+   * @return matching items, an empty collection when none match, or empty when
+   *         the request could not be answered
    */
   Optional<Collection<Result>> query(Query.Several<Criterion> query);
 }

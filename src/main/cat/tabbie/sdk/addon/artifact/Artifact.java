@@ -108,12 +108,12 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
 	/**
 	 * Selects the coordinates of one kind of relation.
 	 *
-	 * @param kind relation kind
+	 * @param kind relation kind, such as {@code Relation.Required.class}
 	 * @return immutable coordinates of that kind
 	 */
-	default Set<Coordinate> coordinates(@NonNull Class<? extends Relation> of) {
+	default Set<Coordinate> coordinates(@NonNull Class<? extends Relation> kind) {
 		return relations().stream()
-				.filter(relation -> relation.getClass() == of)
+				.filter(relation -> relation.getClass() == kind)
 				.map(Relation::coordinate)
 				.collect(Collectors.toUnmodifiableSet());
 	}
@@ -121,11 +121,13 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
 	/**
 	 * Captures the source into the context's retention backend and places it at
 	 * the selected layout: as one named file, or unpacked beneath the layout
-	 * directory.
+	 * directory. Nothing is read until the result is collapsed.
 	 *
 	 * @param context selected target
-	 * @return validated immutable images
-	 * @throws IOException when no layout can be determined
+	 * @return unevaluated capture producing validated immutable images
+	 * @throws IOException              when no layout can be determined
+	 * @throws IllegalArgumentException when the target is not explicitly
+	 *                                  supported
 	 */
 	@Override
 	default Intermediate<Set<Image<?>>> install(@NonNull Context context) throws IOException {
@@ -220,6 +222,17 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
 		@NonNull
 		Installer<Context> installer();
 
+		/**
+		 * Requires explicit target support, then delegates to the caller-supplied
+		 * installer and validates its images.
+		 *
+		 * @param context selected target
+		 * @return unevaluated capture producing validated immutable images
+		 * @throws IOException              when the installer fails to describe
+		 *                                  the content
+		 * @throws IllegalArgumentException when the target is not explicitly
+		 *                                  supported
+		 */
 		@Override
 		default Intermediate<Set<Image<?>>> install(@NonNull Context context) throws IOException {
 			require(context);
@@ -227,12 +240,17 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
 		}
 	}
 
-	interface Relation {
+	/**
+	 * A catalog relationship with other content, matched by
+	 * {@link Coordinate#includes(Coordinate)}. The set of relation kinds is
+	 * closed so that every kind has a defined meaning during resolution.
+	 */
+	sealed interface Relation permits Relation.Required, Relation.Optional, Relation.Incompatible, Relation.Embedded {
 
 		/**
-		 * A relationship with other catalog content.
+		 * Returns the related catalog coordinate.
 		 *
-		 * @param coordinate related catalog coordinate at any level
+		 * @return related coordinate at any level
 		 */
 		@NonNull
 		Coordinate coordinate();
@@ -275,7 +293,7 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
 	 * Selected target, logical mounts, retention, and per-artifact layout
 	 * overrides, independent of physical paths.
 	 */
-	public interface Context extends Installer.Context {
+	interface Context extends Installer.Context {
 
 		/**
 		 * Returns per-artifact layout overrides.
@@ -303,16 +321,14 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
 		 * @return scoped logical layout
 		 * @throws IOException              when no default or override exists
 		 * @throws IllegalArgumentException when the target is not explicitly
-		 *                                  supported, or the layout is world-scoped
-		 *                                  and no world is bound
+		 *                                  supported
 		 */
 		default Layout layout(@NonNull Artifact artifact) throws IOException {
 			artifact.require(this);
 			Layout override = layouts().get(artifact.artifactId());
-			Layout layout = override != null
+			return override != null
 					? override
 					: label().distribution().layout(artifact, this);
-			return layout;
 		}
 
 		/**
@@ -322,7 +338,7 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
 		 * @param platform    target platform
 		 * @param repository  caller-owned retention backend
 		 * @param contextRoot context mount relative to the installation
-		 * @param worldRoot   selected world relative to the context mount, if bound
+		 * @param worldRoot   selected world relative to the context mount
 		 * @param layouts     per-artifact layout overrides
 		 */
 		record Default(
@@ -341,7 +357,7 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
 			}
 
 			/**
-			 * Creates a context with a bound world and no overrides.
+			 * Creates a context without layout overrides.
 			 *
 			 * @param label       selected target
 			 * @param platform    target platform

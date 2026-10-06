@@ -264,7 +264,9 @@ public sealed interface Image<State extends Image.Alteration> {
 	/**
 	 * Composes two changes of one target applied one after the other. A change
 	 * followed by its exact preimage cancels. Whole files and claims compose into
-	 * one change from the first's before state to the second's after state. Text
+	 * one change from the first's before state to the second's after state; a
+	 * claim taken and released again, or released and taken again, cancels even
+	 * when the options carried by its states differ. Text
 	 * changes compose through {@link Chunk#compose(List, List)}: separate regions
 	 * are kept, and overlapping regions are combined where both describe the
 	 * same intermediate lines. An installation and a configuration of the same
@@ -313,9 +315,14 @@ public sealed interface Image<State extends Image.Alteration> {
 			case Installation earlier ->
 				Optional.of(new Installation(earlier.before(), ((Installation) second).after(), earlier.target()));
 
-			// Collapse [P -> A -> P] or [A -> P -> A]
-			case Provision earlier ->
-				Optional.of(new Provision(earlier.before(), ((Provision) second).after(), earlier.target()));
+			// Collapse [P -> A -> P] or [A -> P -> A]; differing options alone are no net change
+			case Provision earlier -> {
+				Claim before = earlier.before();
+				Claim after = ((Provision) second).after();
+				yield before.getClass() == after.getClass()
+						? Optional.empty()
+						: Optional.of(new Provision(before, after, earlier.target()));
+			}
 
 			// Collapse [A ⊆ B] or [B ⊆ A]
 			case Configuration earlier -> {
@@ -457,10 +464,16 @@ public sealed interface Image<State extends Image.Alteration> {
 		record Absent(
 				@NonNull Map<Package.Manager, List<String>> uninstallOption) implements Claim {
 
+			/**
+			 * Describes no claim, reached without extra options.
+			 */
 			public Absent() {
 				this(Map.of());
 			}
 
+			/**
+			 * Copies the options.
+			 */
 			public Absent {
 				uninstallOption = copy(uninstallOption);
 			}
@@ -474,10 +487,16 @@ public sealed interface Image<State extends Image.Alteration> {
 		record Present(
 				@NonNull Map<Package.Manager, List<String>> installOption) implements Claim {
 
+			/**
+			 * Describes a held claim, reached without extra options.
+			 */
 			public Present() {
 				this(Map.of());
 			}
 
+			/**
+			 * Copies the options.
+			 */
 			public Present {
 				installOption = copy(installOption);
 			}
@@ -578,7 +597,9 @@ public sealed interface Image<State extends Image.Alteration> {
 	}
 
 	/**
-	 * Takes or releases a package claim. Both sides may not be absent.
+	 * Takes or releases a package claim. Both sides may not be absent. When both
+	 * sides carry options, at least one manager must appear on both sides, so the
+	 * change can be undone with the manager that made it.
 	 *
 	 * @param before claim expected before the change
 	 * @param after  claim described after the change
@@ -588,7 +609,11 @@ public sealed interface Image<State extends Image.Alteration> {
 			implements Image<Image.Claim> {
 
 		/**
-		 * Rejects an absence-to-absence description.
+		 * Rejects an absence-to-absence description and options that share no
+		 * manager.
+		 *
+		 * @throws IllegalArgumentException when both sides are absent, or both sides
+		 *                                  carry options for disjoint managers
 		 */
 		public Provision {
 			if (before instanceof Claim.Absent && after instanceof Claim.Absent) {

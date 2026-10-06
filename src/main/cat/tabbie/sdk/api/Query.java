@@ -17,7 +17,7 @@ public sealed interface Query<Criterion> {
 	Criterion criteria();
 
 	/**
-	 * A collection request, returning whether an item exists
+	 * A request for whether any item matches.
 	 *
 	 * @param <Criterion> criteria type
 	 * @param criteria    selection criteria
@@ -26,7 +26,7 @@ public sealed interface Query<Criterion> {
 	}
 
 	/**
-	 * A collection request, where the number of items is returned.
+	 * A request for the number of matching items.
 	 *
 	 * @param <Criterion> criteria type
 	 * @param criteria    selection criteria
@@ -35,7 +35,7 @@ public sealed interface Query<Criterion> {
 	}
 
 	/**
-	 * A item request.
+	 * A request for one matching item.
 	 *
 	 * @param <Criterion> criteria type
 	 * @param criteria    selection criteria

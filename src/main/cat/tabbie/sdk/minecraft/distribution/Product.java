@@ -6,21 +6,21 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.merchant.Provider;
-import cat.tabbie.sdk.merchant.Release;
-import cat.tabbie.sdk.platform.Package;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
+import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Label;
+import cat.tabbie.sdk.platform.Package;
 import lombok.NonNull;
 
 /**
- * A published distribution release of one instance, run for every target the
- * instance declares in {@link Instance#labels()}.
  * A provider-owned catalog project publishing releases of one distribution,
- * such as Paper's server builds or Fabric's loader. Implementations supply a
- * non-blank name and builds released under this project's coordinates;
- * discovery may produce a project without builds.
+ * such as Paper's server builds or Fabric's loader. It mirrors
+ * {@code Addon} for distributions. Implementations supply immutable, non-null
+ * collections, a non-blank name, and builds released under this project's
+ * coordinates for this project's distribution; {@link #validate} checks these.
+ * Discovery may produce a project without builds.
  */
-interface Product {
+public interface Product {
 
 	/**
 	 * Returns provider coordinates for this project.
@@ -49,13 +49,13 @@ interface Product {
 	/**
 	 * Exposes the known releases of this project.
 	 *
-	 * @return immutable builds, possibly empty
+	 * @return immutable builds with distinct coordinates, possibly empty
 	 */
 	@NonNull
 	Set<Build> builds();
 
 	/**
-	 * Exposes the most recent build owned by this addon on any channel.
+	 * Exposes the most recent build of this project on any channel.
 	 *
 	 * @return latest build, or empty when no build is known
 	 */
@@ -79,15 +79,46 @@ interface Product {
 	}
 
 	/**
-	 * A published distribution release of one instance, run for every target the
-	 * instance declares in {@link Instance#labels()}.
+	 * Checks copied constructor parameters before record fields are assigned.
+	 *
+	 * @param coordinates  candidate project coordinates
+	 * @param projectName  candidate display name
+	 * @param distribution candidate distribution
+	 * @param builds       candidate builds
+	 * @throws IllegalArgumentException when the name is blank, a build belongs to
+	 *                                  another project or serves another
+	 *                                  distribution, or build coordinates repeat
+	 */
+	static void validate(
+			@NonNull Coordinate.Project coordinates,
+			@NonNull String projectName,
+			@NonNull Distribution distribution,
+			@NonNull Set<Build> builds) {
+		if (projectName.isBlank()) {
+			throw new IllegalArgumentException("A product needs a non-blank name.");
+		}
+		if (!builds.stream().allMatch(build -> build.project().equals(coordinates))) {
+			throw new IllegalArgumentException("Every build must be a release of this product's project.");
+		}
+		if (!builds.stream().allMatch(build -> build.distribution().equals(distribution))) {
+			throw new IllegalArgumentException("Every build must serve this product's distribution.");
+		}
+		if (builds.stream().map(Build::coordinates).distinct().count() != builds.size()) {
+			throw new IllegalArgumentException("Product builds must have distinct coordinates.");
+		}
+	}
+
+	/**
+	 * A published distribution release: its byproducts, all serving one
+	 * distribution, and the system packages they require.
 	 *
 	 * @param coordinates   exact release coordinates
 	 * @param releaseName   non-blank display name
 	 * @param releaseDate   publication instant
 	 * @param releaseNumber positive provider-assigned release number
-	 * @param content       instance published as a file of this release
-	 * @param packages      system packages the instance requires
+	 * @param content       nonempty byproducts, each a distinct file of this
+	 *                      release
+	 * @param packages      system packages the byproducts require
 	 */
 	record Build(
 			@NonNull Coordinate.Build coordinates,
@@ -98,10 +129,12 @@ interface Product {
 			@NonNull Set<Package> packages) implements Release<Byproduct> {
 
 		/**
-		 * Checks shared release invariants and that the instance is a file of this
-		 * release, then copies the packages.
+		 * Copies the byproducts and packages, then checks shared release
+		 * invariants, that every byproduct is a distinct file of this release, and
+		 * that they serve one distribution.
 		 *
 		 * @throws IllegalArgumentException when publication invariants are violated
+		 *                                  or byproducts span distributions
 		 */
 		public Build {
 			content = Set.copyOf(content);
@@ -109,16 +142,28 @@ interface Product {
 			Release.validate(releaseName, releaseNumber);
 			Release.Payload.validate(coordinates, content);
 
-			if (content.stream().flatMap(byproduct -> byproduct.labels().stream()).map(Label::distribution).distinct()
+			if (content.stream()
+					.flatMap(byproduct -> byproduct.labels().stream())
+					.map(Label::distribution)
+					.distinct()
 					.count() != 1) {
 				throw new IllegalArgumentException("A distribution release serves exactly one distribution.");
 			}
 		}
 
 		/**
+		 * Returns the one distribution every byproduct of this release serves.
+		 *
+		 * @return distribution family value
+		 */
+		public Distribution distribution() {
+			return content.iterator().next().labels().iterator().next().distribution();
+		}
+
+		/**
 		 * Returns every target some executable of this release serves.
 		 *
-		 * @return immutable targets
+		 * @return immutable targets, empty when the release has no executable
 		 */
 		public Set<Label> labels() {
 			return content.stream()

@@ -25,7 +25,7 @@ public interface Installer<Contextual extends Installer.Context> {
 	 * Captures and describes the supplied content.
 	 *
 	 * @param context target context
-	 * @return described images
+	 * @return unevaluated capture producing validated images
 	 * @throws IOException when layout resolution fails
 	 */
 	Intermediate<Set<Image<?>>> install(@NonNull Contextual context) throws IOException;
@@ -34,7 +34,7 @@ public interface Installer<Contextual extends Installer.Context> {
 	 * Selected target, logical mounts, and caller-owned retention, independent of
 	 * physical paths.
 	 */
-	public interface Context {
+	interface Context {
 
 		/**
 		 * Returns the explicitly selected target.
@@ -71,10 +71,13 @@ public interface Installer<Contextual extends Installer.Context> {
 		Relative.Root contextRoot();
 
 		/**
-		 * Returns the world mount as a world-scoped anchor for installer-built
-		 * paths. Resolving paths beneath it requires a bound {@link #worldRoot()}.
+		 * Returns the selected world's directory, as components beneath the context
+		 * mount. World-scoped paths resolve beneath it. Every context has a world
+		 * mount; callers that have not selected a world must reject world-scoped
+		 * layouts themselves rather than bind an arbitrary directory.
 		 *
-		 * @return world mount itself
+		 * @return world directory relative to the context mount, empty when the
+		 *         world is the context mount itself
 		 */
 		@NonNull
 		Relative.World worldRoot();
@@ -86,8 +89,6 @@ public interface Installer<Contextual extends Installer.Context> {
 		 *
 		 * @param relative context- or world-scoped path
 		 * @return installation-relative path
-		 * @throws IllegalArgumentException when a world-scoped path is resolved
-		 *                                  without a bound world
 		 */
 		default Relative.Root resolve(@NonNull Relative relative) {
 			return switch (relative) {

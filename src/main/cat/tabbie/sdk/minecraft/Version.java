@@ -10,15 +10,26 @@ import lombok.NonNull;
 /**
  * Represents a specific version of Minecraft.
  *
- * A version is identified by its edition-specific identifier and may include
- * metadata describing its release type and release date.
+ * <p>
+ * A version is identified by its edition and a normalized, lowercase
+ * identifier, and may include metadata describing its release type and release
+ * date. Identity comparisons use {@link #match(Version)}, which ignores that
+ * metadata; record equality does not.
  *
+ * <p>
  * Version discovery and loading are intentionally handled externally. This
  * type only models versions that have already been discovered.
  */
 public sealed interface Version
 		permits Version.Java, Version.Bedrock {
 
+	/**
+	 * Loosely written version text accepted by {@link #interpret(String)}: an
+	 * optional {@code minecraft} prefix, an optional {@code java} or
+	 * {@code bedrock} edition (optionally followed by {@code edition}), each
+	 * separated by whitespace or a colon, then the identifier. Matching ignores
+	 * case.
+	 */
 	Pattern VERSION_PATTERN = Pattern.compile(
 			"(?i)^(?:minecraft(?:\\s*:\\s*|\\s+))?(?:(java|bedrock)(?:\\s+edition)?(?:\\s*:\\s*|\\s+))?(.+)$");
 
@@ -106,12 +117,11 @@ public sealed interface Version
 	}
 
 	/**
-	 *
 	 * A discovered Java Edition version.
 	 *
 	 * @param id          canonical identifier
 	 * @param releaseType edition-specific release classification
-	 * @param releaseDate known release instant
+	 * @param releaseDate release instant, or empty when unknown
 	 */
 	record Java(
 			@NonNull String id,
@@ -120,25 +130,30 @@ public sealed interface Version
 
 		/**
 		 * Normalizes the edition-specific identifier.
+		 *
+		 * @throws IllegalArgumentException when the identifier is blank, contains
+		 *                                  whitespace, or is qualified with
+		 *                                  {@code :} or {@code /}
 		 */
 		public Java {
 			id = normalize(id);
 		}
 
 		/**
-		 * Describes a veeersion with a known release intent.
-		 * 
+		 * Describes a version with a known release classification and date.
+		 *
 		 * @param id          canonical identifier
 		 * @param releaseType edition-specific release classification
-		 * @param releaseDate known release instance
+		 * @param releaseDate known release instant
 		 */
 		public Java(@NonNull String id, @NonNull Java.Release releaseType, @NonNull Instant releaseDate) {
 			this(id, releaseType, Optional.of(releaseDate));
 		}
 
 		/**
-		 * Describes a veeersion with a known release intent.
-		 * 
+		 * Describes a version with a known release classification and an unknown
+		 * date.
+		 *
 		 * @param id          canonical identifier
 		 * @param releaseType edition-specific release classification
 		 */
@@ -151,28 +166,49 @@ public sealed interface Version
 		 */
 		public enum Release {
 
+			/**
+			 * A full release.
+			 */
 			RELEASE,
 
+			/**
+			 * A pre-release ahead of a full release.
+			 */
 			PRE_RELEASE,
 
+			/**
+			 * A release candidate ahead of a full release.
+			 */
 			RELEASE_CANDIDATE,
 
+			/**
+			 * A weekly development snapshot.
+			 */
 			SNAPSHOT,
 
+			/**
+			 * A historical beta version.
+			 */
 			BETA,
 
+			/**
+			 * A historical alpha version.
+			 */
 			ALPHA,
 
+			/**
+			 * No classification evidence, such as a parsed canonical version.
+			 */
 			UNKNOWN
 		}
 
 		/**
-		 * Whether a version is applicable to this version kind
+		 * Checks whether a version belongs to Java Edition.
 		 *
-		 * @param version version target
-		 * @return whether a version is applicable
+		 * @param version candidate version
+		 * @return whether the version is a Java Edition version
 		 */
-		public static boolean applicable(Version version) {
+		public static boolean applicable(@NonNull Version version) {
 			return version instanceof Java;
 		}
 	}
@@ -182,7 +218,7 @@ public sealed interface Version
 	 *
 	 * @param id          canonical identifier
 	 * @param releaseType edition-specific release classification
-	 * @param releaseDate known release instant
+	 * @param releaseDate release instant, or empty when unknown
 	 */
 	record Bedrock(
 			@NonNull String id,
@@ -191,25 +227,30 @@ public sealed interface Version
 
 		/**
 		 * Normalizes the edition-specific identifier.
+		 *
+		 * @throws IllegalArgumentException when the identifier is blank, contains
+		 *                                  whitespace, or is qualified with
+		 *                                  {@code :} or {@code /}
 		 */
 		public Bedrock {
 			id = normalize(id);
 		}
 
 		/**
-		 * Describes a veeersion with a known release intent.
-		 * 
+		 * Describes a version with a known release classification and date.
+		 *
 		 * @param id          canonical identifier
 		 * @param releaseType edition-specific release classification
-		 * @param releaseDate known release instance
+		 * @param releaseDate known release instant
 		 */
 		public Bedrock(@NonNull String id, @NonNull Bedrock.Release releaseType, @NonNull Instant releaseDate) {
 			this(id, releaseType, Optional.of(releaseDate));
 		}
 
 		/**
-		 * Describes a veeersion with a known release intent.
-		 * 
+		 * Describes a version with a known release classification and an unknown
+		 * date.
+		 *
 		 * @param id          canonical identifier
 		 * @param releaseType edition-specific release classification
 		 */
@@ -222,24 +263,39 @@ public sealed interface Version
 		 */
 		public enum Release {
 
+			/**
+			 * A full release.
+			 */
 			RELEASE,
 
+			/**
+			 * A preview build ahead of a full release.
+			 */
 			PREVIEW,
 
+			/**
+			 * A beta build.
+			 */
 			BETA,
 
+			/**
+			 * An alpha build.
+			 */
 			ALPHA,
 
+			/**
+			 * No classification evidence, such as a parsed canonical version.
+			 */
 			UNKNOWN
 		}
 
 		/**
-		 * Whether a version is applicable to this version kind
+		 * Checks whether a version belongs to Bedrock Edition.
 		 *
-		 * @param version version target
-		 * @return whether a version is applicable
+		 * @param version candidate version
+		 * @return whether the version is a Bedrock Edition version
 		 */
-		public static boolean applicable(Version version) {
+		public static boolean applicable(@NonNull Version version) {
 			return version instanceof Bedrock;
 		}
 	}

@@ -23,10 +23,10 @@ import lombok.NonNull;
  * and common content placement. Version resolution, installation conflicts,
  * filesystem observations, and deployment belong to Core.
  *
- * The public values are the {@link Java.Of} and {@link Bedrock.Of} constants,
- * listed by {@link #values()} and found by {@link #of(String)}; equality is
- * identity.
- *
+ * <p>
+ * The public values are the enum constants nested in {@link Java} and
+ * {@link Bedrock}, such as {@link Java.Launcher.Of#FABRIC}, listed by
+ * {@link #values()} and found by {@link #of(String)}; equality is identity.
  */
 public sealed interface Distribution permits Java, Bedrock {
 
@@ -61,10 +61,10 @@ public sealed interface Distribution permits Java, Bedrock {
 	 * is read.
 	 *
 	 * @param id candidate identifier
-	 * @return the identifier
 	 * @throws IllegalArgumentException when it is not {@code bedrock:} or
-	 *                                  {@code java:} followed
-	 *                                  by lowercase letters and digits
+	 *                                  {@code java:} followed by lowercase
+	 *                                  letters and digits, optionally in
+	 *                                  hyphen-separated words
 	 */
 	static void validate(@NonNull String id) {
 		if (!id.matches("(bedrock|java):[a-z0-9]+(-[a-z0-9]+)*")) {

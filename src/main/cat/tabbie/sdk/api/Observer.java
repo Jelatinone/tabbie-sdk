@@ -1,8 +1,13 @@
 package cat.tabbie.sdk.api;
 
 /**
- * Releases this store's resources according to its documented lifetime.
- * Artifact image generation never closes caller-owned stores.
+ * Callbacks reporting the progress and outcome of one observed operation, such
+ * as a content capture. Every callback defaults to doing nothing, so observers
+ * override only what they need. Callbacks run on the operation's thread and
+ * must not throw.
+ *
+ * @param <Observe>  verified outcome type
+ * @param <Transfer> progress report type
  */
 public interface Observer<Observe, Transfer> {
 
@@ -13,13 +18,21 @@ public interface Observer<Observe, Transfer> {
   Observer NONE = new Observer<>() {
   };
 
+  /**
+   * Returns the observer that discards every notification, typed for the
+   * caller.
+   *
+   * @param <Observe>  verified outcome type
+   * @param <Transfer> progress report type
+   * @return shared discarding observer
+   */
   @SuppressWarnings("unchecked")
   static <Observe, Transfer> Observer<Observe, Transfer> none() {
     return (Observer<Observe, Transfer>) NONE;
   }
 
   /**
-   * Observe in-progress transfer statistics
+   * Observes in-progress transfer statistics.
    *
    * @param transfer transfer state
    */
@@ -27,17 +40,18 @@ public interface Observer<Observe, Transfer> {
   }
 
   /**
-   * Observe failed transfer verification of a capture
+   * Observes a failed operation, such as a capture whose verification failed.
+   * The failure is still thrown to the caller.
    *
-   * @param failure failed exception
+   * @param failure failure ending the operation
    */
   default void failed(Exception failure) {
   }
 
   /**
-   * Observe complete transfer verification of a capture
+   * Observes a completed and verified operation.
    *
-   * @param observe verified observation
+   * @param observe verified outcome
    */
   default void verified(Observe observe) {
   }

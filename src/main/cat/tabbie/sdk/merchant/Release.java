@@ -15,6 +15,7 @@ import lombok.NonNull;
  * Target compatibility, installation layout, and dependency resolution belong
  * to the content type or the implementing release, not to this contract.
  *
+ * <p>
  * Implementations are expected to be records whose compact constructors copy
  * their collections and then call {@link #validate(String, long)} and
  * {@link Payload#validate(Provider.Coordinate.Build, Set)}.
@@ -74,9 +75,10 @@ public interface Release<Content> {
 	Set<Content> content();
 
 	/**
-	 * Returns the required packages.
-	 * 
-	 * @return immutable, nonempty packages
+	 * Returns the system packages this release requires on the target machine,
+	 * such as a Java runtime. Declaring them installs nothing.
+	 *
+	 * @return immutable packages, empty by default
 	 */
 	@NonNull
 	default Set<Package> packages() {
@@ -105,6 +107,8 @@ public interface Release<Content> {
 	 * Content published as an exact file of a release, such as a mod jar, plugin
 	 * jar, resource pack archive, or server jar. Content types that correspond to
 	 * provider files implement this so releases can check payload ownership.
+	 *
+	 * @param <Contextual> accepted installation context
 	 */
 	interface Payload<Contextual extends Installer.Context> extends Installer<Contextual> {
 
@@ -117,13 +121,12 @@ public interface Release<Content> {
 		Provider.Coordinate.File coordinates();
 
 		/**
-		 * Copies a release's payloads and checks that each one is a distinct file
-		 * of that release.
+		 * Checks that a release's payloads are each a distinct file of that release.
+		 * Callers copy the payloads first; this method does not return a copy.
 		 *
 		 * @param <P>         payload type
 		 * @param coordinates owning release coordinates
 		 * @param payloads    candidate payloads
-		 * @return immutable, nonempty copy of the payloads
 		 * @throws IllegalArgumentException when empty, when a payload belongs to
 		 *                                  another release, or when two payloads
 		 *                                  share file coordinates
@@ -147,16 +150,13 @@ public interface Release<Content> {
 	}
 
 	/**
-	 * Checks shared construction invariants and copies the content.
+	 * Checks shared publication invariants. Content is checked separately by
+	 * {@link Payload#validate(Provider.Coordinate.Build, Set)}.
 	 *
-	 * @param <Content>     content item type
 	 * @param releaseName   candidate display name
 	 * @param releaseNumber candidate release number
-	 * @param content       candidate content
-	 * @return immutable copy of the content
-	 * @throws IllegalArgumentException when the name is blank, the number is not
-	 *                                  positive, or the content is empty
-	 * @throws NullPointerException     when the content contains null
+	 * @throws IllegalArgumentException when the name is blank or the number is
+	 *                                  not positive
 	 */
 	static void validate(
 			@NonNull String releaseName,

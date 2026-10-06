@@ -314,17 +314,18 @@ public record Package(@NonNull String canonicalName, @NonNull Map<Manager, Speci
 		 * Returns the stable manager name. Unlike {@link #name()}, it does not
 		 * change when a constant is renamed.
 		 *
-		 * @return name such as {@code dpkg-query}
+		 * @return name such as {@code apt}
 		 */
 		public String id() {
 			return id;
 		}
 
 		/**
-		 * Returns the common program executable name, separate from {@link #id()}, it
-		 * may or may not differ depending on usage
-		 * 
-		 * @return name such as {@code rpf}
+		 * Returns the executable that install and uninstall commands run, which may
+		 * differ from {@link #id()}. Verification may run a companion program,
+		 * such as {@code dpkg-query} for APT.
+		 *
+		 * @return executable name such as {@code apt-get}
 		 */
 		public String program() {
 			return program;

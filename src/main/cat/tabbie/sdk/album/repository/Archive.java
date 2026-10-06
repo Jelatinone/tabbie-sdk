@@ -24,10 +24,9 @@ import lombok.NonNull;
 
 /**
  * Bounds ZIP processing. Default limits permit 100,000 entries, 1 GiB
- * compressed
- * and 4 GiB expanded. Description performs no I/O; scratch files exist only
- * while
- * an explicit inspection effect executes and are never installation files.
+ * compressed and 4 GiB expanded. Description performs no I/O; scratch files
+ * exist only while an explicit inspection effect executes and are never
+ * installation files.
  *
  * @param entries       maximum directory and file entries
  * @param archiveBytes  maximum compressed bytes
@@ -58,6 +57,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 	 * need not be listed. Empty files are preserved; empty directories and
 	 * filesystem metadata are not installed.
 	 *
+	 * <p>
 	 * Streams opened during execution are closed; the archive description and
 	 * retention backend stay caller-owned. Entry descriptions reopen the archive
 	 * independently, without holding a ZIP handle open across entries, so the
@@ -179,9 +179,10 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 	}
 
 	/**
-	 * Immutable description of one entry from an inspected archive. No open ZIP
-	 * handle survives inspection; reopening scans the retained parent, with
-	 * entry size and CRC checked at EOF.
+	 * Immutable description of one file entry from an inspected archive. No open
+	 * ZIP handle survives inspection; each {@link #open()} rescans the parent
+	 * archive, failing when its local entries differ from the inspected catalog,
+	 * and checks the entry's size and CRC when the stream reaches EOF.
 	 *
 	 * @param archive parent archive description
 	 * @param path    canonical entry path
@@ -189,10 +190,15 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 	 * @param crc     expected CRC32
 	 * @param catalog validated central-directory names and expanded sizes
 	 */
-	record Entry(@NonNull Describe archive, @NonNull String path, long size, long crc,
+	public record Entry(@NonNull Describe archive, @NonNull String path, long size, long crc,
 			@NonNull Map<String, Long> catalog) implements Describe {
 		/**
-		 * Checks portable entry coordinates and integrity evidence.
+		 * Copies the catalog and checks portable entry coordinates and integrity
+		 * evidence.
+		 *
+		 * @throws IllegalArgumentException when the path is not canonical, the
+		 *                                  entry disagrees with the catalog, or the
+		 *                                  size or CRC is out of range
 		 */
 		public Entry {
 			if (Relative.decode(path).isEmpty()) {

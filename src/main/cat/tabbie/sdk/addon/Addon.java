@@ -118,14 +118,17 @@ public interface Addon {
 
 	/**
 	 * A published release of one fixed set of artifacts, installed together for
-	 * every supported label. External dependency availability is resolved later.
+	 * every advertised label. Every artifact explicitly supports every label and
+	 * may declare further targets of its own. External dependency availability is
+	 * resolved later.
 	 *
 	 * @param coordinates   exact release coordinates
 	 * @param releaseName   non-blank display name
 	 * @param releaseDate   publication instant
 	 * @param releaseNumber positive provider-assigned release number
-	 * @param content       supported labels and the artifacts, each a distinct
-	 *                      file of this release
+	 * @param labels        nonempty targets advertised for the entire build
+	 * @param content       nonempty artifacts, each a distinct file of this
+	 *                      release
 	 */
 	record Build(
 			@NonNull Coordinate.Build coordinates,
@@ -136,26 +139,46 @@ public interface Addon {
 			@NonNull Set<Artifact> content) implements Release<Artifact> {
 
 		/**
-		 * Checks shared release invariants and that every artifact is a distinct
-		 * file of this release.
+		 * Copies the labels and artifacts, then checks shared release invariants,
+		 * that every artifact is a distinct file of this release supporting every
+		 * label, and that no artifact conflicts with another of the same build.
 		 *
-		 * @throws IllegalArgumentException when publication invariants are violated
+		 * @throws IllegalArgumentException when publication invariants are violated,
+		 *                                  no label is advertised, an artifact does
+		 *                                  not support every label, or artifacts
+		 *                                  conflict with each other
 		 */
 		public Build {
+			labels = Set.copyOf(labels);
+			content = Set.copyOf(content);
 			Release.validate(releaseName, releaseNumber);
 			Release.Payload.validate(coordinates, content);
+			if (labels.isEmpty()) {
+				throw new IllegalArgumentException("A build needs at least one advertised label.");
+			}
+			Set<Label> advertised = labels;
+			Set<Artifact> artifacts = content;
+			if (artifacts.stream().anyMatch(artifact -> advertised.stream()
+					.anyMatch(label -> label.compatibility(artifact) != Compatibility.SUPPORTED))) {
+				throw new IllegalArgumentException("Every build artifact must support every advertised label.");
+			}
+			if (artifacts.stream().anyMatch(artifact -> artifact.conflicts().stream()
+					.anyMatch(conflict -> artifacts.stream().anyMatch(other -> conflict.includes(other.coordinates()))))) {
+				throw new IllegalArgumentException("Build artifacts must not conflict with each other.");
+			}
 		}
 
 		/**
-		 * Creates a build installing every artifact for every label.
+		 * Creates a build of a single artifact installed for every label.
 		 *
 		 * @param coordinates   exact release coordinates
 		 * @param releaseName   non-blank display name
 		 * @param releaseDate   publication instant
 		 * @param releaseNumber positive provider-assigned release number
 		 * @param labels        nonempty targets advertised for the entire build
-		 * @param artifacts     nonempty artifacts, each supporting every label
+		 * @param content       artifact supporting every label
 		 * @return build
+		 * @throws IllegalArgumentException when publication invariants are violated
 		 */
 		public static Build of(
 				@NonNull Coordinate.Build coordinates,

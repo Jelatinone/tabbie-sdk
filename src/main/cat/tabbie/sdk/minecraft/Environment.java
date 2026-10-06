@@ -8,12 +8,12 @@ package cat.tabbie.sdk.minecraft;
 public enum Environment {
 
   /**
-   * Dedicated multiplayer server process
+   * Dedicated multiplayer server process.
    */
   SERVER,
 
   /**
-   * Integrated singleplayer server process.
+   * Game client process, which may host an integrated singleplayer server.
    */
   CLIENT
 }

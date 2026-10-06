@@ -7,6 +7,7 @@ import java.util.Set;
 
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.album.repository.Describe;
+import cat.tabbie.sdk.album.repository.Extract;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Label;
@@ -18,34 +19,38 @@ import lombok.NonNull;
 
 /**
  * One file of an exact distribution release, such as a server jar or a loader
- * profile. {@link #install} describes the images it places, and
- * {@link #allocate} and {@link #deallocate} describe how an executor starts and
- * stops it in a context. Describing an instance never downloads runtimes, runs
- * installers, or starts processes; carrying out these descriptions belongs to
- * Core.
+ * profile. {@link #install} describes the images it places; an
+ * {@link Executable} byproduct also describes how an executor starts and stops
+ * it, while a {@link Nonexecutable} one is only placed. Describing a byproduct
+ * never downloads runtimes, runs installers, or starts processes; carrying out
+ * these descriptions belongs to Core.
+ *
+ * <p>
+ * Implementations are records whose compact constructors copy their
+ * collections and call {@link #validate(String, Set)}.
  */
 public sealed interface Byproduct extends Release.Payload<Installer.Context> {
 
 	/**
-	 * Stable instance identity derived from the file coordinates, so equal
+	 * Stable byproduct identity derived from the file coordinates, so equal
 	 * coordinates always yield the same identity across processes.
 	 *
-	 * @return instance identity
+	 * @return byproduct identity
 	 */
 	default Identity<Byproduct> byproductId() {
 		return Identity.create(coordinates().canonical());
 	}
 
 	/**
-	 * Human-readable canonical instance name.
+	 * Human-readable canonical byproduct name.
 	 *
-	 * @return instance name
+	 * @return byproduct name
 	 */
 	@NonNull
 	String byproductName();
 
 	/**
-	 * Provider-owned description of this instance's primary content.
+	 * Provider-owned description of this byproduct's primary content.
 	 *
 	 * @return content source
 	 */
@@ -53,7 +58,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
 	Describe source();
 
 	/**
-	 * Returns the targets this instance supports as a whole.
+	 * Returns the targets this byproduct supports as a whole.
 	 *
 	 * @return immutable, nonempty supported targets
 	 */
@@ -100,6 +105,11 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
 		}
 	}
 
+	/**
+	 * A byproduct an executor runs, such as a server jar or a native server
+	 * binary. Its start and stop arrangements are descriptions; nothing runs
+	 * until an executor carries them out.
+	 */
 	non-sealed interface Executable extends Byproduct {
 
 		/**
@@ -114,7 +124,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
 		}
 
 		/**
-		 * Describes how to start this instance in a context, without starting it.
+		 * Describes how to start this byproduct in a context, without starting it.
 		 * Scoped paths in the arrangement are resolved by the executor through the
 		 * context's mounts.
 		 *
@@ -125,8 +135,8 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
 		Allocate allocate(@NonNull Context context);
 
 		/**
-		 * Describes how to stop this instance in a context, without stopping it. The
-		 * arrangement must suit the one {@link #allocate} returns for the same
+		 * Describes how to stop this byproduct in a context, without stopping it.
+		 * The arrangement must suit the one {@link #allocate} returns for the same
 		 * context; see {@link Deallocate} for valid pairings.
 		 *
 		 * @param context selected target and mounts
@@ -141,7 +151,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
 		sealed interface Allocate {
 
 			/**
-			 * Returns the command the executor runs to start the instance.
+			 * Returns the command the executor runs to start the byproduct.
 			 *
 			 * @return start command
 			 */
@@ -170,9 +180,9 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
 			}
 
 			/**
-			 * A command that hands the instance to something else, such as a service
+			 * A command that hands the byproduct to something else, such as a service
 			 * manager or an external launcher, and then exits. The executor does not
-			 * own the resulting process, so the instance can only be stopped with
+			 * own the resulting process, so it can only be stopped with
 			 * {@link Deallocate.Invoke}.
 			 *
 			 * @param command start command, run in the context mount
@@ -190,7 +200,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
 		sealed interface Deallocate {
 
 			/**
-			 * Returns how long the executor waits for the instance to stop. A managed
+			 * Returns how long the executor waits for the byproduct to stop. A managed
 			 * process still running afterwards is forcibly destroyed; an unmanaged stop
 			 * command still running afterwards fails the stop.
 			 *
@@ -219,38 +229,94 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
 
 			/**
 			 * Runs a separate stop command, such as a service manager's stop action.
-			 * For a managed instance the executor then waits for its process to exit;
+			 * For a managed byproduct the executor then waits for its process to exit;
 			 * for an unmanaged one, for the stop command to exit.
 			 *
 			 * @param command stop command, run in the context mount
-			 * @param grace   time allowed for the instance to stop
+			 * @param grace   time allowed for the byproduct to stop
 			 */
 			record Invoke(@NonNull Command command, @NonNull Duration grace) implements Deallocate {
 			}
 		}
 	}
 
+	/**
+	 * A byproduct that is placed but never run itself, such as a loader library
+	 * or a launcher profile that another program reads.
+	 */
 	non-sealed interface Nonexecutable extends Byproduct {
-
-		// Is there any implementation needed here?
 	}
 
+	/**
+	 * An installation context with the runtime settings an executable byproduct
+	 * is started with.
+	 */
 	interface Context extends Installer.Context {
 
 		/**
-		 * Maximum memory bound during
-		 * {@link Byproduct.Executable#allocate(cat.tabbie.sdk.merchant.Installer.Context)
-		 * allocation}
-		 * 
-		 * @return maximum memory bound, optional
+		 * Returns the memory bound the started process is given, interpreted by
+		 * the byproduct's {@link Executable#allocate(Context) allocation}, such as
+		 * a JVM's maximum heap.
+		 *
+		 * @return maximum memory in bytes, or empty for the program's default
 		 */
+		@NonNull
 		Optional<Long> maximumMemory();
 
 		/**
-		 * Optional user-arguments passed in at runtime
-		 * 
-		 * @return runtime options
+		 * Returns caller-supplied runtime options the byproduct may apply when it
+		 * describes its start arrangement.
+		 *
+		 * @return immutable runtime options, possibly empty
 		 */
+		@NonNull
 		Map<String, String> runtimeOptions();
+
+		/**
+		 * Immutable context with explicit mounts and runtime settings.
+		 *
+		 * @param label          selected target
+		 * @param platform       target platform
+		 * @param repository     caller-owned retention backend
+		 * @param contextRoot    context mount relative to the installation
+		 * @param worldRoot      selected world relative to the context mount
+		 * @param maximumMemory  positive memory bound in bytes, or empty
+		 * @param runtimeOptions runtime options
+		 */
+		record Default(
+				@NonNull Label label,
+				@NonNull Platform platform,
+				@NonNull Extract repository,
+				@NonNull Relative.Root contextRoot,
+				@NonNull Relative.World worldRoot,
+				@NonNull Optional<Long> maximumMemory,
+				@NonNull Map<String, String> runtimeOptions) implements Context {
+
+			/**
+			 * Copies the runtime options and checks the memory bound.
+			 *
+			 * @throws IllegalArgumentException when the memory bound is not positive
+			 */
+			public Default {
+				runtimeOptions = Map.copyOf(runtimeOptions);
+				if (maximumMemory.filter(bytes -> bytes < 1L).isPresent()) {
+					throw new IllegalArgumentException("A memory bound must be positive.");
+				}
+			}
+
+			/**
+			 * Creates a context with the program's default memory and no options.
+			 *
+			 * @param label       selected target
+			 * @param platform    target platform
+			 * @param repository  caller-owned retention backend
+			 * @param contextRoot context mount relative to the installation
+			 * @param worldRoot   selected world relative to the context mount
+			 */
+			public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Extract repository,
+					@NonNull Relative.Root contextRoot, @NonNull Relative.World worldRoot) {
+				this(label, platform, repository, contextRoot, worldRoot, Optional.empty(), Map.of());
+			}
+		}
 	}
 }

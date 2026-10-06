@@ -31,7 +31,10 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.withType(Javadoc).configureEach {
   options.encoding = 'UTF-8'
+  options.tags('apiNote:a:API Note:', 'implSpec:a:Implementation Requirements:', 'implNote:a:Implementation Note:')
 }
+
+check.dependsOn(javadoc)
 
 dependencies {
   compileOnly('org.projectlombok:lombok:1.18.42')
