@@ -1,10 +1,9 @@
 plugins {
   id 'java-library'
-  id 'com.diffplug.spotless' version '8.1.0'
+	id 'maven-publish'
+	id 'io.freefair.lombok' version "9.8.0" 
+  id "com.diffplug.spotless" version "8.10.4"
 }
-
-group = 'cat.tabbie'
-version = '0.1.0'
 
 sourceSets {
   main {
@@ -20,6 +19,8 @@ repositories {
 }
 
 java {
+  withSourcesJar()
+  withJavadocJar()
   toolchain {
     languageVersion = JavaLanguageVersion.of(25)
   }
@@ -36,20 +37,48 @@ tasks.withType(Javadoc).configureEach {
 
 check.dependsOn(javadoc)
 
-dependencies {
-  compileOnly('org.projectlombok:lombok:1.18.42')
-  annotationProcessor('org.projectlombok:lombok:1.18.42')
+lombok {
+  version = '1.18.42'
+}
 
+dependencies {
   testImplementation(platform('org.junit:junit-bom:5.10.2'))
   testImplementation('org.junit.jupiter:junit-jupiter')
   testRuntimeOnly('org.junit.platform:junit-platform-launcher')
-
-  testCompileOnly('org.projectlombok:lombok:1.18.42')
-  testAnnotationProcessor('org.projectlombok:lombok:1.18.42')
 }
 
 tasks.withType(Test).configureEach {
   useJUnitPlatform()
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+						from components.java
+            pom {
+                name = 'tabbie-sdk'
+                description = 'Software Development Kit for Tabbie'
+                url = 'https://github.com/Jelatinone/tabbie-sdk'
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'jelatinone'
+                        name = 'Cody Washington'
+                        email = 'washington.cody@proton.me'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:https://github.com/Jelatinone/tabbie-sdk.git'
+                    url = 'https://github.com/Jelatinone/tabbie-sdk'
+                }
+            }
+        }
+    }
 }
 
 spotless {

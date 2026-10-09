@@ -149,6 +149,12 @@ public enum Response {
 	/** {@code 511 Network Authentication Required}. */
 	NETWORK_AUTHENTICATION_REQUIRED(511);
 
+	/**
+	 * Numeric HTTP status code.
+	 *
+	 * @return numeric HTTP status code
+	 */
+	@Getter
 	int statusCode;
 
 	/**
