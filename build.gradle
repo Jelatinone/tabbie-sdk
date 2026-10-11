@@ -1,8 +1,8 @@
 plugins {
   id 'java-library'
-	id 'maven-publish'
-	id 'io.freefair.lombok' version "9.8.0" 
-  id "com.diffplug.spotless" version "8.10.4"
+  id 'maven-publish'
+  id 'io.freefair.lombok' version '9.8.0'
+  id 'com.diffplug.spotless' version '8.10.4'
 }
 
 sourceSets {
@@ -52,33 +52,35 @@ tasks.withType(Test).configureEach {
 }
 
 publishing {
-    publications {
-        mavenJava(MavenPublication) {
-						from components.java
-            pom {
-                name = 'tabbie-sdk'
-                description = 'Software Development Kit for Tabbie'
-                url = 'https://github.com/Jelatinone/tabbie-sdk'
-                licenses {
-                    license {
-                        name = 'The Apache License, Version 2.0'
-                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                    }
-                }
-                developers {
-                    developer {
-                        id = 'jelatinone'
-                        name = 'Cody Washington'
-                        email = 'washington.cody@proton.me'
-                    }
-                }
-                scm {
-                    connection = 'scm:git:https://github.com/Jelatinone/tabbie-sdk.git'
-                    url = 'https://github.com/Jelatinone/tabbie-sdk'
-                }
-            }
+  publications {
+    mavenJava(MavenPublication) {
+      from components.java
+      pom {
+        name = 'tabbie-sdk'
+        description = 'Software Development Kit for Tabbie'
+        url = 'https://github.com/Jelatinone/tabbie-sdk'
+        licenses {
+          license {
+            name = 'The Apache License, Version 2.0'
+            url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+            distribution = 'repo'
+          }
         }
+        developers {
+          developer {
+            id = 'jelatinone'
+            name = 'Cody Washington'
+            email = 'washington.cody@proton.me'
+          }
+        }
+        scm {
+          connection = 'scm:git:https://github.com/Jelatinone/tabbie-sdk.git'
+          developerConnection = 'scm:git:ssh://git@github.com/Jelatinone/tabbie-sdk.git'
+          url = 'https://github.com/Jelatinone/tabbie-sdk'
+        }
+      }
     }
+  }
 }
 
 spotless {
