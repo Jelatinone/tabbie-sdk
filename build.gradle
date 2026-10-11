@@ -1,6 +1,7 @@
 plugins {
   id 'java-library'
   id 'maven-publish'
+  id 'signing'
   id 'io.freefair.lombok' version '9.8.0'
   id 'com.diffplug.spotless' version '8.10.4'
 }
@@ -81,6 +82,26 @@ publishing {
       }
     }
   }
+  repositories {
+    maven {
+      name = 'staging'
+      url = layout.buildDirectory.dir('staging')
+    }
+  }
+}
+
+signing {
+  useGpgCmd()
+  sign publishing.publications.mavenJava
+}
+
+tasks.register('centralBundle', Zip) {
+  dependsOn 'publishMavenJavaPublicationToStagingRepository'
+  from(layout.buildDirectory.dir('staging')) {
+    include "${project.group.toString().replace('.', '/')}/${project.name}/${project.version}/**"
+  }
+  archiveFileName = "${project.name}-${project.version}-bundle.zip"
+  destinationDirectory = layout.buildDirectory.dir('central')
 }
 
 spotless {
