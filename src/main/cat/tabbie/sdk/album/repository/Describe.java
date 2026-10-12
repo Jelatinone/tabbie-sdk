@@ -15,20 +15,20 @@ import lombok.NonNull;
  */
 public interface Describe {
 
-	/**
-	 * Describes the content without opening it.
-	 *
-	 * @return expected identity of the content
-	 */
-	@NonNull
-	Reference.Pending of();
+  /**
+   * Describes the content without opening it.
+   *
+   * @return expected identity of the content
+   */
+  @NonNull
+  Reference.Pending of();
 
-	/**
-	 * Opens the described content.
-	 *
-	 * @return independent stream at position zero, owned by the caller
-	 * @throws IOException when the content is not readable
-	 */
-	@NonNull
-	InputStream open() throws IOException;
+  /**
+   * Opens the described content.
+   *
+   * @return independent stream at position zero, owned by the caller
+   * @throws IOException when the content is not readable
+   */
+  @NonNull
+  InputStream open() throws IOException;
 }

@@ -13,25 +13,25 @@ import java.io.IOException;
  */
 public interface Store extends AutoCloseable, Describe, Extract {
 
-	/**
-	 * Checks whether primary content is already locally available, without
-	 * acquiring it. Sources without local retention return false by default.
-	 * This is an observation, not a reservation or an installation-state check.
-	 *
-	 * @return whether primary content is locally available
-	 * @throws IOException when availability cannot be checked
-	 */
-	default boolean exists() throws IOException {
-		return false;
-	}
+  /**
+   * Checks whether primary content is already locally available, without
+   * acquiring it. Sources without local retention return false by default.
+   * This is an observation, not a reservation or an installation-state check.
+   *
+   * @return whether primary content is locally available
+   * @throws IOException when availability cannot be checked
+   */
+  default boolean exists() throws IOException {
+    return false;
+  }
 
-	/**
-	 * Releases store resources according to its documented lifetime. Installers
-	 * never close caller-owned stores. Stateless stores need no cleanup.
-	 *
-	 * @throws IOException when resources cannot be released
-	 */
-	@Override
-	default void close() throws IOException {
-	}
+  /**
+   * Releases store resources according to its documented lifetime. Installers
+   * never close caller-owned stores. Stateless stores need no cleanup.
+   *
+   * @throws IOException when resources cannot be released
+   */
+  @Override
+  default void close() throws IOException {
+  }
 }

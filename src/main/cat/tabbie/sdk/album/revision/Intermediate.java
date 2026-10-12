@@ -3,6 +3,7 @@ package cat.tabbie.sdk.album.revision;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 
@@ -222,7 +223,8 @@ public sealed interface Intermediate<T> {
       for (Intermediate<? extends T> element : elements) {
         results.add(element.collapse(context));
       }
-      return List.copyOf(results);
+      // Results may be null, as Intermediate.of(null) is
+      return Collections.unmodifiableList(results);
     }
   }
 
@@ -280,7 +282,7 @@ public sealed interface Intermediate<T> {
         } catch (IOException attempt) {
           if (failure == null) {
             failure = attempt;
-          } else {
+          } else if (attempt != failure) {
             failure.addSuppressed(attempt);
           }
         }

@@ -17,15 +17,15 @@ import lombok.NonNull;
  */
 public record Host(@NonNull Platform platform, @NonNull List<Manager> managers) {
 
-	/**
-	 * Copies the managers.
-	 *
-	 * @throws IllegalArgumentException when a manager repeats
-	 */
-	public Host {
-		managers = List.copyOf(managers);
-		if (managers.stream().distinct().count() != managers.size()) {
-			throw new IllegalArgumentException("A host lists each package manager once.");
-		}
-	}
+  /**
+   * Copies the managers.
+   *
+   * @throws IllegalArgumentException when a manager repeats
+   */
+  public Host {
+    managers = List.copyOf(managers);
+    if (managers.stream().distinct().count() != managers.size()) {
+      throw new IllegalArgumentException("A host lists each package manager once.");
+    }
+  }
 }

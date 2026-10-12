@@ -1,105 +1,99 @@
 package cat.tabbie.sdk.api;
 
-import org.junit.jupiter.api.Test;
-
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
-
+import static cat.tabbie.sdk.TestFixtures.collapse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+
+import cat.tabbie.sdk.album.revision.Intermediate;
+
 class QueryContractsTest {
 
-	@Test
-	void several_requiresAPositiveLimit_whenOneIsGiven() {
-		assertEquals(null, new Query.Several<>("criteria").limit());
-		assertEquals(3, new Query.Several<>("criteria", 3).limit());
-		assertThrows(IllegalArgumentException.class, () -> new Query.Several<>("criteria", 0));
-		assertThrows(NullPointerException.class, () -> new Query.Singular<>(null));
-	}
+  @TempDir
+  Path scratch;
 
-	@Test
-	void defaults_deriveExistenceCountAndSingleItems_fromSeveral() {
-		List<Query.Several<String>> received = new ArrayList<>();
-		Queryable<String, String> names = query -> {
-			received.add(query);
-			return Optional.of(List.of("alpha", "beta"));
-		};
+  @Test
+  void several_requiresAPositiveLimit_whenOneIsGiven() {
+    assertEquals(new Query.Several<>("criteria", null), new Query.Several<>("criteria"));
+    assertEquals(3, new Query.Several<>("criteria", 3).limit());
+    assertThrows(IllegalArgumentException.class, () -> new Query.Several<>("criteria", 0));
+    assertThrows(NullPointerException.class, () -> new Query.Singular<>(null));
+  }
 
-		Optional<Boolean> exists = names.query(new Query.Exists<>("a"));
-		Optional<Long> count = names.query(new Query.Count<>("a"));
-		Optional<String> first = names.query(new Query.Singular<>("a"));
+  @Test
+  void defaults_deriveExistenceCountAndSingleItems_fromSeveral_onlyWhenCollapsed() throws IOException {
+    List<Query.Several<String>> received = new ArrayList<>();
+    Queryable<String, String> names = query -> Intermediate.of(context -> {
+      received.add(query);
+      return List.of("alpha", "beta");
+    });
 
-		assertEquals(Optional.of(true), exists);
-		assertEquals(Optional.of(2L), count);
-		assertEquals(Optional.of("alpha"), first);
-		assertEquals(List.of(new Query.Several<>("a"), new Query.Several<>("a"), new Query.Several<>("a")), received);
-	}
+    Intermediate<Boolean> exists = names.query(new Query.Exists<>("a"));
+    Intermediate<Long> count = names.query(new Query.Count<>("a"));
+    Intermediate<Optional<String>> first = names.query(new Query.Singular<>("a"));
 
-	@Test
-	void defaults_distinguishNoMatches_fromUnanswerableRequests() {
-		Queryable<String, String> empty = query -> Optional.of(List.of());
-		Queryable<String, String> unavailable = query -> Optional.empty();
+    assertEquals(List.of(), received);
+    assertEquals(true, collapse(exists, scratch));
+    assertEquals(2L, collapse(count, scratch));
+    assertEquals(Optional.of("alpha"), collapse(first, scratch));
+    assertEquals(List.of(new Query.Several<>("a", 1), new Query.Several<>("a"), new Query.Several<>("a", 1)), received);
+  }
 
-		assertEquals(Optional.of(false), empty.query(new Query.Exists<>("a")));
-		assertEquals(Optional.of(0L), empty.query(new Query.Count<>("a")));
-		assertEquals(Optional.empty(), empty.query(new Query.Singular<>("a")));
-		assertEquals(Optional.empty(), unavailable.query(new Query.Exists<>("a")));
-		assertEquals(Optional.empty(), unavailable.query(new Query.Count<>("a")));
-	}
+  @Test
+  void defaults_reportNoMatches_andFailUnanswerableRequests() throws IOException {
+    Queryable<String, String> empty = query -> Intermediate.of(List.of());
+    Queryable<String, String> unavailable = query -> Intermediate.of(context -> {
+      throw new IOException("Unavailable");
+    });
 
-	@Test
-	void overriddenCount_isUsedForExistence() {
-		Queryable<String, String> counted = new Queryable<>() {
+    assertEquals(false, collapse(empty.query(new Query.Exists<>("a")), scratch));
+    assertEquals(0L, collapse(empty.query(new Query.Count<>("a")), scratch));
+    assertEquals(Optional.empty(), collapse(empty.query(new Query.Singular<>("a")), scratch));
+    assertThrows(IOException.class, () -> collapse(unavailable.query(new Query.Exists<>("a")), scratch));
+    assertThrows(IOException.class, () -> collapse(unavailable.query(new Query.Count<>("a")), scratch));
+    assertThrows(IOException.class, () -> collapse(unavailable.query(new Query.Singular<>("a")), scratch));
+  }
 
-			@Override
-			public Optional<Long> query(Query.Count<String> query) {
-				return Optional.of(1L);
-			}
+  @Test
+  void criteria_selectByIdentityOrDuration() {
+    Criteria<String> byIdentity = Criteria.identifier("id");
+    Criteria<String> byDuration = Criteria.duration(Duration.ofSeconds(5));
 
-			@Override
-			public Optional<Collection<String>> query(Query.Several<String> query) {
-				throw new AssertionError("Existence must use the overridden count.");
-			}
-		};
+    assertEquals(Optional.of("id"), byIdentity.identifier());
+    assertEquals(Optional.empty(), byIdentity.duration());
+    assertEquals(Optional.empty(), byDuration.identifier());
+    assertEquals(Optional.of(Duration.ofSeconds(5)), byDuration.duration());
+  }
 
-		assertEquals(Optional.of(true), counted.query(new Query.Exists<>("a")));
-	}
+  @Test
+  void observerNone_isSharedAndIgnoresEverything() {
+    Observer<String, Integer> none = Observer.none();
 
-	@Test
-	void criteria_selectByIdentityOrDuration() {
-		Criteria<String> byIdentity = Criteria.identifier("id");
-		Criteria<String> byDuration = Criteria.duration(Duration.ofSeconds(5));
+    none.transfer(1);
+    none.verified("done");
+    none.failed(new Exception("ignored"));
 
-		assertEquals(Optional.of("id"), byIdentity.identifier());
-		assertEquals(Optional.empty(), byIdentity.duration());
-		assertEquals(Optional.empty(), byDuration.identifier());
-		assertEquals(Optional.of(Duration.ofSeconds(5)), byDuration.duration());
-	}
+    assertSame(Observer.NONE, none);
+  }
 
-	@Test
-	void observerNone_isSharedAndIgnoresEverything() {
-		Observer<String, Integer> none = Observer.none();
-
-		none.transfer(1);
-		none.verified("done");
-		none.failed(new Exception("ignored"));
-
-		assertSame(Observer.NONE, none);
-	}
-
-	@Test
-	void response_resolvesKnownStatusCodes() {
-		assertSame(Response.OK, Response.from(200));
-		assertSame(Response.NOT_FOUND, Response.from(404));
-		assertEquals(429, Response.TOO_MANY_REQUESTS.getStatusCode());
-		assertEquals(Response.values().length, Arrays.stream(Response.values()).map(Response::getStatusCode).distinct()
-				.count());
-		assertThrows(IllegalArgumentException.class, () -> Response.from(299));
-	}
+  @Test
+  void response_resolvesKnownStatusCodes() {
+    assertSame(Response.OK, Response.from(200));
+    assertSame(Response.NOT_FOUND, Response.from(404));
+    assertEquals(429, Response.TOO_MANY_REQUESTS.getStatusCode());
+    assertEquals(Response.values().length, Arrays.stream(Response.values()).map(Response::getStatusCode).distinct()
+        .count());
+    assertThrows(IllegalArgumentException.class, () -> Response.from(299));
+  }
 }

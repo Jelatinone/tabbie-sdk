@@ -3,69 +3,69 @@ package cat.tabbie.sdk.api;
 import java.util.Collection;
 import java.util.Optional;
 
+import cat.tabbie.sdk.album.revision.Intermediate;
 import lombok.NonNull;
 
 /**
- * A local or remote read capability. Implementations return non-null containers
- * and distinguish an absent item from a failed request; failures must not be
- * disguised as empty results. A collection with no items means nothing
- * matched; an empty {@link Optional} means the request could not be answered.
+ * A local or remote read capability. Queries are deferred: each returns an
+ * {@link Intermediate} that reads only when collapsed, so the caller decides
+ * where and when the I/O happens. A request that cannot be answered fails the
+ * collapse with an {@link java.io.IOException}; failures are never disguised
+ * as empty results. An empty collection or an empty {@link Optional} means
+ * nothing matched.
  *
  * @param <Criterion> provider-specific selection criteria
  * @param <Result>    returned item type
  */
 @FunctionalInterface
 public interface Queryable<Criterion, Result> {
+
   /**
-   * Derives existence from the count unless overridden.
+   * Determines whether any item matches.
    *
    * @param query existence request
-   * @return true or false when known, or empty when the count is unavailable
+   * @return unevaluated read producing whether any item matches
    *
-   * @apiNote Default implementation always opportunistically determines existence
-   *          found via {@link #query(cat.tabbie.sdk.api.Query.Count) count}
-   *          implementation.
+   * @apiNote The default requests at most one item through
+   *          {@link #query(cat.tabbie.sdk.api.Query.Several) several}.
    */
-  default Optional<Boolean> query(@NonNull Query.Exists<Criterion> query) {
-    return query(new Query.Count<>(query.criteria())).map(v -> v > 0L);
+  default Intermediate<Boolean> query(@NonNull Query.Exists<Criterion> query) {
+    return query(new Query.Several<>(query.criteria(), 1)).map(results -> !results.isEmpty());
   }
 
   /**
-   * Counts all matching results by default. Remote providers may override this
-   * to avoid fetching every result.
+   * Counts every matching item.
    *
    * @param query count request
-   * @return known count including zero, or empty when unavailable
+   * @return unevaluated read producing the count, including zero
    *
-   * @apiNote Default implementation always opportunistically takes counts results
-   *          found via {@link #query(cat.tabbie.sdk.api.Query.Several) several}
-   *          implementation.
+   * @apiNote The default fetches every match through
+   *          {@link #query(cat.tabbie.sdk.api.Query.Several) several}; remote
+   *          providers should override it with a native count.
    */
-  default Optional<Long> query(@NonNull Query.Count<Criterion> query) {
-    return query(new Query.Several<>(query.criteria())).map(c -> (long) c.size());
+  default Intermediate<Long> query(@NonNull Query.Count<Criterion> query) {
+    return query(new Query.Several<>(query.criteria())).map(results -> (long) results.size());
   }
 
   /**
-   * Requests one item; providers document ordering when several items match.
+   * Requests the first matching item in the provider's documented order.
    *
    * @param query singular request
-   * @return selected item, or empty when none matches or the request could not
-   *         be answered
+   * @return unevaluated read producing the item, or empty when none matches
    *
-   * @apiNote Default implementation always opportunistically takes first result
-   *          found via {@link #query(cat.tabbie.sdk.api.Query.Several) several}
-   *          implementation.
+   * @apiNote The default requests at most one item through
+   *          {@link #query(cat.tabbie.sdk.api.Query.Several) several}.
    */
-  default Optional<Result> query(Query.Singular<Criterion> query) {
-    return query(new Query.Several<>(query.criteria())).flatMap(c -> c.stream().findFirst());
+  default Intermediate<Optional<Result>> query(@NonNull Query.Singular<Criterion> query) {
+    return query(new Query.Several<>(query.criteria(), 1)).map(results -> results.stream().findFirst());
   }
 
   /**
-   * Requests a collection honoring the explicit limit, if present.
+   * Requests matching items in the provider's documented order, honoring the
+   * request's limit.
    *
    * @param query collection request
-   * @return matching items, an empty collection when none match, or empty when
-   *         the request could not be answered
+   * @return unevaluated read producing the matching items, empty when none match
    */
-  Optional<Collection<Result>> query(Query.Several<Criterion> query);
+  Intermediate<Collection<Result>> query(@NonNull Query.Several<Criterion> query);
 }

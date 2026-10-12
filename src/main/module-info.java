@@ -10,16 +10,16 @@
  * consumers need no Lombok at compile time or at run time.
  */
 module cat.tabbie.sdk {
-	requires static lombok;
+  requires static lombok;
 
-	exports cat.tabbie.sdk;
-	exports cat.tabbie.sdk.addon;
-	exports cat.tabbie.sdk.addon.artifact;
-	exports cat.tabbie.sdk.album.repository;
-	exports cat.tabbie.sdk.album.revision;
-	exports cat.tabbie.sdk.api;
-	exports cat.tabbie.sdk.merchant;
-	exports cat.tabbie.sdk.minecraft;
-	exports cat.tabbie.sdk.minecraft.distribution;
-	exports cat.tabbie.sdk.platform;
+  exports cat.tabbie.sdk;
+  exports cat.tabbie.sdk.addon;
+  exports cat.tabbie.sdk.addon.artifact;
+  exports cat.tabbie.sdk.album.repository;
+  exports cat.tabbie.sdk.album.revision;
+  exports cat.tabbie.sdk.api;
+  exports cat.tabbie.sdk.merchant;
+  exports cat.tabbie.sdk.minecraft;
+  exports cat.tabbie.sdk.minecraft.distribution;
+  exports cat.tabbie.sdk.platform;
 }
