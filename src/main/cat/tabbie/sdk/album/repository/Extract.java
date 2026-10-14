@@ -29,8 +29,15 @@ public interface Extract {
   /**
    * Describes capture of a source, verifying and retaining its bytes under its
    * own identity. The source is opened only when the returned intermediate is
-   * collapsed, and any expected evidence it declares is verified.
-   * Implementations may use {@link #transfer} to digest while writing.
+   * collapsed or scrutinized, and any expected evidence it declares is
+   * verified. Implementations may use {@link #transfer} to digest while
+   * writing.
+   *
+   * <p>
+   * Scrutinizing a capture performs it, because capturing writes only to this
+   * backend. Implementations return a step whose
+   * {@link Intermediate#scrutinize(Intermediate.Step.Context) scrutinize}
+   * passes with the captured reference.
    *
    * @param source   reusable description of the bytes to capture
    * @param observer transfer callbacks; callbacks must not throw

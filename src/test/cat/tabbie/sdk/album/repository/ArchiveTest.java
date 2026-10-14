@@ -3,6 +3,7 @@ package cat.tabbie.sdk.album.repository;
 import static cat.tabbie.sdk.TestFixtures.bytes;
 import static cat.tabbie.sdk.TestFixtures.collapse;
 import static cat.tabbie.sdk.TestFixtures.entries;
+import static cat.tabbie.sdk.TestFixtures.scrutinize;
 import static cat.tabbie.sdk.TestFixtures.source;
 import static cat.tabbie.sdk.TestFixtures.zip;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -157,6 +158,58 @@ class ArchiveTest {
 
     assertEquals(Set.of(new Image.Target.File(Relative.world("datapacks", "x", "pack.mcmeta"))),
         images.stream().map(Image::target).collect(Collectors.toSet()));
+  }
+
+  @Test
+  void inspect_scrutinizesToAPass_withTheEntriesOfACollapse() throws IOException {
+    MockSource archive = source("pack.zip", zip(entries("assets/a.txt", "alpha", "b.txt", "")));
+
+    Intermediate.Scrutiny<List<Archive.Entry>> scrutiny = scrutinize(Archive.DEFAULT.inspect(archive), scratch);
+    List<Archive.Entry> found = collapse(Archive.DEFAULT.inspect(archive), scratch);
+
+    assertEquals(new Intermediate.Scrutiny.Pass<>(found), scrutiny);
+  }
+
+  @Test
+  void unpack_scrutinizesToAPass_withTheImagesOfACollapse_andRetainsItsCaptures() throws IOException {
+    MockRetention scrutinized = new MockRetention();
+    MockRetention collapsed = new MockRetention();
+    MockSource archive = source("pack.zip", zip(entries("data/a.txt", "alpha", "b.txt", "")));
+
+    Intermediate.Scrutiny<Set<Image<?>>> scrutiny = scrutinize(
+        Archive.DEFAULT.unpack(archive, scrutinized, Relative.root("pack")), scratch);
+    Set<Image<?>> images = collapse(Archive.DEFAULT.unpack(archive, collapsed, Relative.root("pack")), scratch);
+
+    assertEquals(new Intermediate.Scrutiny.Pass<>(images), scrutiny);
+    assertTrue(images.stream()
+        .map(image -> assertInstanceOf(Image.Installation.class, image).after())
+        .map(after -> assertInstanceOf(Image.File.Present.class, after).reference())
+        .allMatch(scrutinized::exists));
+  }
+
+  @Test
+  void unpack_mocks_whenItsBackendCapturesWithAPlainEffect() throws IOException {
+    MockRetention retention = new MockRetention();
+    Extract effectful = new Extract() {
+
+      @Override
+      public Intermediate<Reference.Captured> capture(Describe source,
+          Observer<? super Reference.Captured, ? super Transfer> observer) {
+        return Intermediate.of(context -> retention.capture(source, observer).collapse(context));
+      }
+
+      @Override
+      public Describe retained(Reference.Captured reference) {
+        return retention.retained(reference);
+      }
+    };
+    MockSource archive = source("pack.zip", zip(entries("data/a.txt", "alpha")));
+
+    Intermediate.Scrutiny<Set<Image<?>>> scrutiny = scrutinize(
+        Archive.DEFAULT.unpack(archive, effectful, Relative.root("pack")), scratch);
+
+    assertEquals(new Intermediate.Scrutiny.Mock<>(), scrutiny);
+    assertEquals(0, retention.captures());
   }
 
   @Test

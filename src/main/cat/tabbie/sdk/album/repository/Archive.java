@@ -87,6 +87,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 
   /**
    * Explicit central-directory inspection using execution-owned scratch space.
+   * Scrutinizing it performs the inspection, since it only uses scratch space.
    *
    * @param archive archive description
    * @param limits  processing bounds
@@ -153,6 +154,11 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
         Files.deleteIfExists(scratch);
       }
     }
+
+    @Override
+    public Scrutiny<List<Entry>> scrutinize(Step.Context context) throws IOException {
+      return new Scrutiny.Pass<>(collapse(context));
+    }
   }
 
   /**
@@ -160,7 +166,8 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * immutable image set. It reads the archive once into execution-owned
    * scratch space and captures each file entry through a repeatable
    * description of that copy, checking it against the inspected catalog and
-   * each entry's size and CRC.
+   * each entry's size and CRC. Scrutinizing it scrutinizes each capture instead,
+   * failing when any capture fails and mocking when any capture mocks.
    *
    * @param into        retention backend for the archive's entries
    * @param destination logical extraction directory
@@ -171,43 +178,63 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
       implements Intermediate.Step<Set<Image<?>>> {
     @Override
     public Set<Image<?>> collapse(Step.Context context) throws IOException {
-      Entry first = entries.getFirst();
       Path scratch = Files.createTempFile(context.scratch(), "tabbie-archive-", ".zip");
-      try {
-        try (InputStream input = first.archive().open(); OutputStream output = Files.newOutputStream(scratch)) {
-          bound(input, limits.archiveBytes()).transferTo(output);
-        }
-        try (ZipFile zip = new ZipFile(scratch.toFile())) {
-          if (zip.size() != first.catalog().size()) {
-            throw new IOException("ZIP entries differ from the inspected catalog.");
-          }
-          List<Image<?>> images = new ArrayList<>();
-          for (Entry entry : entries) {
-            ZipEntry found = zip.getEntry(entry.path());
-            if (found == null || found.isDirectory() || found.getSize() != entry.size()
-                || found.getCrc() != entry.crc()) {
-              throw new IOException("ZIP entries differ from the inspected catalog.");
-            }
-            Describe retained = new Describe() {
-              @Override
-              public Reference.Pending of() {
-                return entry.of();
-              }
-
-              @Override
-              public InputStream open() throws IOException {
-                return entry.entryStream(zip.getInputStream(found));
-              }
-            };
-            Reference.Captured captured = into.capture(retained).collapse(context);
-            images.add(Image.create(destination.resolve(Relative.decode(entry.path())), captured));
-          }
-          Image.validate(images);
-          return Set.copyOf(images);
-        }
+      try (ZipFile zip = copy(scratch)) {
+        return extract(zip).collapse(context);
       } finally {
         Files.deleteIfExists(scratch);
       }
+    }
+
+    @Override
+    public Scrutiny<Set<Image<?>>> scrutinize(Step.Context context) throws IOException {
+      Path scratch = Files.createTempFile(context.scratch(), "tabbie-archive-", ".zip");
+      try (ZipFile zip = copy(scratch)) {
+        return extract(zip).scrutinize(context);
+      } finally {
+        Files.deleteIfExists(scratch);
+      }
+    }
+
+    private ZipFile copy(Path scratch) throws IOException {
+      Describe archive = entries.getFirst().archive();
+      try (InputStream input = archive.open(); OutputStream output = Files.newOutputStream(scratch)) {
+        bound(input, limits.archiveBytes()).transferTo(output);
+      }
+      return new ZipFile(scratch.toFile());
+    }
+
+    private Intermediate<Set<Image<?>>> extract(ZipFile zip) throws IOException {
+      if (zip.size() != entries.getFirst().catalog().size()) {
+        throw new IOException("ZIP entries differ from the inspected catalog.");
+      }
+      List<Intermediate<Image<?>>> images = new ArrayList<>();
+      for (Entry entry : entries) {
+        ZipEntry found = zip.getEntry(entry.path());
+        if (found == null || found.isDirectory() || found.getSize() != entry.size()
+            || found.getCrc() != entry.crc()) {
+          throw new IOException("ZIP entries differ from the inspected catalog.");
+        }
+        Describe retained = new Describe() {
+          @Override
+          public Reference.Pending of() {
+            return entry.of();
+          }
+
+          @Override
+          public InputStream open() throws IOException {
+            return entry.entryStream(zip.getInputStream(found));
+          }
+        };
+        Relative target = destination.resolve(Relative.decode(entry.path()));
+        images.add(into.capture(retained).map(captured -> Image.create(target, captured)));
+      }
+      return Intermediate.group(images).map(Unpack::validated);
+    }
+
+    private static Set<Image<?>> validated(List<Image<?>> images) {
+      Image.validate(images);
+      return Set.copyOf(images);
     }
   }
 

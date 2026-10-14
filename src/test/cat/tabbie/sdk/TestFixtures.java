@@ -130,6 +130,13 @@ public final class TestFixtures {
   }
 
   /**
+   * Scrutinizes work with a scratch directory and no observer.
+   */
+  public static <T> Intermediate.Scrutiny<T> scrutinize(Intermediate<T> work, Path scratch) throws IOException {
+    return work.scrutinize(new Intermediate.Step.Context.Default(scratch, Observer.none()));
+  }
+
+  /**
    * Builds a ZIP archive of text entries in insertion order. Names ending in a
    * slash become directory entries.
    */
@@ -224,16 +231,7 @@ public final class TestFixtures {
     @Override
     public Intermediate<Reference.Captured> capture(Describe source,
         Observer<? super Reference.Captured, ? super Transfer> observer) {
-      return Intermediate.of(context -> {
-        ByteArrayOutputStream sink = new ByteArrayOutputStream();
-        Reference.Captured captured;
-        try (InputStream input = source.open()) {
-          captured = Extract.transfer(source.of(), input, sink, observer);
-        }
-        retained.put(captured.sha256(), sink.toByteArray());
-        captures.incrementAndGet();
-        return captured;
-      });
+      return new Capture(this, source, observer);
     }
 
     @Override
@@ -269,6 +267,36 @@ public final class TestFixtures {
 
     public int captures() {
       return captures.get();
+    }
+
+    /**
+     * Captures one source into its backend. Scrutinizing performs the capture,
+     * since it writes only to the backend.
+     *
+     * @param backend  retention backend receiving the bytes
+     * @param source   bytes to capture
+     * @param observer transfer callbacks
+     */
+    private record Capture(MockRetention backend, Describe source,
+        Observer<? super Reference.Captured, ? super Transfer> observer)
+        implements Intermediate.Step<Reference.Captured> {
+
+      @Override
+      public Reference.Captured collapse(Step.Context context) throws IOException {
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+        Reference.Captured captured;
+        try (InputStream input = source.open()) {
+          captured = Extract.transfer(source.of(), input, sink, observer);
+        }
+        backend.retained.put(captured.sha256(), sink.toByteArray());
+        backend.captures.incrementAndGet();
+        return captured;
+      }
+
+      @Override
+      public Scrutiny<Reference.Captured> scrutinize(Step.Context context) throws IOException {
+        return new Scrutiny.Pass<>(collapse(context));
+      }
     }
   }
 }
