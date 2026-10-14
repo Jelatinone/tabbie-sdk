@@ -187,7 +187,7 @@ class DistributionContractsTest {
   void executable_describesHowItStartsAndStops_withoutRunningAnything() {
     ServerJar server = ServerJar.of("server", Set.of());
     Byproduct.Context context = new Byproduct.Context.Default(PAPER_SERVER, PLATFORM, new MockRetention(),
-        Relative.root("servers", "lobby"), WORLD, Optional.of(4096L), Map.of());
+        Relative.root("servers", "lobby"), WORLD, Optional.of(4096L * 1024 * 1024), Map.of());
     Command.Resolver resolver = new Command.Resolver() {
 
       @Override
@@ -206,7 +206,7 @@ class DistributionContractsTest {
 
     Byproduct.Executable.Allocate.Managed managed = assertInstanceOf(Byproduct.Executable.Allocate.Managed.class,
         start);
-    assertEquals(List.of(Path.of("jdk", "bin", "java").toString(), "-Xmx4096", "-jar",
+    assertEquals(List.of(Path.of("jdk", "bin", "java").toString(), "-Xmx4096M", "-jar",
         Path.of("srv", "servers", "lobby", "server.jar").toString(), "--nogui"), managed.command().render(resolver));
     assertEquals(new Byproduct.Executable.Deallocate.Input("stop", Duration.ofSeconds(30)), stop);
   }
@@ -345,7 +345,7 @@ class DistributionContractsTest {
     public Allocate allocate(Byproduct.Context context) {
       List<Command.Token> tokens = new ArrayList<>();
       context.maximumMemory().ifPresent(memory -> tokens.add(new Command.Option("-Xmx",
-          new Command.Argument.Literal(String.valueOf(memory)), Command.Option.Style.JOINED)));
+          new Command.Argument.Literal(memory / (1024 * 1024) + "M"), Command.Option.Style.JOINED)));
       tokens.add(new Command.Argument.Literal("-jar"));
       tokens.add(new Command.Argument.Location(Relative.root("server.jar")));
       tokens.add(new Command.Argument.Literal("--nogui"));
