@@ -3,17 +3,25 @@ package cat.tabbie.sdk.album.revision;
 import static cat.tabbie.sdk.TestFixtures.bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import cat.tabbie.sdk.album.repository.Reference;
 import cat.tabbie.sdk.platform.Package;
@@ -32,6 +40,139 @@ class ImageTest {
 
   private static final Package JAVA = new Package("java-runtime",
       Map.of(Manager.APT, new Package.Specification("openjdk-21-jre-headless")));
+
+  private static final Package MISSING = new Package("tabbie-missing",
+      Map.of(Manager.APT, new Package.Specification("tabbie-missing-package")));
+
+  private Path mount;
+
+  /**
+   * Creates a fresh directory for scrutinized files. File targets resolve
+   * against the working directory, so it lies beneath it, in the build
+   * directory.
+   */
+  private Relative.Root mount() throws IOException {
+    Path parent = Files.createDirectories(Path.of("build", "tmp", "scrutiny"));
+    mount = Files.createTempDirectory(parent, "image-");
+    return Relative.root("build", "tmp", "scrutiny", mount.getFileName().toString());
+  }
+
+  @AfterEach
+  void deleteMount() throws IOException {
+    if (mount == null) {
+      return;
+    }
+    try (Stream<Path> paths = Files.walk(mount)) {
+      for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+        path.toFile().setWritable(true);
+        Files.delete(path);
+      }
+    }
+  }
+
+  @Test
+  void installation_scrutinizesToAPassOfItsAfterState_whenTheFileIsInItsBeforeState() throws IOException {
+    Relative.Root jar = mount().resolve("mods", "example.jar");
+
+    Scrutiny<Image.File> created = Image.create(jar, FIRST).scrutinize();
+    Files.createDirectories(mount.resolve("mods"));
+    Files.write(mount.resolve("mods").resolve("example.jar"), bytes("first"));
+    Scrutiny<Image.File> replaced = Image.replace(jar, FIRST, SECOND).scrutinize();
+    Scrutiny<Image.File> deleted = Image.delete(jar, Reference.of("renamed.jar", bytes("first"))).scrutinize();
+
+    assertEquals(new Scrutiny.Pass<>(new Image.File.Present(FIRST)), created);
+    assertEquals(new Scrutiny.Pass<>(new Image.File.Present(SECOND)), replaced);
+    assertEquals(new Scrutiny.Pass<>(new Image.File.Absent()), deleted);
+  }
+
+  @Test
+  void installation_failsWithTheFileFound_whenItChangedSinceRehearsal() throws IOException {
+    Relative.Root root = mount();
+    Files.write(mount.resolve("example.jar"), bytes("second"));
+
+    Scrutiny<Image.File> changed = Image.replace(root.resolve("example.jar"), FIRST, THIRD).scrutinize();
+    Scrutiny<Image.File> created = Image.create(root.resolve("example.jar"), FIRST).scrutinize();
+    Scrutiny<Image.File> deleted = Image.delete(root.resolve("other.jar"), FIRST).scrutinize();
+
+    assertEquals(new Scrutiny.Fail<>(new Image.File.Present(SECOND)), changed);
+    assertEquals(new Scrutiny.Fail<>(new Image.File.Present(SECOND)), created);
+    assertEquals(new Scrutiny.Fail<>(new Image.File.Absent()), deleted);
+  }
+
+  @Test
+  void installation_failsWithoutAState_whenItsPathIsADirectory_orBeneathAFile() throws IOException {
+    Relative.Root root = mount();
+    Files.createDirectory(mount.resolve("example.jar"));
+    Files.write(mount.resolve("mods"), bytes("first"));
+
+    Scrutiny<Image.File> directory = Image.create(root.resolve("example.jar"), FIRST).scrutinize();
+    Scrutiny<Image.File> beneathAFile = Image.create(root.resolve("mods", "example.jar"), FIRST).scrutinize();
+
+    assertInstanceOf(Scrutiny.Fail.class, directory);
+    assertNull(directory.result());
+    assertInstanceOf(Scrutiny.Fail.class, beneathAFile);
+    assertNull(beneathAFile.result());
+  }
+
+  @Test
+  void installation_failsWithoutAState_whenTheFileIsNotWritable() throws IOException {
+    Relative.Root root = mount();
+    Path file = Files.write(mount.resolve("example.jar"), bytes("first"));
+    assumeTrue(file.toFile().setWritable(false) && !Files.isWritable(file));
+
+    Scrutiny<Image.File> scrutiny = Image.replace(root.resolve("example.jar"), FIRST, SECOND).scrutinize();
+
+    assertInstanceOf(Scrutiny.Fail.class, scrutiny);
+    assertNull(scrutiny.result());
+  }
+
+  @Test
+  void configuration_passesWhenItsChunksMatch_whateverTheLinesOutsideThem() throws IOException {
+    Relative.Root properties = mount().resolve("example.properties");
+    Image<Image.Text> image = Image.configure(properties, "a=1\nb=2\n", "a=1\nb=3\n", 0);
+    Files.writeString(mount.resolve("example.properties"), "a=9\nb=2\n");
+
+    Scrutiny<Image.Text> scrutiny = image.scrutinize();
+
+    assertEquals(new Scrutiny.Pass<>(image.after()), scrutiny);
+  }
+
+  @Test
+  void configuration_failsWithTheCurrentText_whenItsLinesChanged_andWithoutOne_whenTheFileIsGone()
+      throws IOException {
+    Relative.Root properties = mount().resolve("example.properties");
+    Path file = mount.resolve("example.properties");
+    Image<Image.Text> image = Image.configure(properties, "a=1\nb=2\n", "a=1\nb=3\n");
+
+    Files.writeString(file, "a=1\nb=9\n");
+    Scrutiny<Image.Text> changed = image.scrutinize();
+    Files.writeString(file, "a=1\r\nb=2\r\n");
+    Scrutiny<Image.Text> otherEndings = image.scrutinize();
+    Files.delete(file);
+    Scrutiny<Image.Text> gone = image.scrutinize();
+
+    assertEquals(new Scrutiny.Fail<>(new Image.Text(Chunk.fragmentsOf("a=1\nb=9\n"))), changed);
+    assertEquals(new Scrutiny.Fail<>(new Image.Text(Chunk.fragmentsOf("a=1\r\nb=2\r\n"))), otherEndings);
+    assertInstanceOf(Scrutiny.Fail.class, gone);
+    assertNull(gone.result());
+  }
+
+  @Test
+  void scrutinize_rejectsWorldScopedFiles_whoseWorldMountIsUnknown() {
+    Relative.World level = Relative.world("level.dat");
+
+    assertThrows(IOException.class, () -> Image.create(level, FIRST).scrutinize());
+    assertThrows(IOException.class, () -> Image.configure(level, "a\n", "b\n").scrutinize());
+  }
+
+  @Test
+  void provision_failsWithTheClaimFound_whenNoManagerHoldsTheReleasedPackage() throws IOException {
+    Image<Image.Claim> released = Image.deprovision(MISSING);
+
+    Scrutiny<Image.Claim> scrutiny = released.scrutinize();
+
+    assertEquals(new Scrutiny.Fail<>(new Image.Claim.Absent()), scrutiny);
+  }
 
   @Test
   void fileFactories_describeExistenceChanges_andPreimagesSwapThem() {

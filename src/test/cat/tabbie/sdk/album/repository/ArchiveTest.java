@@ -21,6 +21,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +35,7 @@ import cat.tabbie.sdk.TestFixtures.MockRetention;
 import cat.tabbie.sdk.TestFixtures.MockSource;
 import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.album.revision.Intermediate;
+import cat.tabbie.sdk.album.revision.Scrutiny;
 import cat.tabbie.sdk.api.Observer;
 import cat.tabbie.sdk.platform.Relative;
 
@@ -164,10 +167,10 @@ class ArchiveTest {
   void inspect_scrutinizesToAPass_withTheEntriesOfACollapse() throws IOException {
     MockSource archive = source("pack.zip", zip(entries("assets/a.txt", "alpha", "b.txt", "")));
 
-    Intermediate.Scrutiny<List<Archive.Entry>> scrutiny = scrutinize(Archive.DEFAULT.inspect(archive), scratch);
+    Scrutiny<List<Archive.Entry>> scrutiny = scrutinize(Archive.DEFAULT.inspect(archive), scratch);
     List<Archive.Entry> found = collapse(Archive.DEFAULT.inspect(archive), scratch);
 
-    assertEquals(new Intermediate.Scrutiny.Pass<>(found), scrutiny);
+    assertEquals(new Scrutiny.Pass<>(found), scrutiny);
   }
 
   @Test
@@ -176,11 +179,11 @@ class ArchiveTest {
     MockRetention collapsed = new MockRetention();
     MockSource archive = source("pack.zip", zip(entries("data/a.txt", "alpha", "b.txt", "")));
 
-    Intermediate.Scrutiny<Set<Image<?>>> scrutiny = scrutinize(
+    Scrutiny<Set<Image<?>>> scrutiny = scrutinize(
         Archive.DEFAULT.unpack(archive, scrutinized, Relative.root("pack")), scratch);
     Set<Image<?>> images = collapse(Archive.DEFAULT.unpack(archive, collapsed, Relative.root("pack")), scratch);
 
-    assertEquals(new Intermediate.Scrutiny.Pass<>(images), scrutiny);
+    assertEquals(new Scrutiny.Pass<>(images), scrutiny);
     assertTrue(images.stream()
         .map(image -> assertInstanceOf(Image.Installation.class, image).after())
         .map(after -> assertInstanceOf(Image.File.Present.class, after).reference())
@@ -205,10 +208,10 @@ class ArchiveTest {
     };
     MockSource archive = source("pack.zip", zip(entries("data/a.txt", "alpha")));
 
-    Intermediate.Scrutiny<Set<Image<?>>> scrutiny = scrutinize(
+    Scrutiny<Set<Image<?>>> scrutiny = scrutinize(
         Archive.DEFAULT.unpack(archive, effectful, Relative.root("pack")), scratch);
 
-    assertEquals(new Intermediate.Scrutiny.Mock<>(), scrutiny);
+    assertEquals(new Scrutiny.Mock<>(), scrutiny);
     assertEquals(0, retention.captures());
   }
 
@@ -221,6 +224,68 @@ class ArchiveTest {
 
     assertEquals(0, archive.opens());
     assertEquals(0, retention.captures());
+  }
+
+  @Test
+  void inspectAndUnpack_nameTheirArchive_andWhereItUnpacks() throws IOException {
+    byte[] content = zip(entries("data/a.txt", "alpha", "b.txt", ""));
+    MockSource declared = new MockSource(new Reference.Pending("pack.zip", null, (long) content.length), content);
+    MockSource undeclared = source("pack.zip", content);
+    List<Archive.Entry> found = collapse(Archive.DEFAULT.inspect(undeclared), scratch);
+
+    String sized = assertInstanceOf(Intermediate.Step.class, Archive.DEFAULT.inspect(declared)).name();
+    String unsized = assertInstanceOf(Intermediate.Step.class, Archive.DEFAULT.inspect(undeclared)).name();
+    String unpack = new Archive.Unpack(new MockRetention(), Relative.world("datapacks", "x"), found, Archive.DEFAULT)
+        .name();
+
+    assertEquals("Inspect pack.zip (" + Archive.Operand.BYTE.render(content.length) + ")", sized);
+    assertEquals("Inspect pack.zip", unsized);
+    assertEquals("Unpack 2 files from pack.zip into world:/datapacks/x", unpack);
+  }
+
+  @Test
+  void unpack_reportsItsProgressAndOutcome_toTheContextObserver() throws IOException {
+    byte[] content = zip(entries("data/a.txt", "alpha", "b.txt", "", "c.txt", "gamma"));
+    MockSource archive = new MockSource(new Reference.Pending("pack.zip", null, (long) content.length), content);
+    Recorder recorder = new Recorder();
+
+    Archive.DEFAULT.unpack(archive, new MockRetention(), Relative.root("pack"))
+        .collapse(new Intermediate.Step.Context.Default(scratch, recorder));
+
+    String copied = "pack.zip  " + Archive.Operand.BYTE.render(content.length);
+    assertEquals(List.of(copied, copied), rendered(recorder.transfers, "pack.zip", Archive.Operand.BYTE));
+    assertEquals(List.of(1, 2, 3), completed(recorder.transfers, Archive.Operand.ENTRY));
+    assertEquals(List.of("data/a.txt  5 B"), rendered(recorder.transfers, "data/a.txt", Archive.Operand.BYTE));
+    assertEquals(List.of(1, 2, 3), completed(recorder.transfers, Archive.Operand.FILE));
+    assertEquals(List.of("pack.zip  3 files", "pack.zip  3 files"),
+        recorder.verified.stream().map(Archive.Observe::render).toList());
+    assertTrue(recorder.failures.isEmpty());
+  }
+
+  @Test
+  void inspect_reportsTheFailureThatEndedIt_withoutAnOutcome() {
+    Recorder recorder = new Recorder();
+    MockSource corrupt = source("pack.zip", bytes("this is not a zip archive"));
+
+    IOException thrown = assertThrows(IOException.class,
+        () -> Archive.DEFAULT.inspect(corrupt).collapse(new Intermediate.Step.Context.Default(scratch, recorder)));
+
+    assertEquals(List.of(thrown), recorder.failures);
+    assertTrue(recorder.verified.isEmpty());
+  }
+
+  @Test
+  void observe_rendersProgressAgainstItsTotal_andAnOutcomeAlone() {
+    Archive.Observe<Long> bytes = new Archive.Observe<>("pack.zip", 1L << 20, 4L << 20, Archive.Operand.BYTE,
+        Duration.ZERO);
+    Archive.Observe<Integer> entries = new Archive.Observe<>("pack.zip", 3, 40, Archive.Operand.ENTRY, Duration.ZERO);
+    Archive.Observe<Integer> outcome = new Archive.Observe<>("pack.zip", 1, 1, Archive.Operand.FILE, Duration.ZERO);
+
+    assertEquals("pack.zip  1.0 MiB of 4.0 MiB (25%)", bytes.render());
+    assertEquals("pack.zip  3 entries of 40 entries (7%)", entries.render());
+    assertEquals("pack.zip  1 file", outcome.render());
+    assertThrows(IllegalArgumentException.class,
+        () -> new Archive.Observe<>("pack.zip", -1, 1, Archive.Operand.FILE, Duration.ZERO));
   }
 
   @Test
@@ -313,6 +378,51 @@ class ArchiveTest {
   private static byte[] readAll(Describe describe) throws IOException {
     try (InputStream input = describe.open()) {
       return input.readAllBytes();
+    }
+  }
+
+  private static List<String> rendered(List<Archive.Observe<?>> reports, String subject, Archive.Operand unit) {
+    return reports.stream()
+        .filter(report -> report.subject().equals(subject) && report.unit() == unit)
+        .map(Archive.Observe::render)
+        .toList();
+  }
+
+  private static List<Number> completed(List<Archive.Observe<?>> reports, Archive.Operand unit) {
+    return reports.stream()
+        .filter(report -> report.unit() == unit)
+        .<Number>map(Archive.Observe::completed)
+        .toList();
+  }
+
+  /**
+   * A context observer recording the archive reports it receives.
+   */
+  private static final class Recorder implements Observer<Observer.Renderable, Observer.Renderable> {
+
+    final List<Archive.Observe<?>> transfers = new ArrayList<>();
+
+    final List<Archive.Observe<?>> verified = new ArrayList<>();
+
+    final List<Exception> failures = new ArrayList<>();
+
+    @Override
+    public void transfer(Observer.Renderable transfer) {
+      if (transfer instanceof Archive.Observe<?> observe) {
+        transfers.add(observe);
+      }
+    }
+
+    @Override
+    public void verified(Observer.Renderable observe) {
+      if (observe instanceof Archive.Observe<?> outcome) {
+        verified.add(outcome);
+      }
+    }
+
+    @Override
+    public void failed(Exception failure) {
+      failures.add(failure);
     }
   }
 

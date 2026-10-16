@@ -1,6 +1,13 @@
 package cat.tabbie.sdk.album.revision;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.Serial;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -11,22 +18,47 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import cat.tabbie.sdk.album.repository.Extract;
 import cat.tabbie.sdk.album.repository.Reference;
+import cat.tabbie.sdk.api.Observer;
+import cat.tabbie.sdk.platform.Command;
 import cat.tabbie.sdk.platform.Package;
 import cat.tabbie.sdk.platform.Package.Manager;
 import cat.tabbie.sdk.platform.Relative;
+import cat.tabbie.sdk.platform.Toolchain;
 import lombok.NonNull;
 
 /**
  * An immutable description of a change to a file's existence, a text file's
- * content, or a package claim. Images perform no I/O and track no filesystem
- * metadata. The preimage exchanges before and after states; checking and
- * applying either description belongs to its consumer. A replacement does not
- * authorize overwriting observed content.
+ * content, or a package claim. Describing an image performs no I/O, and images
+ * track no filesystem metadata. The preimage exchanges before and after
+ * states. Scrutinizing either description reads its target without changing
+ * it; applying it belongs to its consumer. A replacement does not authorize
+ * overwriting observed content.
  *
  * @param <State> underlying existence, content, or claim state
  */
 public sealed interface Image<State extends Image.Alteration> {
+
+  /**
+   * Scrutinizes this image against its target as it is now, without changing
+   * it: whether the target is in this image's before state and acting could
+   * bring it to the after state. A target that no longer matches fails rather
+   * than throws; {@link Scrutiny.Fail} lists what fails each kind of image.
+   *
+   * @return pass carrying the after state, or failure carrying the state found,
+   *         or null when the found state cannot be described
+   * @throws IOException when the target cannot be checked, including a
+   *                     world-scoped file whose world mount is not known
+   *
+   * @apiNote A file target is read at its {@link Relative#relativePath() native
+   *          relative path}, beneath the managed installation's working
+   *          directory. World-scoped paths are resolved beneath the context
+   *          mount first, as
+   *          {@link cat.tabbie.sdk.merchant.Installer.Context#resolve(Relative)
+   *          Installer.Context.resolve} does.
+   */
+  Scrutiny<State> scrutinize() throws IOException;
 
   /**
    * Target this image changes
@@ -360,6 +392,106 @@ public sealed interface Image<State extends Image.Alteration> {
   }
 
   /**
+   * Locates a file target on this machine. Context-scoped paths lie beneath the
+   * managed installation's working directory; world-scoped paths cannot be
+   * located without their world mount.
+   *
+   * @param target target file
+   * @return native relative path
+   * @throws IOException when the target is world-scoped
+   */
+  private static Path locate(Target.File target) throws IOException {
+    return switch (target.relative()) {
+      case Relative.Root root -> root.relativePath();
+      case Relative.World world -> throw new IOException(
+          "A world-scoped file must be resolved beneath the context mount to be scrutinized: " + world.encoded());
+    };
+  }
+
+  /**
+   * Observes a file's existence and complete content, digesting the content
+   * without retaining it.
+   *
+   * @param path     located file
+   * @param fileName name the found content is described under
+   * @return found state, or empty when the path is neither a file nor absent,
+   *         such as a directory
+   * @throws IOException when the file cannot be read
+   */
+  private static Optional<File> observe(Path path, String fileName) throws IOException {
+    if (Files.isRegularFile(path)) {
+      try (InputStream input = Files.newInputStream(path)) {
+        return Optional.of(new File.Present(Extract.transfer(
+            new Reference.Pending(fileName), input, OutputStream.nullOutputStream(), Observer.none())));
+      }
+    }
+    return Files.exists(path)
+        ? Optional.empty()
+        : Optional.of(new File.Absent());
+  }
+
+  /**
+   * Whether a file could be written at a path: an existing file must be
+   * writable, and its nearest existing ancestor must be a writable directory
+   * rather than a file used as one.
+   *
+   * @param path located file
+   * @return whether the path is writable
+   */
+  private static boolean writable(Path path) {
+    if (Files.exists(path) && !Files.isWritable(path)) {
+      return false;
+    }
+    Path ancestor = path.toAbsolutePath().getParent();
+    while (ancestor != null && !Files.exists(ancestor)) {
+      ancestor = ancestor.getParent();
+    }
+    return ancestor != null && Files.isDirectory(ancestor) && Files.isWritable(ancestor);
+  }
+
+  /**
+   * Runs a read-only package manager check, such as its probe or a verify,
+   * without a shell, input, or output.
+   *
+   * @param command literal check
+   * @return whether the program started and exited with status 0; a program
+   *         that cannot start is absent
+   * @throws IOException when interrupted while waiting for the check
+   */
+  private static boolean succeeds(Command command) throws IOException {
+    List<String> line = command.render(new Command.Resolver() {
+
+      @Override
+      public Path path(@NonNull Relative relative) {
+        throw new IllegalArgumentException("A package manager check names no scoped path.");
+      }
+
+      @Override
+      public Path toolchain(@NonNull Toolchain toolchain) {
+        throw new IllegalArgumentException("A package manager check names no toolchain.");
+      }
+    });
+    Process process;
+    try {
+      process = new ProcessBuilder(line)
+          .redirectErrorStream(true)
+          .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+          .start();
+    } catch (IOException exception) {
+      return false;
+    }
+    try {
+      // End of input, so a check that prompts cannot wait on it
+      process.getOutputStream().close();
+      return process.waitFor() == 0;
+    } catch (InterruptedException exception) {
+      process.destroy();
+      Thread.currentThread().interrupt();
+      throw new IOException("Interrupted while running " + line.getFirst(), exception);
+    }
+  }
+
+  /**
    * Folds sequentially applied sets into the minimal set with the same net
    * effect. Targets whose changes cancel out disappear.
    *
@@ -550,6 +682,12 @@ public sealed interface Image<State extends Image.Alteration> {
    * Creates, deletes, or replaces a whole file. Both sides may be present, but
    * both sides may not be absent. Equal references describe an unchanged file.
    *
+   * <p>
+   * Scrutinizing it digests the file without retaining it. It passes when the
+   * file's absence, or its digest and size, match the before state and the
+   * path can be written. Whether the after content is still retained is the
+   * consumer's check, since an image does not know its retention backend.
+   *
    * @param before complete content or absence expected before the change
    * @param after  complete content or absence described after the change
    * @param target target file
@@ -573,12 +711,34 @@ public sealed interface Image<State extends Image.Alteration> {
     public Installation preimage() {
       return new Installation(after, before, target);
     }
+
+    @Override
+    public Scrutiny<File> scrutinize() throws IOException {
+      Path path = locate(target);
+      Optional<File> found = observe(path, target.relative().components().getLast());
+      // A directory at the path has no file state to report
+      if (found.isEmpty()) {
+        return new Scrutiny.Fail<>();
+      }
+      if (!same(before, found.get())) {
+        return new Scrutiny.Fail<>(found.get());
+      }
+      return writable(path)
+          ? new Scrutiny.Pass<>(after)
+          : new Scrutiny.Fail<>();
+    }
   }
 
   /**
    * Changes selected ranges of an existing text file, stored as corresponding
    * chunks. A configuration never creates or deletes a file; an installation
    * does.
+   *
+   * <p>
+   * Scrutinizing it reads the file as UTF-8 text. It passes when each chunk's
+   * before fragment matches the file's lines at its range, exact endings
+   * included; lines outside every chunk are not compared. A failure carries the
+   * file's complete current text, or nothing when the file is gone.
    *
    * @param chunks text changes
    * @param target target file
@@ -632,12 +792,38 @@ public sealed interface Image<State extends Image.Alteration> {
               .toList(),
           target);
     }
+
+    @Override
+    public Scrutiny<Text> scrutinize() throws IOException {
+      Path path = locate(target);
+      if (!Files.isRegularFile(path)) {
+        return new Scrutiny.Fail<>();
+      }
+      String text = Files.readString(path, StandardCharsets.UTF_8);
+      List<Chunk.Change.Line> lines = Chunk.linesOf(text);
+      boolean matches = chunks.stream()
+          .map(Chunk::before)
+          .allMatch(fragment -> fragment.range().end() <= lines.size()
+              && lines.subList(fragment.range().start(), fragment.range().end()).equals(fragment.lines()));
+      return matches
+          ? new Scrutiny.Pass<>(after())
+          : new Scrutiny.Fail<>(new Text(Chunk.fragmentsOf(text)));
+    }
   }
 
   /**
    * Takes or releases a package claim. Both sides may not be absent. When both
    * sides carry options, at least one manager must appear on both sides, so the
    * change can be undone with the manager that made it.
+   *
+   * <p>
+   * Scrutinizing it runs the verify command of each manager carrying the
+   * package. A claim is held when one of them reports the package installed
+   * through its own spelling; a package another manager installed is not
+   * claimed. It passes when that matches the before state and a manager on
+   * this machine, as its probe reports, can make the change: any manager
+   * carrying the package takes a claim, and a held claim changes through a
+   * manager holding it.
    *
    * @param before claim expected before the change
    * @param after  claim described after the change
@@ -676,6 +862,33 @@ public sealed interface Image<State extends Image.Alteration> {
     @Override
     public @NonNull Image<Claim> preimage() {
       return new Provision(after, before, target);
+    }
+
+    @Override
+    public Scrutiny<Claim> scrutinize() throws IOException {
+      Package pack = target.pkg();
+      List<Manager> carrying = pack.specifications().keySet().stream()
+          .sorted()
+          .toList();
+      // Each manager verifies its own spelling, since another manager's install is not tabbie's claim
+      List<Manager> holding = new ArrayList<>();
+      for (Manager manager : carrying) {
+        if (succeeds(manager.verify(pack.specifications().get(manager)))) {
+          holding.add(manager);
+        }
+      }
+      Claim found = holding.isEmpty()
+          ? new Claim.Absent()
+          : new Claim.Present();
+      if (!same(before, found)) {
+        return new Scrutiny.Fail<>(found);
+      }
+      for (Manager manager : before instanceof Claim.Absent ? carrying : holding) {
+        if (succeeds(manager.probe())) {
+          return new Scrutiny.Pass<>(after);
+        }
+      }
+      return new Scrutiny.Fail<>();
     }
   }
 

@@ -1,10 +1,19 @@
 package cat.tabbie.sdk.api;
 
+import java.time.Duration;
+
+import lombok.NonNull;
+
 /**
  * Callbacks reporting the progress and outcome of one observed operation, such
  * as a content capture. Every callback defaults to doing nothing, so observers
  * override only what they need. Callbacks run on the operation's thread and
  * must not throw.
+ *
+ * <p>
+ * An operation that takes an observer directly reports its own shapes to it.
+ * Intermediate steps report to their context's observer instead, which accepts
+ * any {@link Renderable} report, since every step in the work shares it.
  *
  * @param <Observe>  verified outcome type
  * @param <Transfer> progress report type
@@ -54,5 +63,29 @@ public interface Observer<Observe, Transfer> {
    * @param observe verified outcome
    */
   default void verified(Observe observe) {
+  }
+
+  /**
+   * A report any observer can show without knowing its shape. An observer
+   * that knows a reporter's own record type may match on it for the full
+   * shape.
+   */
+  interface Renderable {
+
+    /**
+     * Renders this report as one line, leaving out its duration.
+     *
+     * @return human-readable report
+     */
+    @NonNull
+    String render();
+
+    /**
+     * Time the reporting operation has taken so far.
+     *
+     * @return elapsed time
+     */
+    @NonNull
+    Duration duration();
   }
 }

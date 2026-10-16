@@ -8,7 +8,8 @@
  * execution context.
  *
  * <p>
- * Checking an image against observed state and applying it belong to the
- * consumer.
+ * Scrutinizing an image checks it against its target as it is now, reading
+ * files and running package managers' read-only checks without changing
+ * anything. Applying it belongs to the consumer.
  */
 package cat.tabbie.sdk.album.revision;

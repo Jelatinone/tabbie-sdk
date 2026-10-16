@@ -9,7 +9,8 @@ import lombok.NonNull;
  * A particular machine: its platform and the package managers available on
  * it, in preference order. Two hosts of one platform may have different
  * managers. Executors detect the managers on their own machine by running each
- * manager's {@link Manager#probe()}; nothing in the SDK inspects a machine.
+ * manager's {@link Manager#probe()}. Within the SDK, only scrutinizing a
+ * provision inspects a machine, probing the managers its recipe names.
  *
  * @param platform kernel and architecture
  * @param managers available package managers, most preferred first, without

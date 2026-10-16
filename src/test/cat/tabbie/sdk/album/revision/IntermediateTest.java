@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
-import cat.tabbie.sdk.album.revision.Intermediate.Scrutiny;
 import cat.tabbie.sdk.api.Observer;
 
 class IntermediateTest {

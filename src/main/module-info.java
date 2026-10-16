@@ -2,8 +2,9 @@
  * Tabbie's software development kit: the contracts that Tabbie's core, its
  * local executor, its command line, and third-party providers share. The SDK
  * describes catalogs, content, targets, and changes; it never writes to a
- * target installation, launches processes, or inspects a machine. Carrying out
- * its descriptions belongs to the consumer.
+ * target installation. Only scrutinizing an image inspects a machine: it reads
+ * the image's target, and runs package managers' read-only checks for a
+ * provision. Carrying out its descriptions belongs to the consumer.
  *
  * <p>
  * Every package is exported. Lombok is a compile-time dependency only;

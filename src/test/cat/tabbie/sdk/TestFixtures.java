@@ -22,6 +22,7 @@ import cat.tabbie.sdk.album.repository.Describe;
 import cat.tabbie.sdk.album.repository.Extract;
 import cat.tabbie.sdk.album.repository.Reference;
 import cat.tabbie.sdk.album.revision.Intermediate;
+import cat.tabbie.sdk.album.revision.Scrutiny;
 import cat.tabbie.sdk.api.Observer;
 import cat.tabbie.sdk.merchant.Provider;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
@@ -132,7 +133,7 @@ public final class TestFixtures {
   /**
    * Scrutinizes work with a scratch directory and no observer.
    */
-  public static <T> Intermediate.Scrutiny<T> scrutinize(Intermediate<T> work, Path scratch) throws IOException {
+  public static <T> Scrutiny<T> scrutinize(Intermediate<T> work, Path scratch) throws IOException {
     return work.scrutinize(new Intermediate.Step.Context.Default(scratch, Observer.none()));
   }
 
