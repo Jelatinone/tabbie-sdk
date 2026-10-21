@@ -1,5 +1,6 @@
 package cat.tabbie.sdk.album.revision;
 
+import java.io.IOException;
 import java.io.Serial;
 import java.util.Collection;
 import java.util.Collections;
@@ -11,6 +12,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import cat.tabbie.sdk.album.model.Plate;
 import cat.tabbie.sdk.album.repository.Reference;
 import cat.tabbie.sdk.platform.Package;
 import cat.tabbie.sdk.platform.Package.Manager;
@@ -27,6 +29,21 @@ import lombok.NonNull;
  * @param <State> underlying existence, content, or claim state
  */
 public sealed interface Image<State extends Image.Alteration> {
+
+  /**
+   * Exposes this image on a plate: checks that its target is in the before
+   * state, then brings it to the after state through the plate. A target that
+   * no longer matches fails rather than throws, and is left unchanged;
+   * {@link Scrutiny.Fail} lists what fails each kind of image. The same image
+   * exposes alike on a rehearsal's plate and on an acting one.
+   *
+   * @param plate plate the change is carried out on
+   * @return pass carrying the state the target reached, or failure carrying the
+   *         state found, or null when the found state cannot be described
+   * @throws IOException when the target cannot be read or the change fails
+   *                     part-way
+   */
+  Scrutiny<State> expose(@NonNull Plate plate) throws IOException;
 
   /**
    * Target this image changes

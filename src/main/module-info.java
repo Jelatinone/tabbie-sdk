@@ -17,6 +17,7 @@ module cat.tabbie.sdk {
   exports cat.tabbie.sdk.addon.artifact;
   exports cat.tabbie.sdk.album.repository;
   exports cat.tabbie.sdk.album.revision;
+  exports cat.tabbie.sdk.album.model;
   exports cat.tabbie.sdk.api;
   exports cat.tabbie.sdk.merchant;
   exports cat.tabbie.sdk.minecraft;
