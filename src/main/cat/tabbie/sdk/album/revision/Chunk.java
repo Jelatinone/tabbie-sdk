@@ -1,5 +1,6 @@
 package cat.tabbie.sdk.album.revision;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -11,6 +12,7 @@ import java.util.stream.Stream;
 
 import cat.tabbie.sdk.album.revision.Chunk.Change.Line;
 import cat.tabbie.sdk.album.revision.Chunk.Change.Revision;
+import cat.tabbie.sdk.platform.Relative;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NonNull;
@@ -115,6 +117,59 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
   public static List<Fragment> fragmentsOf(@NonNull String text) {
     List<Line> lines = linesOf(text);
     return lines.isEmpty() ? List.of() : List.of(new Fragment(lines, new Range(0, lines.size())));
+  }
+
+  /**
+   * Checks whether chunks apply to complete text: each chunk's before fragment
+   * matches the text's lines at its range, exact endings included. Lines
+   * outside every chunk are not compared.
+   *
+   * @param chunks chunks in file order
+   * @param text   complete text
+   * @return whether every before fragment matches the text
+   */
+  public static boolean matches(@NonNull List<Chunk> chunks, @NonNull String text) {
+    List<Line> lines = linesOf(text);
+    return chunks.stream()
+        .map(Chunk::before)
+        .allMatch(fragment -> fragment.range().end() <= lines.size()
+            && lines.subList(fragment.range().start(), fragment.range().end()).equals(fragment.lines()));
+  }
+
+  /**
+   * Applies chunks to complete text: each chunk's before fragment is replaced
+   * by its after fragment, and lines outside every chunk are unchanged.
+   *
+   * @param chunks chunks in file order
+   * @param text   complete text the chunks {@link #matches(List, String) match}
+   * @return complete resulting text
+   * @throws IllegalArgumentException when the chunks are invalid or do not
+   *                                  match the text
+   */
+  public static String apply(@NonNull List<Chunk> chunks, @NonNull String text) {
+    validateChunks(chunks);
+    if (!matches(chunks, text)) {
+      throw new IllegalArgumentException("Every chunk's before lines must match the text it applies to.");
+    }
+    return project(linesOf(text).toArray(Line[]::new), 0, chunks, Chunk::before, Chunk::after).stream()
+        .map(line -> line.text() + line.ending().getValue())
+        .collect(Collectors.joining());
+  }
+
+  /**
+   * Applies chunks to the content of a folded change.
+   *
+   * @param chunks   chunks to apply
+   * @param text     complete text the chunks must match
+   * @param relative folded file, for the failure message
+   * @return the resulting text as UTF-8
+   * @throws IllegalArgumentException when the chunks do not match the text
+   */
+  private static byte[] applied(List<Chunk> chunks, String text, Relative relative) {
+    if (!Chunk.matches(chunks, text)) {
+      throw new IllegalArgumentException("Changes are discontinuous at %s".formatted(relative));
+    }
+    return Chunk.apply(chunks, text).getBytes(StandardCharsets.UTF_8);
   }
 
   /**

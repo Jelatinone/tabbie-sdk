@@ -27,7 +27,7 @@ public final class Refusal extends FileSystemException {
    * @param reason why
    */
   public Refusal(@NonNull Reason reason) {
-    super(reason.relative().encoded(), reason.message());
+    super(reason.relative().encoded(), reason().above() ? reason().at() : null, reason.message());
     this.reason = reason;
   }
 

@@ -8,35 +8,32 @@ import java.util.function.Function;
 
 import cat.tabbie.sdk.album.model.Plate;
 import cat.tabbie.sdk.album.revision.Intermediate.Step.Effect;
-
 import lombok.NonNull;
 
 /**
- * Immutable unevaluated work that can be collapsed into an exact value when
- * supplied with its required execution context.
+ * Immutable unevaluated work that collapses into a checked result when
+ * supplied with a {@link Plate}.
  *
  * <p>
  * Construction and inspection never invoke callbacks or perform I/O. Collapsing
- * the same intermediate again repeats its effects.
+ * the same intermediate again repeats its effects. Work reaches its targets
+ * only through the plate, so collapsing it against a rehearsal's plate checks
+ * it without changing anything outside scratch space, and collapsing it against
+ * an acting plate carries it out.
  *
- * @param <T> result type
+ * @param <Result> result type
  */
 public sealed interface Intermediate<Result> {
 
   /**
-   * Collapses this intermediate into a scrutinized value, performing any declared
-   * effects using the supplied context. The scrutinized result reflect whether
-   * this step can be verifiably performed.
+   * Collapses this intermediate, performing its declared effects through the
+   * plate and checking them as it goes.
    *
-   * @param context caller-owned execution context
-   * @return collapsed result
-   * @throws IOException when a declared effect fails
-   * 
-   * @apiNote Notably, this method performs should be written identically
-   *          regardless of whether the plate context reflects the real filesystem
-   *          or not.
+   * @param plate caller-owned plate the work is carried out on
+   * @return pass carrying the result, or failure when a check ran and refused
+   * @throws IOException when an effect fails or a check cannot be made
    */
-  Scrutiny<Result> collapse(Plate context) throws IOException;
+  Scrutiny<Result> collapse(@NonNull Plate plate) throws IOException;
 
   /**
    * Describes an already available value.
@@ -113,17 +110,6 @@ public sealed interface Intermediate<Result> {
    */
   static <T> Intermediate<List<T>> group(@NonNull List<? extends Intermediate<? extends T>> elements) {
     return new Cluster<>(elements);
-  }
-
-  /**
-   * Combines independent intermediates that must all pass.
-   *
-   * @param <T>      element type
-   * @param elements independent intermediates
-   * @return intermediate producing an immutable result list in supplied order
-   */
-  static <T> Intermediate<List<T>> all(@NonNull List<? extends Intermediate<? extends T>> elements) {
-    return new All<>(elements);
   }
 
   /**
@@ -245,30 +231,6 @@ public sealed interface Intermediate<Result> {
       }
       // Results may be null, as Intermediate.of(null) is
       return new Scrutiny.Pass<>(Collections.unmodifiableList(results));
-    }
-  }
-
-  /**
-   * Independent intermediates that must all pass. This implementation collapses
-   * them one after another and stops at the first failure; an interpreter may
-   * collapse them concurrently against a thread-safe plate.
-   *
-   * @param <T>      element type
-   * @param elements independent intermediates
-   */
-  record All<T>(@NonNull List<? extends Intermediate<? extends T>> elements)
-      implements Intermediate<List<T>> {
-
-    /**
-     * Copies intermediates without evaluating them.
-     */
-    public All {
-      elements = List.copyOf(elements);
-    }
-
-    @Override
-    public Scrutiny<List<T>> collapse(@NonNull Plate plate) throws IOException {
-      return new Cluster<T>(elements).collapse(plate);
     }
   }
 

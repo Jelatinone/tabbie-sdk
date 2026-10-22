@@ -5,6 +5,7 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -25,6 +26,20 @@ import lombok.NonNull;
  * retention. Implementations document concurrency and limits.
  */
 public interface Extract {
+
+  /**
+   * Reads retained content as UTF-8 text.
+   *
+   * @param repository retention backend
+   * @param content    retained content
+   * @return complete text
+   * @throws IOException when the content is not retained or not UTF-8
+   */
+  private String text(Reference.Captured content) throws IOException {
+    try (InputStream input = repository.retained(content).open()) {
+      return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+    }
+  }
 
   /**
    * Describes capture of a source, verifying and retaining its bytes under its

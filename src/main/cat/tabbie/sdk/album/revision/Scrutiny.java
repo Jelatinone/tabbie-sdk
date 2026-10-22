@@ -1,6 +1,7 @@
 package cat.tabbie.sdk.album.revision;
 
 import cat.tabbie.sdk.album.model.Plate;
+import lombok.NonNull;
 
 /**
  * The checked outcome of collapsing an {@link Intermediate} or exposing an
@@ -33,7 +34,7 @@ public sealed interface Scrutiny<T> {
    * @param <T>    result type
    * @param result produced value
    */
-  record Pass<T>(T result) implements Scrutiny<T> {
+  record Pass<T>(@NonNull T result) implements Scrutiny<T> {
 
   }
 
@@ -64,6 +65,15 @@ public sealed interface Scrutiny<T> {
    *          failure carries no result forward.
    */
   record Fail<T>(T result, Exception failure) implements Scrutiny<T> {
+
+    /**
+     * Describes a failure that produced a result non-exceptionally
+     * 
+     * @param result the state found
+     */
+    public Fail(T result) {
+      this(result, null);
+    }
 
     /**
      * Describes a failure without a result.
