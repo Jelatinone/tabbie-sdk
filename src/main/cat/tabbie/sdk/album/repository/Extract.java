@@ -28,20 +28,6 @@ import lombok.NonNull;
 public interface Extract {
 
   /**
-   * Reads retained content as UTF-8 text.
-   *
-   * @param repository retention backend
-   * @param content    retained content
-   * @return complete text
-   * @throws IOException when the content is not retained or not UTF-8
-   */
-  private String text(Reference.Captured content) throws IOException {
-    try (InputStream input = repository.retained(content).open()) {
-      return new String(input.readAllBytes(), StandardCharsets.UTF_8);
-    }
-  }
-
-  /**
    * Describes capture of a source, verifying and retaining its bytes under its
    * own identity. The source is opened only when the returned intermediate is
    * collapsed or scrutinized, and any expected evidence it declares is
@@ -73,6 +59,20 @@ public interface Extract {
    */
   @NonNull
   Describe retained(@NonNull Reference.Captured reference);
+
+  /**
+   * Reads retained content as UTF-8 text.
+   *
+   * @param repository retention backend
+   * @param content    retained content
+   * @return complete text
+   * @throws IOException when the content is not retained or not UTF-8
+   */
+  public default String text(Reference.Captured content) throws IOException {
+    try (InputStream input = retained(content).open()) {
+      return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+    }
+  }
 
   /**
    * Checks whether the referenced bytes are retained, without acquiring them.

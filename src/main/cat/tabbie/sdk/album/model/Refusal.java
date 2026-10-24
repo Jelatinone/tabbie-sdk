@@ -5,13 +5,20 @@ import java.nio.file.FileSystemException;
 
 import cat.tabbie.sdk.platform.Relative;
 import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
 
 /**
  * Thrown when a plate will not carry out an operation, and changed nothing.
  * {@link #reason()} says why. Failures while reading or writing are other
- * IOExceptions.
+ * {@link java.io.IOException IOExceptions}: a refusal means the plate looked,
+ * and the path or its lease did not allow the operation.
+ *
+ * <p>
+ * Callers that decide whether work passes or fails catch the refusal and
+ * switch over its reason; callers that do not care let it propagate.
  */
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public final class Refusal extends FileSystemException {
@@ -24,15 +31,15 @@ public final class Refusal extends FileSystemException {
   /**
    * Refuses an operation.
    *
-   * @param reason why
+   * @param reason why the plate refused
    */
   public Refusal(@NonNull Reason reason) {
-    super(reason.relative().encoded(), reason().above() ? reason().at() : null, reason.message());
+    super(reason.relative().encoded(), reason.above() ? reason.at().encoded() : null, reason.message());
     this.reason = reason;
   }
 
   /**
-   * Why the plate refused.
+   * Returns why the plate refused.
    *
    * @return refusal reason
    */
@@ -43,15 +50,32 @@ public final class Refusal extends FileSystemException {
   /**
    * What a path holds.
    */
+  @Getter
+  @AllArgsConstructor
+  @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
   public enum Kind {
 
-    ABSENT,
+    /**
+     * Nothing.
+     */
+    ABSENT("nothing"),
 
-    FILE,
+    /**
+     * A regular file.
+     */
+    FILE("a file"),
 
-    DIRECTORY,
+    /**
+     * A directory.
+     */
+    DIRECTORY("a directory"),
 
-    OTHER
+    /**
+     * Something other than a file or directory, such as a dangling link.
+     */
+    OTHER("something other than a file or directory");
+
+    String phrase;
   }
 
   /**
@@ -59,17 +83,37 @@ public final class Refusal extends FileSystemException {
    * the path that decided it: the operation's own path when anything is there,
    * otherwise the nearest existing path above it.
    */
-  public sealed interface Reason {
+  public sealed interface Reason permits Mismatch, Denied, Held {
 
+    /**
+     * Returns the path the operation was on.
+     *
+     * @return operation's path
+     */
     @NonNull
     Relative relative();
 
+    /**
+     * Returns the path that decided the refusal.
+     *
+     * @return the operation's own path, or a path above it
+     */
     @NonNull
     Relative at();
 
+    /**
+     * Describes the refusal as a sentence.
+     *
+     * @return refusal message
+     */
     @NonNull
     String message();
 
+    /**
+     * Whether a path above the operation's path decided the refusal.
+     *
+     * @return true when {@link #at()} is not the operation's own path
+     */
     default boolean above() {
       return !at().equals(relative());
     }
@@ -77,24 +121,37 @@ public final class Refusal extends FileSystemException {
 
   /**
    * The path that decided holds something other than the operation requires
-   * there.
+   * there. Creating requires nothing at the operation's path; reading,
+   * replacing and deleting require a file there; and every existing path above
+   * it must be a directory.
    */
-  public sealed interface Mismatch extends Reason {
+  public sealed interface Mismatch extends Reason permits Missing, Occupied {
 
+    /**
+     * Returns what the operation requires at {@link #at()}.
+     *
+     * @return required kind
+     */
     @NonNull
     Kind required();
 
+    /**
+     * Returns what {@link #at()} holds.
+     *
+     * @return found kind
+     */
     @NonNull
     Kind found();
 
     @Override
     default String message() {
-      return "Expected %s, found %s.".formatted(required(), found());
+      return "Expected %s, found %s.".formatted(required().getPhrase(), found().getPhrase());
     }
   }
 
   /**
-   * Nothing is at the operation's path, which requires a file there.
+   * Nothing is at the operation's path, which requires a file there, and
+   * nothing above it is in the way.
    *
    * @param relative path the operation was on
    */
@@ -117,7 +174,9 @@ public final class Refusal extends FileSystemException {
   }
 
   /**
-   * Something is in the way at the operation's path, or above it.
+   * Something is in the way: a file or directory where a file is to be
+   * created, something other than a file where one is to be read, replaced or
+   * deleted, or something other than a directory above the operation's path.
    *
    * @param relative path the operation was on
    * @param at       path that holds it: the operation's own, or one above it
@@ -164,7 +223,7 @@ public final class Refusal extends FileSystemException {
 
     @Override
     public String message() {
-      return "access denied for this location";
+      return "Writing is not permitted.";
     }
   }
 
@@ -182,7 +241,7 @@ public final class Refusal extends FileSystemException {
 
     @Override
     public String message() {
-      return "lock held for this location";
+      return "Another lease holds the path.";
     }
   }
 }

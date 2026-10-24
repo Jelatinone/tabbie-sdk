@@ -71,7 +71,7 @@ public sealed interface Scrutiny<T> {
      * 
      * @param result the state found
      */
-    public Fail(T result) {
+    public Fail(@NonNull T result) {
       this(result, null);
     }
 
