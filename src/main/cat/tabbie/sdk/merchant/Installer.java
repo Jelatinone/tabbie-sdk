@@ -3,7 +3,6 @@ package cat.tabbie.sdk.merchant;
 import java.io.IOException;
 import java.util.Set;
 
-import cat.tabbie.sdk.album.repository.Extract;
 import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.minecraft.Label;
@@ -12,9 +11,10 @@ import cat.tabbie.sdk.platform.Relative;
 import lombok.NonNull;
 
 /**
- * Describes content without applying it. Installers capture bytes into the
- * caller's retention backend and describe changes; they never write to the
- * target installation filesystem or launch processes.
+ * Describes content without applying it. Installers describe captures of
+ * content and the images that place it; the captures run in the stash of the
+ * {@link cat.tabbie.sdk.album.model.Plate Plate} the result is collapsed on.
+ * They never write to the Cat's files or launch processes.
  *
  * @param <Contextual> accepted target context
  */
@@ -31,8 +31,9 @@ public interface Installer<Contextual extends Installer.Context> {
   Intermediate<Set<Image<?>>> install(@NonNull Contextual context) throws IOException;
 
   /**
-   * Selected target, logical mounts, and caller-owned retention, independent of
-   * physical paths.
+   * Selected target and logical mounts, independent of physical paths. A
+   * context carries no stash: captures run on the plate that collapses the
+   * installer's result.
    */
   interface Context {
 
@@ -52,14 +53,6 @@ public interface Installer<Contextual extends Installer.Context> {
      */
     @NonNull
     Platform platform();
-
-    /**
-     * Returns the caller-owned retention backend receiving captures.
-     *
-     * @return caller-owned retention backend
-     */
-    @NonNull
-    Extract repository();
 
     /**
      * Returns the context mount relative to the installation's working
