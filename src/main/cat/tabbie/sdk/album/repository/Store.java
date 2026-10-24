@@ -3,15 +3,14 @@ package cat.tabbie.sdk.album.repository;
 import java.io.IOException;
 
 /**
- * A complete repository combining both content roles: it describes its own
- * primary content ({@link Describe}) and retains other described content
- * ({@link Extract}), reopening retained bytes with
- * {@link Extract#retained(Reference.Captured)}. Contracts that need only one
- * role hold a {@link Describe} or an {@link Extract} rather than a store.
- * Implementations may acquire remote, local, cached, or generated content and
- * document their concurrency, limits, and retention lifetime.
+ * A source with a lifetime: it describes its own primary content
+ * ({@link Describe}) and may hold resources, such as a cache or a connection,
+ * until it is closed. Retaining content is not its role; work captures through
+ * the {@link Stash} of the plate it runs on. Implementations may acquire
+ * remote, local, cached, or generated content and document their concurrency,
+ * limits, and lifetime.
  */
-public interface Store extends AutoCloseable, Describe, Extract {
+public interface Store extends AutoCloseable, Describe {
 
   /**
    * Checks whether primary content is already locally available, without

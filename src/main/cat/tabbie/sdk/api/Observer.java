@@ -1,7 +1,5 @@
 package cat.tabbie.sdk.api;
 
-import java.time.Duration;
-
 import lombok.NonNull;
 
 /**
@@ -68,24 +66,16 @@ public interface Observer<Observe, Transfer> {
   /**
    * A report any observer can show without knowing its shape. An observer
    * that knows a reporter's own record type may match on it for the full
-   * shape.
+   * shape. Reports carry no timing; whoever runs the work times its steps.
    */
   interface Renderable {
 
     /**
-     * Renders this report as one line, leaving out its duration.
+     * Renders this report as one line.
      *
      * @return human-readable report
      */
     @NonNull
     String render();
-
-    /**
-     * Time the reporting operation has taken so far.
-     *
-     * @return elapsed time
-     */
-    @NonNull
-    Duration duration();
   }
 }

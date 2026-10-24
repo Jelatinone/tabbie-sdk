@@ -10,15 +10,20 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 
+import cat.tabbie.sdk.album.model.Plate;
 import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.album.revision.Intermediate;
+import cat.tabbie.sdk.album.revision.Scrutiny;
+import cat.tabbie.sdk.api.Observer;
 import cat.tabbie.sdk.platform.Relative;
 import lombok.NonNull;
 
@@ -58,52 +63,72 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * filesystem metadata are not installed.
    *
    * <p>
-   * Streams opened during execution are closed; the archive description and
-   * retention backend stay caller-owned. The archive is read twice, once to
-   * inspect it and once to capture its file entries, so it should describe
-   * already retained bytes rather than a remote source.
+   * The archive is read twice, once to inspect it and once to capture its file
+   * entries, so it must already be retained: both reopen it from the stash of
+   * the plate that collapses the result, and its entries are captured into the
+   * same stash. Streams opened during execution are closed.
    *
-   * @param archive     retained archive, typically
-   *                    {@link Extract#retained(Reference.Captured)}
-   * @param into        retention backend for the extracted entries
+   * @param archive     retained archive
    * @param destination logical extraction directory
    * @return unevaluated image preparation producing an immutable set
    */
-  public Intermediate<Set<Image<?>>> unpack(@NonNull Describe archive, @NonNull Extract into,
-      @NonNull Relative destination) {
-    return inspect(archive).flatMap(found -> new Unpack(into, destination, found, this));
+  public Intermediate<Set<Image<?>>> unpack(@NonNull Reference.Captured archive, @NonNull Relative destination) {
+    return inspect(archive).flatMap(found -> new Unpack(destination, found, this));
   }
 
   /**
    * Describes explicit central-directory inspection using execution-owned
    * scratch space, independent of extraction.
    *
-   * @param archive archive description
+   * @param archive retained archive
    * @return unevaluated inspection, producing the archive's file entries
    */
-  public Intermediate<List<Entry>> inspect(@NonNull Describe archive) {
+  public Intermediate<List<Entry>> inspect(@NonNull Reference.Captured archive) {
     return new Inspect(archive, this);
   }
 
   /**
    * Explicit central-directory inspection using execution-owned scratch space.
-   * Scrutinizing it performs the inspection, since it only uses scratch space.
+   * It touches only scratch space, so it runs alike while rehearsing and
+   * acting.
    *
-   * @param archive archive description
+   * <p>
+   * It reports to the plate's observer as it runs: a {@link Stash.Transfer} as
+   * the archive is copied into scratch space; then an {@link Observe} for each
+   * central-directory entry as it is checked; then the file entries found, or
+   * the failure that ended it.
+   *
+   * @param archive retained archive, reopened from the plate's stash
    * @param limits  processing bounds
    */
-  record Inspect(Describe archive, Archive limits) implements Intermediate.Step<List<Entry>> {
+  record Inspect(Reference.Captured archive, Archive limits) implements Intermediate.Step<List<Entry>> {
+
     @Override
-    public List<Entry> collapse(Step.Context context) throws IOException {
-      Reference.Pending pending = archive.of();
-      if (pending.expectedSize() != null && pending.expectedSize() > limits.archiveBytes()) {
+    public String name() {
+      return String.format("Inspect %s (%s)", archive.fileName(), Operand.BYTE.render(archive.size()));
+    }
+
+    @Override
+    public Scrutiny<List<Entry>> collapse(@NonNull Plate plate) throws IOException {
+      try {
+        List<Entry> found = scan(plate);
+        plate.observer().verified(
+            new Observe<>(archive.fileName(), found.size(), found.size(), Operand.FILE));
+        return new Scrutiny.Pass<>(found);
+      } catch (IOException | RuntimeException failure) {
+        plate.observer().failed(failure);
+        throw failure;
+      }
+    }
+
+    private List<Entry> scan(Plate plate) throws IOException {
+      if (archive.size() > limits.archiveBytes()) {
         throw new IOException("ZIP byte limit exceeded.");
       }
-      Path scratch = Files.createTempFile(context.scratch(), "tabbie-archive-", ".zip");
+      Describe source = plate.retained(archive);
+      Path scratch = Files.createTempFile(plate.scratch(), "tabbie-archive-", ".zip");
       try {
-        try (InputStream input = archive.open(); OutputStream output = Files.newOutputStream(scratch)) {
-          bound(input, limits.archiveBytes()).transferTo(output);
-        }
+        limits.copy(source, scratch, plate);
         try (ZipFile zip = new ZipFile(scratch.toFile())) {
           if (zip.size() > limits.entries()) {
             throw new IOException("ZIP entry limit exceeded.");
@@ -112,6 +137,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
           List<ZipEntry> files = new ArrayList<>();
           Map<String, Long> sizes = new HashMap<>();
           long expanded = 0;
+          int checked = 0;
           var iterator = zip.entries();
           while (iterator.hasMoreElements()) {
             ZipEntry entry = iterator.nextElement();
@@ -130,6 +156,8 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
             } else {
               files.add(entry);
             }
+            plate.observer().transfer(
+                new Observe<>(archive.fileName(), ++checked, zip.size(), Operand.ENTRY));
           }
           for (List<String> path : paths.keySet()) {
             for (int depth = path.size() - 1; depth > 0; depth--) {
@@ -144,7 +172,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
           Map<String, Long> catalog = Map.copyOf(sizes);
           List<Entry> result = new ArrayList<>();
           for (ZipEntry entry : files) {
-            result.add(new Entry(archive, entry.getName(), entry.getSize(), entry.getCrc(), catalog));
+            result.add(new Entry(source, entry.getName(), entry.getSize(), entry.getCrc(), catalog));
           }
           return List.copyOf(result);
         } catch (IllegalArgumentException failure) {
@@ -154,61 +182,65 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
         Files.deleteIfExists(scratch);
       }
     }
-
-    @Override
-    public Scrutiny<List<Entry>> scrutinize(Step.Context context) throws IOException {
-      return new Scrutiny.Pass<>(collapse(context));
-    }
   }
 
   /**
    * Extraction effect over every inspected file entry, producing the complete
    * immutable image set. It reads the archive once into execution-owned
-   * scratch space and captures each file entry through a repeatable
-   * description of that copy, checking it against the inspected catalog and
-   * each entry's size and CRC. Scrutinizing it scrutinizes each capture instead,
-   * failing when any capture fails and mocking when any capture mocks.
+   * scratch space and captures each file entry into the plate's stash through
+   * a repeatable description of that copy, checking it against the inspected
+   * catalog and each entry's size and CRC. A capture that fails throws.
    *
-   * @param into        retention backend for the archive's entries
+   * <p>
+   * It reports to the plate's observer as it runs: a {@link Stash.Transfer} as
+   * the archive is copied into scratch space, and as each entry's capture reads
+   * it, when the stash reports them; an {@link Observe} for each file once its
+   * capture completes; then the files unpacked, or the failure that ended it.
+   *
    * @param destination logical extraction directory
    * @param entries     inspected file entries of one archive, at least one
    * @param limits      processing bounds
    */
-  record Unpack(Extract into, Relative destination, List<Entry> entries, Archive limits)
+  record Unpack(Relative destination, List<Entry> entries, Archive limits)
       implements Intermediate.Step<Set<Image<?>>> {
+
     @Override
-    public Set<Image<?>> collapse(Step.Context context) throws IOException {
-      Path scratch = Files.createTempFile(context.scratch(), "tabbie-archive-", ".zip");
-      try (ZipFile zip = copy(scratch)) {
-        return extract(zip).collapse(context);
-      } finally {
-        Files.deleteIfExists(scratch);
-      }
+    public String name() {
+      return String.format("Unpack %s from %s into %s", Operand.FILE.render(entries.size()),
+          entries.getFirst().archive().of().fileName(), destination.encoded());
     }
 
     @Override
-    public Scrutiny<Set<Image<?>>> scrutinize(Step.Context context) throws IOException {
-      Path scratch = Files.createTempFile(context.scratch(), "tabbie-archive-", ".zip");
-      try (ZipFile zip = copy(scratch)) {
-        return extract(zip).scrutinize(context);
-      } finally {
-        Files.deleteIfExists(scratch);
+    public Scrutiny<Set<Image<?>>> collapse(@NonNull Plate plate) throws IOException {
+      try {
+        Path scratch = Files.createTempFile(plate.scratch(), "tabbie-archive-", ".zip");
+        try (ZipFile zip = open(scratch, plate)) {
+          Set<Image<?>> unpacked = validated(extract(zip, plate));
+          plate.observer().verified(files(unpacked.size()));
+          return new Scrutiny.Pass<>(unpacked);
+        } finally {
+          Files.deleteIfExists(scratch);
+        }
+      } catch (IOException | RuntimeException failure) {
+        plate.observer().failed(failure);
+        throw failure;
       }
     }
 
-    private ZipFile copy(Path scratch) throws IOException {
-      Describe archive = entries.getFirst().archive();
-      try (InputStream input = archive.open(); OutputStream output = Files.newOutputStream(scratch)) {
-        bound(input, limits.archiveBytes()).transferTo(output);
-      }
+    private ZipFile open(Path scratch, Plate plate) throws IOException {
+      limits.copy(entries.getFirst().archive(), scratch, plate);
       return new ZipFile(scratch.toFile());
     }
 
-    private Intermediate<Set<Image<?>>> extract(ZipFile zip) throws IOException {
+    private Observe<Integer> files(int completed) {
+      return new Observe<>(entries.getFirst().archive().of().fileName(), completed, entries.size(), Operand.FILE);
+    }
+
+    private List<Image<?>> extract(ZipFile zip, Plate plate) throws IOException {
       if (zip.size() != entries.getFirst().catalog().size()) {
         throw new IOException("ZIP entries differ from the inspected catalog.");
       }
-      List<Intermediate<Image<?>>> images = new ArrayList<>();
+      List<Image<?>> images = new ArrayList<>(entries.size());
       for (Entry entry : entries) {
         ZipEntry found = zip.getEntry(entry.path());
         if (found == null || found.isDirectory() || found.getSize() != entry.size()
@@ -226,10 +258,18 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
             return entry.entryStream(zip.getInputStream(found));
           }
         };
+        Observer<Reference.Captured, Stash.Transfer> read = new Observer<>() {
+
+          @Override
+          public void transfer(Stash.Transfer transfer) {
+            plate.observer().transfer(transfer);
+          }
+        };
         Relative target = destination.resolve(Relative.decode(entry.path()));
-        images.add(into.capture(retained).map(captured -> Image.create(target, captured)));
+        images.add(Image.create(target, plate.capture(retained, read)));
+        plate.observer().transfer(files(images.size()));
       }
-      return Intermediate.group(images).map(Unpack::validated);
+      return images;
     }
 
     private static Set<Image<?>> validated(List<Image<?>> images) {
@@ -361,6 +401,28 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
     }
   }
 
+  /**
+   * Copies an archive into scratch space within the compressed byte limit,
+   * reporting each read as a transfer of the archive.
+   */
+  private void copy(Describe archive, Path scratch, Plate plate)
+      throws IOException {
+    Reference.Pending pending = archive.of();
+    OptionalLong total = pending.expectedSize() != null
+        ? OptionalLong.of(pending.expectedSize())
+        : OptionalLong.empty();
+    try (InputStream input = archive.open(); OutputStream output = Files.newOutputStream(scratch)) {
+      InputStream bounded = bound(input, archiveBytes);
+      byte[] buffer = new byte[8192];
+      long copied = 0;
+      for (int read; (read = bounded.read(buffer)) != -1;) {
+        output.write(buffer, 0, read);
+        copied += read;
+        plate.observer().transfer(new Stash.Transfer(pending.fileName(), copied, total));
+      }
+    }
+  }
+
   private static List<String> resolve(String name) throws IOException {
     String value = name.endsWith("/") ? name.substring(0, name.length() - 1) : name;
     try {
@@ -416,5 +478,96 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
         return skipped;
       }
     };
+  }
+
+  /**
+   * Progress or outcome of an archive step, as reported to its plate's
+   * observer: a count of entries or files completed out of a known total.
+   * Bytes are reported as {@link Stash.Transfer transfers} instead. Progress
+   * and outcome share this shape; an outcome has completed its total.
+   *
+   * @param <Count>   counted amount type
+   * @param subject   what the step is working through, such as an archive's
+   *                  file name or an entry's path
+   * @param completed amount completed so far, possibly beyond a total the
+   *                  archive misdeclared
+   * @param total     amount the step works through in all
+   * @param unit      unit both amounts are counted in
+   */
+  public record Observe<Count extends Number>(
+      @NonNull String subject,
+      @NonNull Count completed,
+      @NonNull Count total,
+      @NonNull Operand unit) implements Observer.Renderable {
+
+    /**
+     * Checks non-negative amounts.
+     *
+     * @throws IllegalArgumentException when either amount is negative
+     */
+    public Observe {
+      if (completed.longValue() < 0 || total.longValue() < 0) {
+        throw new IllegalArgumentException("Observed amounts must be non-negative.");
+      }
+    }
+
+    @Override
+    public String render() {
+      long done = completed.longValue();
+      long whole = total.longValue();
+      return done == whole
+          ? String.format("%s  %s", subject, unit.render(done))
+          : String.format(Locale.ROOT, "%s  %s of %s (%d%%)", subject, unit.render(done), unit.render(whole),
+              whole == 0 ? 100 : done * 100 / whole);
+    }
+  }
+
+  /**
+   * Unit an archive step counts its progress in.
+   */
+  public enum Operand {
+
+    /**
+     * Bytes, in the largest binary unit that keeps the count at least one,
+     * such as {@code 3.2 MiB}.
+     */
+    BYTE {
+      @Override
+      public String render(long count) {
+        if (count < 1024) {
+          return count + " B";
+        }
+        int exponent = (63 - Long.numberOfLeadingZeros(count)) / 10;
+        return String.format(Locale.ROOT, "%.1f %ciB", count / Math.pow(1024, exponent), "KMGTPE".charAt(exponent - 1));
+      }
+    },
+
+    /**
+     * Central-directory entries, files and directories alike.
+     */
+    ENTRY {
+      @Override
+      public String render(long count) {
+        return String.format(Locale.ROOT, count == 1 ? "%d entry" : "%d entries", count);
+      }
+    },
+
+    /**
+     * Files.
+     */
+    FILE {
+      @Override
+      public String render(long count) {
+        return String.format(Locale.ROOT, count == 1 ? "%d file" : "%d files", count);
+      }
+    };
+
+    /**
+     * Renders a count in this unit.
+     *
+     * @param count count to render
+     * @return human-readable count
+     */
+    public abstract String render(long count);
   }
 }
