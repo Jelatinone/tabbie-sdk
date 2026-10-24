@@ -1,6 +1,5 @@
 package cat.tabbie.sdk.album.revision;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -12,7 +11,6 @@ import java.util.stream.Stream;
 
 import cat.tabbie.sdk.album.revision.Chunk.Change.Line;
 import cat.tabbie.sdk.album.revision.Chunk.Change.Revision;
-import cat.tabbie.sdk.platform.Relative;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NonNull;
@@ -157,19 +155,13 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
   }
 
   /**
-   * Applies chunks to the content of a folded change.
+   * Whether this chunk edits its text: it inserts or deletes at least one line,
+   * rather than being empty or holding only context.
    *
-   * @param chunks   chunks to apply
-   * @param text     complete text the chunks must match
-   * @param relative folded file, for the failure message
-   * @return the resulting text as UTF-8
-   * @throws IllegalArgumentException when the chunks do not match the text
+   * @return true when the chunk changes something
    */
-  private static byte[] applied(List<Chunk> chunks, String text, Relative relative) {
-    if (!Chunk.matches(chunks, text)) {
-      throw new IllegalArgumentException("Changes are discontinuous at %s".formatted(relative));
-    }
-    return Chunk.apply(chunks, text).getBytes(StandardCharsets.UTF_8);
+  public boolean edits() {
+    return changes.stream().anyMatch(change -> change.revision() != Revision.CONTEXT);
   }
 
   /**

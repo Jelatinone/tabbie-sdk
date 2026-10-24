@@ -11,8 +11,8 @@ import lombok.NonNull;
  * check is never disguised as a pass or a failure.
  *
  * <p>
- * An image passes with the state its target reached, and fails with the state
- * it found when its target no longer matches what it describes; {@link Fail}
+ * An image passes with the state its file reached, and fails with the state
+ * it found when its file no longer matches what it describes; {@link Fail}
  * lists what fails each kind of image.
  *
  * @param <T> result type
@@ -23,7 +23,7 @@ public sealed interface Scrutiny<T> {
    * Value the scrutiny produced.
    *
    * @return result, or null when the scrutiny carries none, as a failure of a
-   *         composite part does
+   *         composite part or an effect with no result does
    */
   T result();
 
@@ -32,9 +32,10 @@ public sealed interface Scrutiny<T> {
    * carried out on the plate.
    *
    * @param <T>    result type
-   * @param result produced value
+   * @param result produced value, or null when the work produces none, as
+   *               {@link Intermediate#of(Object) Intermediate.of(null)} does
    */
-  record Pass<T>(@NonNull T result) implements Scrutiny<T> {
+  record Pass<T>(T result) implements Scrutiny<T> {
 
   }
 
@@ -43,32 +44,32 @@ public sealed interface Scrutiny<T> {
    * cannot be carried out as described; that is an outcome, not an error.
    *
    * <p>
-   * Each kind of image fails when its target no longer matches what it
+   * Each kind of image fails when its file no longer matches what it
    * describes:
    * <ul>
    * <li>An {@link Image.Installation} fails with the file found when the file
    * is not in its before state, because it was changed, deleted or created
-   * since rehearsal, and without a state when its path is blocked, because it
-   * is a directory, lies beneath a file, or cannot be written.</li>
+   * since rehearsal, and with the plate's {@link cat.tabbie.sdk.album.model.Refusal
+   * Refusal} when its path is blocked, because it is a directory, lies beneath
+   * a file, or cannot be written.</li>
    * <li>An {@link Image.Configuration} fails with the file's current text when
-   * its lines no longer match its chunks' before fragments, and without a state
-   * when the file is gone.</li>
-   * <li>A {@link Image.Provision} fails with the claim found when the claim is
-   * not in its before state, and without a state when no package manager on
-   * the machine can make the change.</li>
+   * its lines no longer match its chunks' before fragments, and with the
+   * plate's refusal when the file is gone or cannot be written.</li>
    * </ul>
    *
-   * @param <T>    result type
-   * @param result the state found, or null when the failure carries none
+   * @param <T>     result type
+   * @param result  the state found, or null when the failure carries none
+   * @param failure what refused the work, such as a plate's refusal, or null
+   *                when a check found a state other than the one expected
    *
-   * @apiNote composites report a failed part with {@link #Fail()}, since a
-   *          failure carries no result forward.
+   * @apiNote composites carry a failed part's {@code failure} forward without
+   *          its result, since a failure carries no result forward.
    */
   record Fail<T>(T result, Exception failure) implements Scrutiny<T> {
 
     /**
-     * Describes a failure that produced a result non-exceptionally
-     * 
+     * Describes a failure that found a state other than the one expected.
+     *
      * @param result the state found
      */
     public Fail(@NonNull T result) {
@@ -76,7 +77,7 @@ public sealed interface Scrutiny<T> {
     }
 
     /**
-     * Describes a failure without a result.
+     * Describes a failure without a result or a cause.
      */
     public Fail() {
       this(null, null);

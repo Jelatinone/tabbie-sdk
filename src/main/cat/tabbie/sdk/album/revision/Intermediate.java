@@ -157,9 +157,9 @@ public sealed interface Intermediate<Result> {
 
   /**
    * Pure transformation of another intermediate's passing result; a failure
-   * passes through. Named {@code Transform} rather than {@code Map} so
-   * implementations of {@link Step} that also need {@code java.util.Map} are
-   * not shadowed by this member type.
+   * passes through with its cause. Named {@code Transform} rather than
+   * {@code Map} so implementations of {@link Step} that also need
+   * {@code java.util.Map} are not shadowed by this member type.
    *
    * @param <S>    input type
    * @param <T>    result type
@@ -174,14 +174,14 @@ public sealed interface Intermediate<Result> {
     public Scrutiny<T> collapse(@NonNull Plate plate) throws IOException {
       return switch (source.collapse(plate)) {
         case Scrutiny.Pass<S> pass -> new Scrutiny.Pass<>(mapper.apply(pass.result()));
-        case Scrutiny.Fail<S> _ -> new Scrutiny.Fail<>();
+        case Scrutiny.Fail<S> fail -> new Scrutiny.Fail<>(null, fail.failure());
       };
     }
   }
 
   /**
    * Dependent work whose next intermediate is built from the source's passing
-   * result; a failure passes through without building it.
+   * result; a failure passes through with its cause, without building it.
    *
    * @param <S>    input type
    * @param <T>    result type
@@ -196,14 +196,14 @@ public sealed interface Intermediate<Result> {
       return switch (source.collapse(plate)) {
         case Scrutiny.Pass<S> pass -> mapper.apply(pass.result()).collapse(plate);
         // Dependent work cannot be built without the source's result
-        case Scrutiny.Fail<S> _ -> new Scrutiny.Fail<>();
+        case Scrutiny.Fail<S> fail -> new Scrutiny.Fail<>(null, fail.failure());
       };
     }
   }
 
   /**
    * Ordered intermediates producing an immutable list. Collapsing stops at the
-   * first element that fails.
+   * first element that fails, and fails with its cause.
    *
    * @param <T>      element type
    * @param elements ordered intermediates
@@ -224,8 +224,8 @@ public sealed interface Intermediate<Result> {
       for (Intermediate<? extends T> element : elements) {
         switch (element.collapse(plate)) {
           case Scrutiny.Pass<? extends T> pass -> results.add(pass.result());
-          case Scrutiny.Fail<? extends T> _ -> {
-            return new Scrutiny.Fail<>();
+          case Scrutiny.Fail<? extends T> fail -> {
+            return new Scrutiny.Fail<>(null, fail.failure());
           }
         }
       }
