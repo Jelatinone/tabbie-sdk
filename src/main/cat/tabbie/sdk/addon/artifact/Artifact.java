@@ -8,7 +8,6 @@ import java.util.stream.Collectors;
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.album.repository.Archive;
 import cat.tabbie.sdk.album.repository.Describe;
-import cat.tabbie.sdk.album.repository.Extract;
 import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.merchant.Installer;
@@ -119,9 +118,10 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
   }
 
   /**
-   * Captures the source into the context's retention backend and places it at
-   * the selected layout: as one named file, or unpacked beneath the layout
-   * directory. Nothing is read until the result is collapsed.
+   * Captures the source into the stash of the plate that collapses the result,
+   * and places it at the selected layout: as one named file, or unpacked
+   * beneath the layout directory. Nothing is read until the result is
+   * collapsed.
    *
    * @param context selected target
    * @return unevaluated capture producing validated immutable images
@@ -132,10 +132,9 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
   @Override
   default Intermediate<Set<Image<?>>> install(@NonNull Context context) throws IOException {
     Layout layout = context.layout(this);
-    Extract repository = context.repository();
-    return repository.capture(source())
+    return source().capture()
         .flatMap(captured -> layout.unpack()
-            ? context.archive().unpack(repository.retained(captured), repository, layout.relative())
+            ? context.archive().unpack(captured, layout.relative())
             : Intermediate.of(Set.<Image<?>>of(
                 Image.create(layout.relative().resolve(captured.fileName()), captured))))
         .map(Artifact::checked);
@@ -336,7 +335,6 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
      *
      * @param label       selected target
      * @param platform    target platform
-     * @param repository  caller-owned retention backend
      * @param contextRoot context mount relative to the installation
      * @param worldRoot   selected world relative to the context mount
      * @param layouts     per-artifact layout overrides
@@ -344,7 +342,6 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
     record Default(
         @NonNull Label label,
         @NonNull Platform platform,
-        @NonNull Extract repository,
         @NonNull Relative.Root contextRoot,
         @NonNull Relative.World worldRoot,
         @NonNull Map<Identity<Artifact>, Layout> layouts) implements Context {
@@ -361,13 +358,12 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
        *
        * @param label       selected target
        * @param platform    target platform
-       * @param repository  caller-owned retention backend
        * @param contextRoot context mount relative to the installation
        * @param worldRoot   selected world relative to the context mount
        */
-      public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Extract repository,
-          @NonNull Relative.Root contextRoot, @NonNull Relative.World worldRoot) {
-        this(label, platform, repository, contextRoot, worldRoot, Map.of());
+      public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Relative.Root contextRoot,
+          @NonNull Relative.World worldRoot) {
+        this(label, platform, contextRoot, worldRoot, Map.of());
       }
     }
   }

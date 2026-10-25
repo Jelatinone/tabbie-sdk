@@ -7,7 +7,6 @@ import java.util.Set;
 
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.album.repository.Describe;
-import cat.tabbie.sdk.album.repository.Extract;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Label;
@@ -277,7 +276,6 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
      *
      * @param label          selected target
      * @param platform       target platform
-     * @param repository     caller-owned retention backend
      * @param contextRoot    context mount relative to the installation
      * @param worldRoot      selected world relative to the context mount
      * @param maximumMemory  positive memory bound in bytes, or empty
@@ -286,7 +284,6 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
     record Default(
         @NonNull Label label,
         @NonNull Platform platform,
-        @NonNull Extract repository,
         @NonNull Relative.Root contextRoot,
         @NonNull Relative.World worldRoot,
         @NonNull Optional<Long> maximumMemory,
@@ -309,13 +306,12 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
        *
        * @param label       selected target
        * @param platform    target platform
-       * @param repository  caller-owned retention backend
        * @param contextRoot context mount relative to the installation
        * @param worldRoot   selected world relative to the context mount
        */
-      public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Extract repository,
-          @NonNull Relative.Root contextRoot, @NonNull Relative.World worldRoot) {
-        this(label, platform, repository, contextRoot, worldRoot, Optional.empty(), Map.of());
+      public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Relative.Root contextRoot,
+          @NonNull Relative.World worldRoot) {
+        this(label, platform, contextRoot, worldRoot, Optional.empty(), Map.of());
       }
     }
   }
