@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import cat.tabbie.sdk.platform.layout.Address;
 import lombok.NonNull;
 
 /**
@@ -103,9 +102,9 @@ public record Command(@NonNull Argument executable, @NonNull List<Token> tokens)
   public interface Resolver {
 
     /**
-     * Binds an address beneath the Cat to a physical path.
+     * Binds an address to a physical path.
      *
-     * @param address path beneath the Cat
+     * @param address path beneath the executor's root
      * @return physical path
      */
     @NonNull
@@ -191,9 +190,9 @@ public record Command(@NonNull Argument executable, @NonNull List<Token> tokens)
     }
 
     /**
-     * An address beneath the Cat, bound by the executor.
+     * An address, bound to a physical path by the executor.
      *
-     * @param address path beneath the Cat
+     * @param address path beneath the executor's root
      */
     record Location(@NonNull Address address) implements Argument {
 

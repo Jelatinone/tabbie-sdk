@@ -10,10 +10,10 @@ import cat.tabbie.sdk.album.repository.Describe;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Label;
+import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Command;
 import cat.tabbie.sdk.platform.Platform;
 import cat.tabbie.sdk.platform.Toolchain;
-import cat.tabbie.sdk.platform.layout.Address;
 import lombok.NonNull;
 
 /**
@@ -162,7 +162,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
        * its input, signal it, and observe its exit.
        *
        * @param command     start command
-       * @param pwd         working directory of the process, beneath the Cat
+       * @param pwd         working directory of the process
        * @param environment additional environment variables
        */
       record Managed(
@@ -184,7 +184,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
        * own the resulting process, so it can only be stopped with
        * {@link Deallocate.Invoke}.
        *
-       * @param command start command, run in the Cat's directory
+       * @param command start command, run in the root the executor binds
        */
       record Unmanaged(@NonNull Command command) implements Allocate {
       }
@@ -231,7 +231,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
        * For a managed byproduct the executor then waits for its process to exit;
        * for an unmanaged one, for the stop command to exit.
        *
-       * @param command stop command, run in the Cat's directory
+       * @param command stop command, run in the root the executor binds
        * @param grace   time allowed for the byproduct to stop
        */
       record Invoke(@NonNull Command command, @NonNull Duration grace) implements Deallocate {
@@ -276,7 +276,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
      *
      * @param label          selected target
      * @param platform       target platform
-     * @param world          selected World's directory beneath the Cat
+     * @param world          selected World's directory
      * @param maximumMemory  positive memory bound in bytes, or empty
      * @param runtimeOptions runtime options
      */
@@ -304,7 +304,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
        *
        * @param label    selected target
        * @param platform target platform
-       * @param world    selected World's directory beneath the Cat
+       * @param world    selected World's directory
        */
       public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Address world) {
         this(label, platform, world, Optional.empty(), Map.of());

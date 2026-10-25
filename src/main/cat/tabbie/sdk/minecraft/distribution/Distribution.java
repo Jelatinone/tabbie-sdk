@@ -15,7 +15,7 @@ import cat.tabbie.sdk.addon.artifact.Plugin;
 import cat.tabbie.sdk.addon.artifact.Resourcepack;
 import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Version;
-import cat.tabbie.sdk.platform.layout.Address;
+import cat.tabbie.sdk.platform.Address;
 import lombok.NonNull;
 
 /**
@@ -123,7 +123,7 @@ public sealed interface Distribution permits Java, Bedrock {
    * @param artifact reference artifact
    * @param context  reference context
    *
-   * @return default layout, beneath the Cat
+   * @return default layout
    *
    * @throws IOException              when no default layout exists
    * @throws IllegalArgumentException when this distribution does not support the
@@ -183,7 +183,7 @@ public sealed interface Distribution permits Java, Bedrock {
             true,
             context.world().resolve("behavior_packs", directory));
 
-      // Self-contained modpack (.zip) -> the Cat itself, on mod loaders only
+      // Self-contained modpack (.zip) -> the root itself, on mod loaders only
       case Modpack modpack -> {
         if (!(this instanceof Java.Launcher)) {
           throw new IOException(String.format(

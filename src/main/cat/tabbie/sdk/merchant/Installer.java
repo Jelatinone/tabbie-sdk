@@ -6,15 +6,15 @@ import java.util.Set;
 import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.minecraft.Label;
+import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Platform;
-import cat.tabbie.sdk.platform.layout.Address;
 import lombok.NonNull;
 
 /**
  * Describes content without applying it. Installers describe captures of
  * content and the images that place it; the captures run in the stash of the
  * {@link cat.tabbie.sdk.album.model.Plate Plate} the result is collapsed on.
- * They never write to the Cat's files or launch processes.
+ * They never write files or launch processes.
  *
  * @param <Contextual> accepted target context
  */
@@ -54,7 +54,8 @@ public interface Installer<Contextual extends Installer.Context> {
     Platform platform();
 
     /**
-     * Returns the selected World's directory beneath the Cat. Content that
+     * Returns the selected World's directory, beneath the same root as the
+     * installer's images. Content that
      * belongs to a World is placed in it and {@link Address#require(Address)
      * required} there. Callers that have not selected a World must reject
      * World content themselves rather than name an arbitrary directory.

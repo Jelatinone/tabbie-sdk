@@ -1,5 +1,6 @@
 package cat.tabbie.sdk.platform.layout;
 
+import cat.tabbie.sdk.platform.Address;
 import lombok.NonNull;
 
 /**
@@ -12,7 +13,7 @@ public sealed interface Located permits Located.Declared, Located.Beneath {
   /**
    * Returns the address that landed here.
    *
-   * @return address beneath the Cat
+   * @return the address
    */
   @NonNull
   Address address();

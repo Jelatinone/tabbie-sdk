@@ -3,7 +3,7 @@ package cat.tabbie.sdk.album.model;
 import java.io.Serial;
 import java.nio.file.FileSystemException;
 
-import cat.tabbie.sdk.platform.layout.Address;
+import cat.tabbie.sdk.platform.Address;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -34,7 +34,7 @@ public final class Refusal extends FileSystemException {
    * @param reason why the plate refused
    */
   public Refusal(@NonNull Reason reason) {
-    super(reason.address().encoded(), reason.above() ? reason.at().encoded() : null, reason.message());
+    super(reason.address().canonical(), reason.above() ? reason.at().canonical() : null, reason.message());
     this.reason = reason;
   }
 

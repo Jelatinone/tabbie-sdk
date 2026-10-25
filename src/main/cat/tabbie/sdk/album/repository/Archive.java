@@ -24,7 +24,7 @@ import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.album.revision.Scrutiny;
 import cat.tabbie.sdk.api.Observer;
-import cat.tabbie.sdk.platform.layout.Address;
+import cat.tabbie.sdk.platform.Address;
 import lombok.NonNull;
 
 /**
@@ -172,7 +172,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
           Map<String, Long> catalog = Map.copyOf(sizes);
           List<Entry> result = new ArrayList<>();
           for (ZipEntry entry : files) {
-            result.add(new Entry(source, entry.getName(), entry.getSize(), entry.getCrc(), catalog));
+            result.add(new Entry(source, Address.parse(entry.getName()), entry.getSize(), entry.getCrc(), catalog));
           }
           return List.copyOf(result);
         } catch (IllegalArgumentException failure) {
@@ -207,7 +207,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
     @Override
     public String name() {
       return String.format("Unpack %s from %s into %s", Operand.FILE.render(entries.size()),
-          entries.getFirst().archive().of().fileName(), destination.encoded());
+          entries.getFirst().archive().of().fileName(), destination.canonical());
     }
 
     @Override
@@ -242,7 +242,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
       }
       List<Image<?>> images = new ArrayList<>(entries.size());
       for (Entry entry : entries) {
-        ZipEntry found = zip.getEntry(entry.path());
+        ZipEntry found = zip.getEntry(entry.path().canonical());
         if (found == null || found.isDirectory() || found.getSize() != entry.size()
             || found.getCrc() != entry.crc()) {
           throw new IOException("ZIP entries differ from the inspected catalog.");
@@ -265,7 +265,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
             plate.observer().transfer(transfer);
           }
         };
-        Address target = destination.resolve(Address.decode(entry.path()));
+        Address target = destination.resolve(entry.path());
         images.add(Image.create(target, plate.capture(retained, read)));
         plate.observer().transfer(files(images.size()));
       }
@@ -287,27 +287,27 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * fail to open; {@link Archive#unpack} still extracts them.
    *
    * @param archive parent archive description
-   * @param path    canonical entry path
+   * @param path    entry's path within the archive
    * @param size    exact expanded size
    * @param crc     expected CRC32
    * @param catalog validated central-directory names and expanded sizes
    */
-  public record Entry(@NonNull Describe archive, @NonNull String path, long size, long crc,
+  public record Entry(@NonNull Describe archive, @NonNull Address path, long size, long crc,
       @NonNull Map<String, Long> catalog) implements Describe {
     /**
      * Copies the catalog and checks portable entry coordinates and integrity
      * evidence.
      *
-     * @throws IllegalArgumentException when the path is not canonical, the
-     *                                  entry disagrees with the catalog, or the
-     *                                  size or CRC is out of range
+     * @throws IllegalArgumentException when the path is the root, the entry
+     *                                  disagrees with the catalog, or the size
+     *                                  or CRC is out of range
      */
     public Entry {
-      if (Address.decode(path).isEmpty()) {
+      if (path.isRoot()) {
         throw new IllegalArgumentException("A ZIP entry needs a path.");
       }
       catalog = Map.copyOf(catalog);
-      if (!Long.valueOf(size).equals(catalog.get(path))) {
+      if (!Long.valueOf(size).equals(catalog.get(path.canonical()))) {
         throw new IllegalArgumentException("ZIP entry must agree with its inspected catalog.");
       }
       if (size < 0 || crc < 0 || crc > 0xffffffffL) {
@@ -317,7 +317,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 
     @Override
     public Reference.Pending of() {
-      return new Reference.Pending(Address.decode(path).getLast(), path, null, size);
+      return new Reference.Pending(path, null, size);
     }
 
     @Override
@@ -330,7 +330,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
           if (expectedSize == null || !visited.add(current.getName())) {
             throw new IOException("ZIP local entries differ from the inspected catalog.");
           }
-          if (current.getName().equals(path)) {
+          if (current.getName().equals(path.canonical())) {
             return entryStream(zip);
           }
           long skipped = bound(zip, expectedSize).transferTo(OutputStream.nullOutputStream());
@@ -338,7 +338,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
             throw new IOException("ZIP skipped entry size differs from the inspected catalog.");
           }
         }
-        throw new IOException("Retained ZIP entry is missing: " + path);
+        throw new IOException("Retained ZIP entry is missing: " + path.canonical());
       } catch (IOException | RuntimeException failure) {
         try {
           zip.close();
@@ -381,7 +381,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
           } else if (read == -1 && !finished) {
             finished = true;
             if (count != size || checksum.getValue() != crc) {
-              throw new IOException("ZIP entry size or CRC mismatch: " + path);
+              throw new IOException("ZIP entry size or CRC mismatch: " + path.canonical());
             }
           }
           return read;
@@ -426,7 +426,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
   private static List<String> resolve(String name) throws IOException {
     String value = name.endsWith("/") ? name.substring(0, name.length() - 1) : name;
     try {
-      List<String> components = Address.decode(value);
+      List<String> components = Address.parse(value).components();
       if (components.isEmpty()) {
         throw new IllegalArgumentException("Empty ZIP path.");
       }

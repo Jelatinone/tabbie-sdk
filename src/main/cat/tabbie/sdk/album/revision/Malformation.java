@@ -2,7 +2,7 @@ package cat.tabbie.sdk.album.revision;
 
 import java.io.Serial;
 
-import cat.tabbie.sdk.platform.layout.Address;
+import cat.tabbie.sdk.platform.Address;
 import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
@@ -49,7 +49,7 @@ public abstract sealed class Malformation extends IllegalArgumentException {
      * @param address file the change was on
      */
     public Unchanged(@NonNull Address address) {
-      super("A change of %s must change something.".formatted(address.encoded()), null);
+      super("A change of %s must change something.".formatted(address.canonical()), null);
       this.address = address;
     }
 
@@ -64,7 +64,7 @@ public abstract sealed class Malformation extends IllegalArgumentException {
   }
 
   /**
-   * The change names the Cat itself rather than a file beneath it.
+   * The change names the root itself rather than a file beneath it.
    */
   @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
   public static final class Root extends Malformation {
@@ -75,19 +75,19 @@ public abstract sealed class Malformation extends IllegalArgumentException {
     transient Address address;
 
     /**
-     * Describes a change of the Cat itself.
+     * Describes a change of the root itself.
      *
-     * @param address the Cat's address the change named
+     * @param address the root's address the change named
      */
     public Root(@NonNull Address address) {
-      super("A changed file must lie beneath the Cat.", null);
+      super("A changed file must lie beneath its root.", null);
       this.address = address;
     }
 
     /**
      * Returns the address the change named.
      *
-     * @return the Cat's address
+     * @return the root's address
      */
     public Address address() {
       return address;
@@ -123,7 +123,7 @@ public abstract sealed class Malformation extends IllegalArgumentException {
      * @param cause   failure that revealed the discontinuity
      */
     public Discontinuous(@NonNull Address address, Throwable cause) {
-      super("Changes of %s must continue from one another.".formatted(address.encoded()), cause);
+      super("Changes of %s must continue from one another.".formatted(address.canonical()), cause);
       this.address = address;
     }
 
@@ -158,7 +158,7 @@ public abstract sealed class Malformation extends IllegalArgumentException {
      * @param second file of the later change
      */
     public Unrelated(@NonNull Address first, @NonNull Address second) {
-      super("Only changes of one file compose, not %s and %s.".formatted(first.encoded(), second.encoded()), null);
+      super("Only changes of one file compose, not %s and %s.".formatted(first.canonical(), second.canonical()), null);
       this.first = first;
       this.second = second;
     }
@@ -200,7 +200,7 @@ public abstract sealed class Malformation extends IllegalArgumentException {
      * @param address file both images change
      */
     public Clash(@NonNull Address address) {
-      super("A set may change %s only once.".formatted(address.encoded()), null);
+      super("A set may change %s only once.".formatted(address.canonical()), null);
       this.address = address;
     }
 
@@ -235,7 +235,7 @@ public abstract sealed class Malformation extends IllegalArgumentException {
      * @param file      changed file beneath it
      */
     public Nested(@NonNull Address directory, @NonNull Address file) {
-      super("%s cannot be a file while %s lies beneath it.".formatted(directory.encoded(), file.encoded()), null);
+      super("%s cannot be a file while %s lies beneath it.".formatted(directory.canonical(), file.canonical()), null);
       this.directory = directory;
       this.file = file;
     }

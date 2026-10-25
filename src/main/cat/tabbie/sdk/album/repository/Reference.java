@@ -6,11 +6,10 @@ import java.io.OutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
-import java.util.List;
 import java.util.OptionalLong;
 
 import cat.tabbie.sdk.api.Observer;
-import cat.tabbie.sdk.platform.layout.Address;
+import cat.tabbie.sdk.platform.Address;
 import lombok.NonNull;
 
 /**
@@ -32,32 +31,28 @@ public sealed interface Reference permits Reference.Pending, Reference.Captured 
   /**
    * Expected identity of bytes that have not been read yet.
    *
-   * @param fileName       single filename, equal to the last path component
-   * @param path           canonical forward-slash source path, such as an
-   *                       archive entry path
+   * @param path           path of the bytes within their source, such as an
+   *                       archive entry's path; its last component is the
+   *                       {@link #fileName() filename}
    * @param expectedSha256 lowercase SHA-256 digest the bytes must match, or
    *                       null when unknown
    * @param expectedSize   exact byte count the bytes must match, or null when
    *                       unknown
    */
   record Pending(
-      @NonNull String fileName,
-      @NonNull String path,
+      @NonNull Address path,
       String expectedSha256,
       Long expectedSize) implements Reference {
 
     /**
-     * Checks the filename, the canonical path, and any expected evidence.
+     * Checks that the path names a file, and any expected evidence.
      *
-     * @throws IllegalArgumentException when the path is not canonical, its last
-     *                                  component differs from the filename, or
-     *                                  the evidence is malformed
+     * @throws IllegalArgumentException when the path is the root, or the
+     *                                  evidence is malformed
      */
     public Pending {
-      Address.validateFilename(fileName);
-      List<String> components = Address.decode(path);
-      if (components.isEmpty() || !components.getLast().equals(fileName)) {
-        throw new IllegalArgumentException("A source path must end with its filename.");
+      if (path.isRoot()) {
+        throw new IllegalArgumentException("A source path must name a file.");
       }
       if (expectedSize != null && expectedSize < 0L) {
         throw new IllegalArgumentException("Content size must be non-negative");
@@ -75,7 +70,7 @@ public sealed interface Reference permits Reference.Pending, Reference.Captured 
      * @param expectedSize   expected byte count, or null when unknown
      */
     public Pending(@NonNull String fileName, String expectedSha256, Long expectedSize) {
-      this(fileName, fileName, expectedSha256, expectedSize);
+      this(Address.of(fileName), expectedSha256, expectedSize);
     }
 
     /**
@@ -84,7 +79,12 @@ public sealed interface Reference permits Reference.Pending, Reference.Captured 
      * @param fileName single filename
      */
     public Pending(@NonNull String fileName) {
-      this(fileName, fileName, null, null);
+      this(Address.of(fileName), null, null);
+    }
+
+    @Override
+    public String fileName() {
+      return path.fileName().orElseThrow();
     }
 
     /**
@@ -113,20 +113,20 @@ public sealed interface Reference permits Reference.Pending, Reference.Captured 
           size = Math.addExact(size, read);
           // Stop at the first byte past the expected size rather than reading on
           if (expectedSize != null && size > expectedSize) {
-            throw new IOException("Captured size exceeds expected evidence: " + path);
+            throw new IOException("Captured size exceeds expected evidence: " + path.canonical());
           }
           digest.update(buffer, 0, read);
           sink.write(buffer, 0, read);
-          observer.transfer(new Stash.Transfer(path, size, total));
+          observer.transfer(new Stash.Transfer(path.canonical(), size, total));
         }
         String hash = HexFormat.of().formatHex(digest.digest());
         if (expectedSize != null && expectedSize != size) {
-          throw new IOException("Captured size does not match expected evidence: " + path);
+          throw new IOException("Captured size does not match expected evidence: " + path.canonical());
         }
         if (expectedSha256 != null && !expectedSha256.equals(hash)) {
-          throw new IOException("Captured digest does not match expected evidence: " + path);
+          throw new IOException("Captured digest does not match expected evidence: " + path.canonical());
         }
-        Captured captured = new Captured(fileName, hash, size);
+        Captured captured = new Captured(fileName(), hash, size);
         observer.verified(captured);
         return captured;
       } catch (IOException failure) {

@@ -12,11 +12,11 @@
  * file is in the before state; steps reach their files and the stash through
  * the same plate. Both report a {@link Scrutiny}: a pass, or a failure when a
  * check ran and refused. Whether that work rehearses or acts depends only on
- * the plate: a rehearsal's plate lays an overlay over the Cat, and an acting
- * plate reaches the Cat itself.
+ * the plate: a rehearsal's plate lays an overlay over its root, and an acting
+ * plate reaches the root itself.
  *
  * <p>
- * Revision history describes the Cat, not the machine. What a Cat needs from
+ * Revision history describes files, not the machine. What a Cat needs from
  * its machine is recorded in its lockfile, a text file images edit like any
  * other.
  */

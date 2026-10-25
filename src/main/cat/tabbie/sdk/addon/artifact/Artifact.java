@@ -16,8 +16,8 @@ import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
+import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Platform;
-import cat.tabbie.sdk.platform.layout.Address;
 import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
 
@@ -320,9 +320,9 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
      * {@link #world()}, whichever was selected.
      *
      * @param artifact selected artifact
-     * @return layout beneath the Cat
+     * @return layout
      * @throws IOException              when no default or override exists
-     * @throws Violation.Outside        when World content would lie outside the
+     * @throws Address.External         when World content would lie outside the
      *                                  World
      * @throws IllegalArgumentException when the target is not explicitly
      *                                  supported
@@ -344,7 +344,7 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
      *
      * @param label    selected target
      * @param platform target platform
-     * @param world    selected World's directory beneath the Cat
+     * @param world    selected World's directory
      * @param layouts  per-artifact layout overrides
      */
     record Default(
@@ -365,7 +365,7 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
        *
        * @param label    selected target
        * @param platform target platform
-       * @param world    selected World's directory beneath the Cat
+       * @param world    selected World's directory
        */
       public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Address world) {
         this(label, platform, world, Map.of());
@@ -374,8 +374,8 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
   }
 
   /**
-   * Placement beneath the Cat. A named-file layout names the directory
-   * receiving the file; an unpacking layout names the exact extraction root.
+   * Placement of content. A named-file layout names the directory receiving
+   * the file; an unpacking layout names the exact extraction root.
    *
    * @param unpack  whether the content is a ZIP archive to extract
    * @param address destination directory
@@ -387,7 +387,7 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
      *
      * @param directory directory the destination must lie in
      * @return this layout
-     * @throws Violation.Outside when the destination lies elsewhere
+     * @throws Address.External when the destination lies elsewhere
      */
     public Layout require(@NonNull Address directory) {
       address.require(directory);

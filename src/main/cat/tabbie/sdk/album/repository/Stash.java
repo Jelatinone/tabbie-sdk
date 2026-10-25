@@ -138,7 +138,8 @@ public interface Stash {
   /**
    * A capture described to run later: collapsing it captures the source into
    * the plate's stash and passes with the captured reference. Capturing changes
-   * no file of the Cat, so it runs alike while rehearsing and acting.
+   * no file beneath the plate's root, so it runs alike while rehearsing and
+   * acting.
    *
    * <p>
    * It reports to the plate's observer as it runs: each {@link Transfer} as
@@ -168,7 +169,7 @@ public interface Stash {
 
         @Override
         public void verified(Reference.Captured captured) {
-          plate.observer().verified(new Transfer(source.of().path(), captured.size(),
+          plate.observer().verified(new Transfer(source.of().path().canonical(), captured.size(),
               OptionalLong.of(captured.size())));
         }
 

@@ -1,10 +1,11 @@
 package cat.tabbie.sdk.platform.layout;
 
+import cat.tabbie.sdk.platform.Address;
 import lombok.NonNull;
 
 /**
- * The declared shape of a Cat: a tree of {@link Node nodes} for the Cat, and
- * one for the inside of a World, each node with the {@link Rule rules} that say
+ * The declared shape of a root, such as a Cat: a tree of {@link Node nodes} for
+ * the root, and one for the inside of a World, each node with the {@link Rule rules} that say
  * what may happen there. A layout is immutable data. The distribution build a
  * Cat runs declares it, and it is kept with the Cat, so every change made under
  * it can name the layout it was made under.
@@ -15,26 +16,26 @@ import lombok.NonNull;
  * a declared directory. A World's directory is named by whoever runs the work,
  * so finding inside a World takes that directory's address.
  *
- * @param root  unnamed directory standing for the Cat itself
+ * @param root  unnamed directory standing for the root itself
  * @param world unnamed directory standing for the inside of a World
  */
 public record Layout(@NonNull Node.Directory root, @NonNull Node.Directory world) {
 
   /**
-   * Checks that the directories standing for the Cat and a World are unnamed.
+   * Checks that the directories standing for the root and a World are unnamed.
    *
    * @throws IllegalArgumentException when either has a name
    */
   public Layout {
     if (!root.name().isEmpty() || !world.name().isEmpty()) {
-      throw new IllegalArgumentException("A directory standing for the Cat or a World has no name.");
+      throw new IllegalArgumentException("A directory standing for the root or a World has no name.");
     }
   }
 
   /**
-   * Finds where an address lands in the Cat's tree.
+   * Finds where an address lands in the root's tree.
    *
-   * @param address address beneath the Cat
+   * @param address address beneath the root
    * @return the declared node it names, or the declared directory it lies
    *         beneath
    * @throws Violation.Undeclared when the address leads beneath a declared
@@ -51,7 +52,7 @@ public record Layout(@NonNull Node.Directory root, @NonNull Node.Directory world
    * @param world   address of the World's directory
    * @return the declared node it names, or the declared directory it lies
    *         beneath
-   * @throws Violation.Outside    when the address does not lie in the World
+   * @throws Address.External     when the address does not lie in the World
    * @throws Violation.Undeclared when the address leads beneath a declared
    *                              file
    */

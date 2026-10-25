@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import cat.tabbie.sdk.platform.Address;
 import lombok.NonNull;
 
 /**
@@ -17,8 +18,8 @@ public sealed interface Node permits Node.Directory, Node.File {
   /**
    * Returns this node's name.
    *
-   * @return single filename, empty only for a directory standing for the Cat
-   *         or a World
+   * @return single filename, empty only for a directory standing for a root or
+   *         a World
    */
   @NonNull
   String name();
@@ -46,7 +47,7 @@ public sealed interface Node permits Node.Directory, Node.File {
    * does not declare, such as the mods placed in a mods directory, may lie
    * beneath it as its rules allow.
    *
-   * @param name     single filename, empty only when it stands for the Cat or a
+   * @param name     single filename, empty only when it stands for a root or a
    *                 World
    * @param rules    what may happen to it and to undeclared content beneath it
    * @param children declared children, uniquely named
@@ -70,7 +71,7 @@ public sealed interface Node permits Node.Directory, Node.File {
         Address.validateFilename(name);
       }
       if (children.stream().map(Node::name).anyMatch(String::isEmpty)) {
-        throw new IllegalArgumentException("Only a directory standing for the Cat or a World may be unnamed.");
+        throw new IllegalArgumentException("Only a directory standing for a root or a World may be unnamed.");
       }
       if (children.stream().map(Node::name).distinct().count() != children.size()) {
         throw new IllegalArgumentException("A directory declares each name only once.");

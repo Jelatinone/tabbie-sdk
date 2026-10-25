@@ -16,7 +16,7 @@ import cat.tabbie.sdk.album.model.Refusal;
 import cat.tabbie.sdk.album.repository.Describe;
 import cat.tabbie.sdk.album.repository.Reference;
 import cat.tabbie.sdk.album.repository.Stash;
-import cat.tabbie.sdk.platform.layout.Address;
+import cat.tabbie.sdk.platform.Address;
 import lombok.NonNull;
 
 /**
@@ -29,14 +29,14 @@ import lombok.NonNull;
  *
  * <p>
  * An image is always well formed: it changes something, and its file lies
- * beneath the Cat. Describing a change that is not throws a
+ * beneath its root. Describing a change that is not throws a
  * {@link Malformation} saying why, so no image needs checking for a change
  * that does nothing.
  *
  * <p>
  * Images name content by {@link Reference.Captured reference}, never by its
  * bytes: the bytes live in the stash of the plate an image is exposed on.
- * Images describe the Cat, not the machine it runs on. What a Cat needs from
+ * Images describe files, not the machine they run on. What a Cat needs from
  * its machine, such as a system package, is data in its lockfile, which images
  * edit like any other text file.
  *
@@ -62,7 +62,7 @@ public sealed interface Image<State extends Image.Alteration> {
   /**
    * File this image changes.
    *
-   * @return changed file, beneath the Cat
+   * @return changed file, beneath the root of the plate it is exposed on
    */
   @NonNull
   Address address();
@@ -97,7 +97,7 @@ public sealed interface Image<State extends Image.Alteration> {
    * @param address target file
    * @param after   retained content
    * @return resulting image
-   * @throws Malformation.Root when the address is the Cat itself
+   * @throws Malformation.Root when the address is the root itself
    */
   static Image<File> create(@NonNull Address address, @NonNull Reference.Captured after) {
     return new Installation(new File.Absent(), new File.Present(after), address);
@@ -112,7 +112,7 @@ public sealed interface Image<State extends Image.Alteration> {
    * @param after   retained content after
    * @return resulting image
    * @throws Malformation.Unchanged when both contents are the same
-   * @throws Malformation.Root      when the address is the Cat itself
+   * @throws Malformation.Root      when the address is the root itself
    */
   static Image<File> replace(@NonNull Address address, @NonNull Reference.Captured before,
       @NonNull Reference.Captured after) {
@@ -125,7 +125,7 @@ public sealed interface Image<State extends Image.Alteration> {
    * @param address target file
    * @param before  retained content before
    * @return resulting image
-   * @throws Malformation.Root when the address is the Cat itself
+   * @throws Malformation.Root when the address is the root itself
    */
   static Image<File> delete(@NonNull Address address, @NonNull Reference.Captured before) {
     return new Installation(new File.Present(before), new File.Absent(), address);
@@ -140,7 +140,7 @@ public sealed interface Image<State extends Image.Alteration> {
    * @param after   text after
    * @return resulting image
    * @throws Malformation.Unchanged when no fragment changes
-   * @throws Malformation.Root      when the address is the Cat itself
+   * @throws Malformation.Root      when the address is the root itself
    */
   static Image<Text> configure(@NonNull Address address, @NonNull Text before, @NonNull Text after) {
     return new Configuration(before, after, address);
@@ -154,7 +154,7 @@ public sealed interface Image<State extends Image.Alteration> {
    * @param chunks  changed chunks
    * @return resulting image
    * @throws Malformation.Unchanged when no chunk edits its text
-   * @throws Malformation.Root      when the address is the Cat itself
+   * @throws Malformation.Root      when the address is the root itself
    */
   static Image<Text> configure(@NonNull Address address, @NonNull List<Chunk> chunks) {
     return new Configuration(chunks, address);
@@ -168,7 +168,7 @@ public sealed interface Image<State extends Image.Alteration> {
    * @param after   text after
    * @return resulting image
    * @throws Malformation.Unchanged when the texts are equal
-   * @throws Malformation.Root      when the address is the Cat itself
+   * @throws Malformation.Root      when the address is the root itself
    */
   static Image<Text> configure(@NonNull Address address, @NonNull String before, @NonNull String after) {
     return configure(address, Chunk.diff(before, after));
@@ -184,7 +184,7 @@ public sealed interface Image<State extends Image.Alteration> {
    * @param contextLines number of context lines to keep
    * @return resulting image
    * @throws Malformation.Unchanged when the texts are equal
-   * @throws Malformation.Root      when the address is the Cat itself
+   * @throws Malformation.Root      when the address is the root itself
    */
   static Image<Text> configure(@NonNull Address address, @NonNull String before, @NonNull String after,
       int contextLines) {
@@ -392,25 +392,25 @@ public sealed interface Image<State extends Image.Alteration> {
    * they may not be the same, so both sides are never absent.
    *
    * <p>
-   * Exposing it leases the file exclusively and digests it without retaining
-   * it. When the file's absence, or its digest and size, match the before
-   * state, it deletes the file or places the after content, reopened from the
-   * plate's stash and verified as it is written, and passes with the after
-   * state. A path no file can occupy, or one that may not be written, fails
-   * with the plate's refusal.
+   * Exposing it takes a mutual lease on the file and digests it without
+   * retaining it. When the file's absence, or its digest and size, match the
+   * before state, it deletes the file or places the after content, reopened
+   * from the plate's stash and verified as it is written, and passes with the
+   * after state. A path no file can occupy, or one that may not be written,
+   * fails with the plate's refusal.
    *
    * @param before   complete content or absence expected before the change
    * @param after    complete content or absence described after the change
-   * @param address  changed file, beneath the Cat
+   * @param address  changed file, beneath the plate's root
    */
   record Installation(
       @NonNull File before, @NonNull File after, @NonNull Address address)
       implements Image<Image.File> {
 
     /**
-     * Rejects the Cat itself as a file, and a change that changes nothing.
+     * Rejects the root itself as a file, and a change that changes nothing.
      *
-     * @throws Malformation.Root      when the address is the Cat itself
+     * @throws Malformation.Root      when the address is the root itself
      * @throws Malformation.Unchanged when both states are the same, including
      *                                both absent
      */
@@ -430,7 +430,7 @@ public sealed interface Image<State extends Image.Alteration> {
 
     @Override
     public Scrutiny<File> expose(@NonNull Plate plate) throws IOException {
-      try (Lease.Exclusive file = plate.compose(address)) {
+      try (Lease.Mutual file = plate.mutual(address)) {
         File found = File.of(file);
         if (!before.same(found)) {
           return new Scrutiny.Fail<>(found);
@@ -457,7 +457,7 @@ public sealed interface Image<State extends Image.Alteration> {
      *
      * @param before   state before
      * @param after    state after
-     * @param address  changed file, beneath the Cat
+     * @param address  changed file, beneath the plate's root
      * @return the installation, or empty when the states are the same
      */
     static Optional<Image<?>> between(@NonNull File before, @NonNull File after, @NonNull Address address) {
@@ -509,27 +509,27 @@ public sealed interface Image<State extends Image.Alteration> {
    * creates or deletes a file; an installation does.
    *
    * <p>
-   * Exposing it leases the file exclusively and reads it as UTF-8 text. When
-   * each chunk's before fragment matches the file's lines at its range, exact
-   * endings included, it writes the file with the chunks applied and passes
-   * with the file's complete new text; lines outside every chunk are not
+   * Exposing it takes a mutual lease on the file and reads it as UTF-8 text.
+   * When each chunk's before fragment matches the file's lines at its range,
+   * exact endings included, it writes the file with the chunks applied and
+   * passes with the file's complete new text; lines outside every chunk are not
    * compared. A failure carries the file's complete current text, or the
    * plate's refusal when the file is gone or cannot be written.
    *
    * @param chunks   text changes
-   * @param address  changed file, beneath the Cat
+   * @param address  changed file, beneath the plate's root
    */
   record Configuration(
       @NonNull List<Chunk> chunks, @NonNull Address address)
       implements Image<Image.Text> {
 
     /**
-     * Copies and validates the chunks, and rejects the Cat itself as a file
+     * Copies and validates the chunks, and rejects the root itself as a file
      * and chunks that change nothing.
      *
      * @throws IllegalArgumentException when the chunks are out of order or
      *                                  overlap
-     * @throws Malformation.Root        when the address is the Cat itself
+     * @throws Malformation.Root        when the address is the root itself
      * @throws Malformation.Unchanged   when no chunk edits its text
      */
     public Configuration {
@@ -548,8 +548,8 @@ public sealed interface Image<State extends Image.Alteration> {
      *
      * @param before   text before
      * @param after    text after
-     * @param address  changed file, beneath the Cat
-     * @throws Malformation.Root      when the address is the Cat itself
+     * @param address  changed file, beneath the plate's root
+     * @throws Malformation.Root      when the address is the root itself
      * @throws Malformation.Unchanged when no fragment changes
      */
     public Configuration(
@@ -585,7 +585,7 @@ public sealed interface Image<State extends Image.Alteration> {
 
     @Override
     public Scrutiny<Text> expose(@NonNull Plate plate) throws IOException {
-      try (Lease.Exclusive file = plate.compose(address)) {
+      try (Lease.Mutual file = plate.mutual(address)) {
         Describe current = file.read();
         String text = current.text();
         if (!Chunk.matches(chunks, text)) {
@@ -607,7 +607,7 @@ public sealed interface Image<State extends Image.Alteration> {
      * Describes chunks of a file as a change, unless none of them edits.
      *
      * @param chunks   text changes
-     * @param address  changed file, beneath the Cat
+     * @param address  changed file, beneath the plate's root
      * @return the configuration, or empty when no chunk edits its text
      */
     static Optional<Image<?>> between(@NonNull List<Chunk> chunks, @NonNull Address address) {

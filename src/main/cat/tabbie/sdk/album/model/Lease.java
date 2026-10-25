@@ -3,14 +3,14 @@ package cat.tabbie.sdk.album.model;
 import java.io.IOException;
 
 import cat.tabbie.sdk.album.repository.Describe;
-import cat.tabbie.sdk.platform.layout.Address;
+import cat.tabbie.sdk.platform.Address;
 import lombok.NonNull;
 
 /**
  * A caller-owned hold on one file of a {@link Plate}. Whatever exclusion the
  * plate applies lasts until the lease closes, so work can read a file, decide,
  * and write it without the file changing in between. A lease reads, writes, or
- * does both; {@link Exclusive} is the lease that does both.
+ * does both; {@link Mutual} is the lease that does both.
  *
  * <p>
  * Content read through a lease includes the lease's own writes, and stops
@@ -23,7 +23,7 @@ public sealed interface Lease extends AutoCloseable {
   /**
    * Returns the leased file.
    *
-   * @return file beneath the Cat
+   * @return file beneath the plate's root
    */
   @NonNull
   Address address();
@@ -109,7 +109,7 @@ public sealed interface Lease extends AutoCloseable {
    * A lease that reads and changes its file, for work that checks a file
    * before it writes it.
    */
-  interface Exclusive extends Read, Write {
+  interface Mutual extends Read, Write {
   }
 
   /**

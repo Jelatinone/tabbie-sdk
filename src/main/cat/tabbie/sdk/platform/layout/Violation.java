@@ -2,6 +2,7 @@ package cat.tabbie.sdk.platform.layout;
 
 import java.io.Serial;
 
+import cat.tabbie.sdk.platform.Address;
 import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
@@ -28,54 +29,10 @@ public abstract sealed class Violation extends IllegalArgumentException {
   }
 
   /**
-   * Shows an address in a message, naming the Cat itself for the root.
+   * Shows an address in a message, naming the root itself.
    */
   private static String shown(Address address) {
-    return address.isRoot() ? "the Cat" : address.encoded();
-  }
-
-  /**
-   * An address does not lie in the directory work requires it in.
-   */
-  @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-  public static final class Outside extends Violation {
-
-    @Serial
-    private static final long serialVersionUID = 1L;
-
-    transient Address address;
-
-    transient Address directory;
-
-    /**
-     * Describes an address outside the directory it must lie in.
-     *
-     * @param address   address that lies elsewhere
-     * @param directory directory it must lie in
-     */
-    public Outside(@NonNull Address address, @NonNull Address directory) {
-      super("%s does not lie in %s.".formatted(shown(address), shown(directory)));
-      this.address = address;
-      this.directory = directory;
-    }
-
-    /**
-     * Returns the address that lies elsewhere.
-     *
-     * @return address
-     */
-    public Address address() {
-      return address;
-    }
-
-    /**
-     * Returns the directory the address must lie in.
-     *
-     * @return required directory
-     */
-    public Address directory() {
-      return directory;
-    }
+    return address.isRoot() ? "the root" : address.canonical();
   }
 
   /**
