@@ -3,7 +3,7 @@ package cat.tabbie.sdk.album.model;
 import java.io.IOException;
 
 import cat.tabbie.sdk.album.repository.Describe;
-import cat.tabbie.sdk.platform.Relative;
+import cat.tabbie.sdk.platform.layout.Address;
 import lombok.NonNull;
 
 /**
@@ -23,10 +23,10 @@ public sealed interface Lease extends AutoCloseable {
   /**
    * Returns the leased file.
    *
-   * @return file beneath its mount
+   * @return file beneath the Cat
    */
   @NonNull
-  Relative relative();
+  Address address();
 
   /**
    * Releases the lease. Closing again does nothing; any other use afterwards

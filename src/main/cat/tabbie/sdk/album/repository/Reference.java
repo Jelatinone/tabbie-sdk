@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.OptionalLong;
 
 import cat.tabbie.sdk.api.Observer;
-import cat.tabbie.sdk.platform.Relative;
+import cat.tabbie.sdk.platform.layout.Address;
 import lombok.NonNull;
 
 /**
@@ -54,8 +54,8 @@ public sealed interface Reference permits Reference.Pending, Reference.Captured 
      *                                  the evidence is malformed
      */
     public Pending {
-      Relative.validateFilename(fileName);
-      List<String> components = Relative.decode(path);
+      Address.validateFilename(fileName);
+      List<String> components = Address.decode(path);
       if (components.isEmpty() || !components.getLast().equals(fileName)) {
         throw new IllegalArgumentException("A source path must end with its filename.");
       }
@@ -153,7 +153,7 @@ public sealed interface Reference permits Reference.Pending, Reference.Captured 
      * count.
      */
     public Captured {
-      Relative.validateFilename(fileName);
+      Address.validateFilename(fileName);
       if (size < 0L) {
         throw new IllegalArgumentException("Content size must be non-negative");
       }

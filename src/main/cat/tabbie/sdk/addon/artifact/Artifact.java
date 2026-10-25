@@ -17,7 +17,8 @@ import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
 import cat.tabbie.sdk.platform.Platform;
-import cat.tabbie.sdk.platform.Relative;
+import cat.tabbie.sdk.platform.layout.Address;
+import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
 
 /**
@@ -134,9 +135,9 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
     Layout layout = context.layout(this);
     return source().capture()
         .flatMap(captured -> layout.unpack()
-            ? context.archive().unpack(captured, layout.relative())
+            ? context.archive().unpack(captured, layout.address())
             : Intermediate.of(Set.<Image<?>>of(
-                Image.create(layout.relative().resolve(captured.fileName()), captured))))
+                Image.create(layout.address().resolve(captured.fileName()), captured))))
         .map(Artifact::checked);
   }
 
@@ -289,8 +290,8 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
   }
 
   /**
-   * Selected target, logical mounts, retention, and per-artifact layout
-   * overrides, independent of physical paths.
+   * Selected target and World, and per-artifact layout overrides, independent
+   * of physical paths.
    */
   interface Context extends Installer.Context {
 
@@ -314,36 +315,42 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
     }
 
     /**
-     * Selects an override or the distribution's default layout.
+     * Selects an override or the distribution's default layout. Datapacks and
+     * behaviour packs belong to a World, so their layout must lie in
+     * {@link #world()}, whichever was selected.
      *
      * @param artifact selected artifact
-     * @return scoped logical layout
+     * @return layout beneath the Cat
      * @throws IOException              when no default or override exists
+     * @throws Violation.Outside        when World content would lie outside the
+     *                                  World
      * @throws IllegalArgumentException when the target is not explicitly
      *                                  supported
      */
     default Layout layout(@NonNull Artifact artifact) throws IOException {
       artifact.require(this);
       Layout override = layouts().get(artifact.artifactId());
-      return override != null
+      Layout layout = override != null
           ? override
           : label().distribution().layout(artifact, this);
+      return switch (artifact) {
+        case Datapack _, Behaviourpack _ -> layout.require(world());
+        case Mod _, Plugin _, Modpack _, Resourcepack _, Custom _ -> layout;
+      };
     }
 
     /**
-     * Immutable context with explicit mounts and layout overrides.
+     * Immutable context with a selected World and layout overrides.
      *
-     * @param label       selected target
-     * @param platform    target platform
-     * @param contextRoot context mount relative to the installation
-     * @param worldRoot   selected world relative to the context mount
-     * @param layouts     per-artifact layout overrides
+     * @param label    selected target
+     * @param platform target platform
+     * @param world    selected World's directory beneath the Cat
+     * @param layouts  per-artifact layout overrides
      */
     record Default(
         @NonNull Label label,
         @NonNull Platform platform,
-        @NonNull Relative.Root contextRoot,
-        @NonNull Relative.World worldRoot,
+        @NonNull Address world,
         @NonNull Map<Identity<Artifact>, Layout> layouts) implements Context {
 
       /**
@@ -356,25 +363,35 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
       /**
        * Creates a context without layout overrides.
        *
-       * @param label       selected target
-       * @param platform    target platform
-       * @param contextRoot context mount relative to the installation
-       * @param worldRoot   selected world relative to the context mount
+       * @param label    selected target
+       * @param platform target platform
+       * @param world    selected World's directory beneath the Cat
        */
-      public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Relative.Root contextRoot,
-          @NonNull Relative.World worldRoot) {
-        this(label, platform, contextRoot, worldRoot, Map.of());
+      public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Address world) {
+        this(label, platform, world, Map.of());
       }
     }
   }
 
   /**
-   * Scoped placement. A named-file layout names the directory receiving the
-   * file; an unpacking layout names the exact extraction root.
+   * Placement beneath the Cat. A named-file layout names the directory
+   * receiving the file; an unpacking layout names the exact extraction root.
    *
-   * @param unpack   whether the content is a ZIP archive to extract
-   * @param relative scoped destination directory
+   * @param unpack  whether the content is a ZIP archive to extract
+   * @param address destination directory
    */
-  record Layout(boolean unpack, @NonNull Relative relative) {
+  record Layout(boolean unpack, @NonNull Address address) {
+
+    /**
+     * Requires this layout's destination to lie in a directory.
+     *
+     * @param directory directory the destination must lie in
+     * @return this layout
+     * @throws Violation.Outside when the destination lies elsewhere
+     */
+    public Layout require(@NonNull Address directory) {
+      address.require(directory);
+      return this;
+    }
   }
 }

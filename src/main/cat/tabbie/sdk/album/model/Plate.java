@@ -6,7 +6,7 @@ import java.nio.file.Path;
 import cat.tabbie.sdk.album.repository.Stash;
 import cat.tabbie.sdk.api.Observer;
 import cat.tabbie.sdk.platform.Command;
-import cat.tabbie.sdk.platform.Relative;
+import cat.tabbie.sdk.platform.layout.Address;
 import cat.tabbie.sdk.platform.Toolchain;
 import lombok.NonNull;
 
@@ -19,7 +19,7 @@ import lombok.NonNull;
  *
  * <p>
  * Work reaches files only through {@link Lease leases}, taken by
- * {@link Relative} path. How a plate excludes other work while a lease is open
+ * {@link Address}. How a plate excludes other work while a lease is open
  * is its own choice. Content reaches the stash through the plate as well, since
  * a plate is a {@link Stash}: captures land alike while rehearsing and acting,
  * because retaining content changes no file of the Cat.
@@ -61,19 +61,17 @@ public interface Plate extends Command.Resolver, Stash {
   }
 
   /**
-   * Binds a scoped path to a physical path, only for rendering the arguments of
-   * a command an outside process runs. Work reads and writes files through
+   * Binds an address to a physical path, only for rendering the arguments of a
+   * command an outside process runs. Work reads and writes files through
    * leases, never through this path: while rehearsing, it names the real Cat
    * rather than the overlay.
    *
-   * @param relative scoped path
+   * @param address path beneath the Cat
    * @return physical path
-   * @throws IllegalArgumentException when no directory is bound to the path's
-   *                                  mount
    */
   @Override
   @NonNull
-  Path path(@NonNull Relative relative);
+  Path path(@NonNull Address address);
 
   /**
    * Locates the program of a runtime meeting a requirement, for rendering a
@@ -90,37 +88,37 @@ public interface Plate extends Command.Resolver, Stash {
   /**
    * Leases a file for reading.
    *
-   * @param relative file beneath its mount
+   * @param address file beneath the Cat
    * @return open lease, owned by the caller
    * @throws Refusal     with {@link Refusal.Held} when the plate does not wait
    *                     and the path is leased for writing
    * @throws IOException when the lease cannot be taken
    */
   @NonNull
-  Lease.Read read(@NonNull Relative relative) throws IOException;
+  Lease.Read read(@NonNull Address address) throws IOException;
 
   /**
    * Leases a file for writing.
    *
-   * @param relative file beneath its mount
+   * @param address file beneath the Cat
    * @return open lease, owned by the caller
    * @throws Refusal     with {@link Refusal.Held} when the plate does not wait
    *                     and the path is leased
    * @throws IOException when the lease cannot be taken
    */
   @NonNull
-  Lease.Write write(@NonNull Relative relative) throws IOException;
+  Lease.Write write(@NonNull Address address) throws IOException;
 
   /**
    * Leases a file for reading and writing, for work that checks a file before
    * it changes it.
    *
-   * @param relative file beneath its mount
+   * @param address file beneath the Cat
    * @return open lease, owned by the caller
    * @throws Refusal     with {@link Refusal.Held} when the plate does not wait
    *                     and the path is leased
    * @throws IOException when the lease cannot be taken
    */
   @NonNull
-  Lease.Exclusive compose(@NonNull Relative relative) throws IOException;
+  Lease.Exclusive compose(@NonNull Address address) throws IOException;
 }

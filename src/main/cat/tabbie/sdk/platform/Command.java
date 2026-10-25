@@ -5,12 +5,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import cat.tabbie.sdk.platform.layout.Address;
 import lombok.NonNull;
 
 /**
  * A declarative program invocation: an executable followed by ordered tokens.
  * Describing a command runs nothing. Executors render it into an argument
- * vector, binding scoped paths and toolchain programs to their physical
+ * vector, binding addresses and toolchain programs to their physical
  * locations, and run it without a shell, so no token is ever reinterpreted.
  *
  * @param executable program to run
@@ -86,7 +87,7 @@ public record Command(@NonNull Argument executable, @NonNull List<Token> tokens)
   /**
    * Renders the argument vector, executable first.
    *
-   * @param resolver executor bindings for scoped paths and toolchains
+   * @param resolver executor bindings for addresses and toolchains
    * @return immutable argument vector
    */
   public List<String> render(@NonNull Resolver resolver) {
@@ -102,13 +103,13 @@ public record Command(@NonNull Argument executable, @NonNull List<Token> tokens)
   public interface Resolver {
 
     /**
-     * Binds a scoped logical path to a physical path.
+     * Binds an address beneath the Cat to a physical path.
      *
-     * @param relative context- or world-scoped path
+     * @param address path beneath the Cat
      * @return physical path
      */
     @NonNull
-    Path path(@NonNull Relative relative);
+    Path path(@NonNull Address address);
 
     /**
      * Locates the program of a provisioned toolchain, such as a {@code java}
@@ -190,15 +191,15 @@ public record Command(@NonNull Argument executable, @NonNull List<Token> tokens)
     }
 
     /**
-     * A scoped logical path, bound by the executor.
+     * An address beneath the Cat, bound by the executor.
      *
-     * @param path context- or world-scoped path
+     * @param address path beneath the Cat
      */
-    record Location(@NonNull Relative path) implements Argument {
+    record Location(@NonNull Address address) implements Argument {
 
       @Override
       public String render(@NonNull Resolver resolver) {
-        return resolver.path(path).toString();
+        return resolver.path(address).toString();
       }
     }
 

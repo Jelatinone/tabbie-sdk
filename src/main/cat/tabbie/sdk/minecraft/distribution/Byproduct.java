@@ -12,8 +12,8 @@ import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.platform.Command;
 import cat.tabbie.sdk.platform.Platform;
-import cat.tabbie.sdk.platform.Relative;
 import cat.tabbie.sdk.platform.Toolchain;
+import cat.tabbie.sdk.platform.layout.Address;
 import lombok.NonNull;
 
 /**
@@ -124,10 +124,10 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
 
     /**
      * Describes how to start this byproduct in a context, without starting it.
-     * Scoped paths in the arrangement are resolved by the executor through the
-     * context's mounts.
+     * Addresses in the arrangement are bound to physical paths by the
+     * executor.
      *
-     * @param context selected target and mounts
+     * @param context selected target and World
      * @return start arrangement
      */
     @NonNull
@@ -138,7 +138,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
      * The arrangement must suit the one {@link #allocate} returns for the same
      * context; see {@link Deallocate} for valid pairings.
      *
-     * @param context selected target and mounts
+     * @param context selected target and World
      * @return stop arrangement
      */
     @NonNull
@@ -162,12 +162,12 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
        * its input, signal it, and observe its exit.
        *
        * @param command     start command
-       * @param pwd         scoped working directory of the process
+       * @param pwd         working directory of the process, beneath the Cat
        * @param environment additional environment variables
        */
       record Managed(
           @NonNull Command command,
-          @NonNull Relative pwd,
+          @NonNull Address pwd,
           @NonNull Map<String, String> environment) implements Allocate {
 
         /**
@@ -184,7 +184,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
        * own the resulting process, so it can only be stopped with
        * {@link Deallocate.Invoke}.
        *
-       * @param command start command, run in the context mount
+       * @param command start command, run in the Cat's directory
        */
       record Unmanaged(@NonNull Command command) implements Allocate {
       }
@@ -231,7 +231,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
        * For a managed byproduct the executor then waits for its process to exit;
        * for an unmanaged one, for the stop command to exit.
        *
-       * @param command stop command, run in the context mount
+       * @param command stop command, run in the Cat's directory
        * @param grace   time allowed for the byproduct to stop
        */
       record Invoke(@NonNull Command command, @NonNull Duration grace) implements Deallocate {
@@ -272,20 +272,18 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
     Map<String, String> runtimeOptions();
 
     /**
-     * Immutable context with explicit mounts and runtime settings.
+     * Immutable context with a selected World and runtime settings.
      *
      * @param label          selected target
      * @param platform       target platform
-     * @param contextRoot    context mount relative to the installation
-     * @param worldRoot      selected world relative to the context mount
+     * @param world          selected World's directory beneath the Cat
      * @param maximumMemory  positive memory bound in bytes, or empty
      * @param runtimeOptions runtime options
      */
     record Default(
         @NonNull Label label,
         @NonNull Platform platform,
-        @NonNull Relative.Root contextRoot,
-        @NonNull Relative.World worldRoot,
+        @NonNull Address world,
         @NonNull Optional<Long> maximumMemory,
         @NonNull Map<String, String> runtimeOptions) implements Context {
 
@@ -304,14 +302,12 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
       /**
        * Creates a context with the program's default memory and no options.
        *
-       * @param label       selected target
-       * @param platform    target platform
-       * @param contextRoot context mount relative to the installation
-       * @param worldRoot   selected world relative to the context mount
+       * @param label    selected target
+       * @param platform target platform
+       * @param world    selected World's directory beneath the Cat
        */
-      public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Relative.Root contextRoot,
-          @NonNull Relative.World worldRoot) {
-        this(label, platform, contextRoot, worldRoot, Optional.empty(), Map.of());
+      public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Address world) {
+        this(label, platform, world, Optional.empty(), Map.of());
       }
     }
   }

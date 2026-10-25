@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-import cat.tabbie.sdk.platform.Relative;
 import lombok.NonNull;
 
 /**
@@ -68,7 +67,7 @@ public sealed interface Node permits Node.Directory, Node.File {
       rules = Set.copyOf(rules);
       children = List.copyOf(children);
       if (!name.isEmpty()) {
-        Relative.validateFilename(name);
+        Address.validateFilename(name);
       }
       if (children.stream().map(Node::name).anyMatch(String::isEmpty)) {
         throw new IllegalArgumentException("Only a directory standing for the Cat or a World may be unnamed.");
@@ -119,7 +118,7 @@ public sealed interface Node permits Node.Directory, Node.File {
      */
     public File {
       rules = Set.copyOf(rules);
-      Relative.validateFilename(name);
+      Address.validateFilename(name);
       if (rules.stream().anyMatch(Rule.Accepts.class::isInstance)) {
         throw new IllegalArgumentException("A file accepts no content.");
       }

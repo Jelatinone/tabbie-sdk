@@ -49,7 +49,8 @@ machine. Carrying out its descriptions belongs to the consumer.
 | `cat.tabbie.sdk.addon`, `.addon.artifact` | Addon projects, their builds, and the artifacts they carry |
 | `cat.tabbie.sdk.album.repository` | Describing, retaining and unpacking content |
 | `cat.tabbie.sdk.album.revision` | Images (reversible changes) and intermediates (deferred work) |
-| `cat.tabbie.sdk.platform` | Relative paths, platforms, toolchains, packages and commands |
+| `cat.tabbie.sdk.platform` | Platforms, toolchains, packages and commands |
+| `cat.tabbie.sdk.platform.layout` | Addresses and the declared layout of a Cat |
 | `cat.tabbie.sdk.api` | Provider-agnostic queries and progress observers |
 
 ## Building

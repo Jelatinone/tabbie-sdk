@@ -2,10 +2,10 @@ package cat.tabbie.sdk.platform.layout;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import cat.tabbie.sdk.platform.Relative;
 import lombok.NonNull;
 
 /**
@@ -28,7 +28,7 @@ public record Address(@NonNull List<String> components) {
    *                                  portable filename
    */
   public Address {
-    components = Relative.canonical(components);
+    components = canonical(components);
   }
 
   /**
@@ -62,7 +62,52 @@ public record Address(@NonNull List<String> components) {
    * @throws IllegalArgumentException when the encoding is not canonical
    */
   public static Address parse(@NonNull String encoded) {
-    return new Address(Relative.decode(encoded));
+    return new Address(decode(encoded));
+  }
+
+  /**
+   * Decodes a persisted forward-slash path into its components. Only canonical
+   * encodings are accepted: empty components, dot segments, and backslashes
+   * are rejected rather than normalized, so a persisted path decodes to
+   * identical components on every platform.
+   *
+   * @param encoded forward-slash encoding, empty for no components
+   * @return immutable canonical components
+   * @throws IllegalArgumentException when the encoding is not canonical
+   */
+  public static List<String> decode(@NonNull String encoded) {
+    return encoded.isEmpty()
+        ? List.of()
+        : canonical(Arrays.asList(encoded.split("/", -1)));
+  }
+
+  /**
+   * Checks that every component is one portable filename.
+   *
+   * @param components candidate components
+   * @return immutable copy
+   * @throws IllegalArgumentException when a component is empty, a dot segment,
+   *                                  or contains a separator or reserved
+   *                                  character
+   */
+  public static List<String> canonical(@NonNull List<String> components) {
+    List<String> copy = List.copyOf(components);
+    copy.forEach(Address::validateFilename);
+    return copy;
+  }
+
+  /**
+   * Checks a single filename without reading the filesystem. These lexical
+   * checks do not establish whether a target filesystem permits the name.
+   *
+   * @param fileName filename to check
+   * @throws IllegalArgumentException when the name is blank or contains a path
+   */
+  public static void validateFilename(@NonNull String fileName) {
+    if (fileName.isBlank() || fileName.equals(".") || fileName.equals("..")
+        || fileName.chars().anyMatch(character -> character < 32 || "<>:\"/\\|?*".indexOf(character) >= 0)) {
+      throw new IllegalArgumentException("Expected a non-blank single filename.");
+    }
   }
 
   /**

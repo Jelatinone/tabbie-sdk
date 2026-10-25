@@ -3,7 +3,7 @@ package cat.tabbie.sdk.album.model;
 import java.io.Serial;
 import java.nio.file.FileSystemException;
 
-import cat.tabbie.sdk.platform.Relative;
+import cat.tabbie.sdk.platform.layout.Address;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -34,7 +34,7 @@ public final class Refusal extends FileSystemException {
    * @param reason why the plate refused
    */
   public Refusal(@NonNull Reason reason) {
-    super(reason.relative().encoded(), reason.above() ? reason.at().encoded() : null, reason.message());
+    super(reason.address().encoded(), reason.above() ? reason.at().encoded() : null, reason.message());
     this.reason = reason;
   }
 
@@ -91,7 +91,7 @@ public final class Refusal extends FileSystemException {
      * @return operation's path
      */
     @NonNull
-    Relative relative();
+    Address address();
 
     /**
      * Returns the path that decided the refusal.
@@ -99,7 +99,7 @@ public final class Refusal extends FileSystemException {
      * @return the operation's own path, or a path above it
      */
     @NonNull
-    Relative at();
+    Address at();
 
     /**
      * Describes the refusal as a sentence.
@@ -115,7 +115,7 @@ public final class Refusal extends FileSystemException {
      * @return true when {@link #at()} is not the operation's own path
      */
     default boolean above() {
-      return !at().equals(relative());
+      return !at().equals(address());
     }
   }
 
@@ -153,13 +153,13 @@ public final class Refusal extends FileSystemException {
    * Nothing is at the operation's path, which requires a file there, and
    * nothing above it is in the way.
    *
-   * @param relative path the operation was on
+   * @param address path the operation was on
    */
-  public record Missing(@NonNull Relative relative) implements Mismatch {
+  public record Missing(@NonNull Address address) implements Mismatch {
 
     @Override
-    public Relative at() {
-      return relative;
+    public Address at() {
+      return address;
     }
 
     @Override
@@ -178,14 +178,14 @@ public final class Refusal extends FileSystemException {
    * created, something other than a file where one is to be read, replaced or
    * deleted, or something other than a directory above the operation's path.
    *
-   * @param relative path the operation was on
+   * @param address  path the operation was on
    * @param at       path that holds it: the operation's own, or one above it
    * @param required what the operation requires at that path
    * @param found    what that path holds
    */
   public record Occupied(
-      @NonNull Relative relative,
-      @NonNull Relative at,
+      @NonNull Address address,
+      @NonNull Address at,
       @NonNull Kind required,
       @NonNull Kind found) implements Mismatch {
 
@@ -204,22 +204,22 @@ public final class Refusal extends FileSystemException {
     /**
      * Describes the operation's own path holding the wrong kind of thing.
      *
-     * @param relative path the operation was on
+     * @param address  path the operation was on
      * @param required what the operation requires there
      * @param found    what the path holds
      */
-    public Occupied(@NonNull Relative relative, @NonNull Kind required, @NonNull Kind found) {
-      this(relative, relative, required, found);
+    public Occupied(@NonNull Address address, @NonNull Kind required, @NonNull Kind found) {
+      this(address, address, required, found);
     }
   }
 
   /**
    * The filesystem does not permit the write.
    *
-   * @param relative path the operation was on
+   * @param address  path the operation was on
    * @param at       the read-only file, or the directory that would hold it
    */
-  public record Denied(@NonNull Relative relative, @NonNull Relative at) implements Reason {
+  public record Denied(@NonNull Address address, @NonNull Address at) implements Reason {
 
     @Override
     public String message() {
@@ -230,13 +230,13 @@ public final class Refusal extends FileSystemException {
   /**
    * Another lease holds the operation's path, on a plate that does not wait.
    *
-   * @param relative path the operation was on
+   * @param address path the operation was on
    */
-  public record Held(@NonNull Relative relative) implements Reason {
+  public record Held(@NonNull Address address) implements Reason {
 
     @Override
-    public Relative at() {
-      return relative;
+    public Address at() {
+      return address;
     }
 
     @Override

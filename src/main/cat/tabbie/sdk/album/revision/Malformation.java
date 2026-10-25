@@ -2,7 +2,7 @@ package cat.tabbie.sdk.album.revision;
 
 import java.io.Serial;
 
-import cat.tabbie.sdk.platform.Relative;
+import cat.tabbie.sdk.platform.layout.Address;
 import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
@@ -41,16 +41,16 @@ public abstract sealed class Malformation extends IllegalArgumentException {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    transient Relative relative;
+    transient Address address;
 
     /**
      * Describes a change that changes nothing.
      *
-     * @param relative file the change was on
+     * @param address file the change was on
      */
-    public Unchanged(@NonNull Relative relative) {
-      super("A change of %s must change something.".formatted(relative.encoded()), null);
-      this.relative = relative;
+    public Unchanged(@NonNull Address address) {
+      super("A change of %s must change something.".formatted(address.encoded()), null);
+      this.address = address;
     }
 
     /**
@@ -58,39 +58,39 @@ public abstract sealed class Malformation extends IllegalArgumentException {
      *
      * @return changed file
      */
-    public Relative relative() {
-      return relative;
+    public Address address() {
+      return address;
     }
   }
 
   /**
-   * The change names a mount itself rather than a file beneath it.
+   * The change names the Cat itself rather than a file beneath it.
    */
   @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-  public static final class Mount extends Malformation {
+  public static final class Root extends Malformation {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
-    transient Relative relative;
+    transient Address address;
 
     /**
-     * Describes a change of a mount.
+     * Describes a change of the Cat itself.
      *
-     * @param relative mount the change named
+     * @param address the Cat's address the change named
      */
-    public Mount(@NonNull Relative relative) {
-      super("A changed file must lie beneath its mount.", null);
-      this.relative = relative;
+    public Root(@NonNull Address address) {
+      super("A changed file must lie beneath the Cat.", null);
+      this.address = address;
     }
 
     /**
-     * Returns the mount the change named.
+     * Returns the address the change named.
      *
-     * @return named mount
+     * @return the Cat's address
      */
-    public Relative relative() {
-      return relative;
+    public Address address() {
+      return address;
     }
   }
 
@@ -104,27 +104,27 @@ public abstract sealed class Malformation extends IllegalArgumentException {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    transient Relative relative;
+    transient Address address;
 
     /**
      * Describes discontinuous changes.
      *
-     * @param relative file the changes were on
+     * @param address file the changes were on
      */
-    public Discontinuous(@NonNull Relative relative) {
-      this(relative, null);
+    public Discontinuous(@NonNull Address address) {
+      this(address, null);
     }
 
     /**
      * Describes discontinuous changes found by a failure, such as chunks that
      * disagree about the text between them.
      *
-     * @param relative file the changes were on
-     * @param cause    failure that revealed the discontinuity
+     * @param address file the changes were on
+     * @param cause   failure that revealed the discontinuity
      */
-    public Discontinuous(@NonNull Relative relative, Throwable cause) {
-      super("Changes of %s must continue from one another.".formatted(relative.encoded()), cause);
-      this.relative = relative;
+    public Discontinuous(@NonNull Address address, Throwable cause) {
+      super("Changes of %s must continue from one another.".formatted(address.encoded()), cause);
+      this.address = address;
     }
 
     /**
@@ -132,8 +132,8 @@ public abstract sealed class Malformation extends IllegalArgumentException {
      *
      * @return changed file
      */
-    public Relative relative() {
-      return relative;
+    public Address address() {
+      return address;
     }
   }
 
@@ -147,9 +147,9 @@ public abstract sealed class Malformation extends IllegalArgumentException {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    transient Relative first;
+    transient Address first;
 
-    transient Relative second;
+    transient Address second;
 
     /**
      * Describes a composition of changes of different files.
@@ -157,7 +157,7 @@ public abstract sealed class Malformation extends IllegalArgumentException {
      * @param first  file of the earlier change
      * @param second file of the later change
      */
-    public Unrelated(@NonNull Relative first, @NonNull Relative second) {
+    public Unrelated(@NonNull Address first, @NonNull Address second) {
       super("Only changes of one file compose, not %s and %s.".formatted(first.encoded(), second.encoded()), null);
       this.first = first;
       this.second = second;
@@ -168,7 +168,7 @@ public abstract sealed class Malformation extends IllegalArgumentException {
      *
      * @return earlier file
      */
-    public Relative first() {
+    public Address first() {
       return first;
     }
 
@@ -177,7 +177,7 @@ public abstract sealed class Malformation extends IllegalArgumentException {
      *
      * @return later file
      */
-    public Relative second() {
+    public Address second() {
       return second;
     }
   }
@@ -192,16 +192,16 @@ public abstract sealed class Malformation extends IllegalArgumentException {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    transient Relative relative;
+    transient Address address;
 
     /**
      * Describes two images of one file in a set.
      *
-     * @param relative file both images change
+     * @param address file both images change
      */
-    public Clash(@NonNull Relative relative) {
-      super("A set may change %s only once.".formatted(relative.encoded()), null);
-      this.relative = relative;
+    public Clash(@NonNull Address address) {
+      super("A set may change %s only once.".formatted(address.encoded()), null);
+      this.address = address;
     }
 
     /**
@@ -209,8 +209,8 @@ public abstract sealed class Malformation extends IllegalArgumentException {
      *
      * @return changed file
      */
-    public Relative relative() {
-      return relative;
+    public Address address() {
+      return address;
     }
   }
 
@@ -224,9 +224,9 @@ public abstract sealed class Malformation extends IllegalArgumentException {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    transient Relative directory;
+    transient Address directory;
 
-    transient Relative file;
+    transient Address file;
 
     /**
      * Describes a file that a set also uses as a directory.
@@ -234,7 +234,7 @@ public abstract sealed class Malformation extends IllegalArgumentException {
      * @param directory changed file that another changed file lies beneath
      * @param file      changed file beneath it
      */
-    public Nested(@NonNull Relative directory, @NonNull Relative file) {
+    public Nested(@NonNull Address directory, @NonNull Address file) {
       super("%s cannot be a file while %s lies beneath it.".formatted(directory.encoded(), file.encoded()), null);
       this.directory = directory;
       this.file = file;
@@ -245,7 +245,7 @@ public abstract sealed class Malformation extends IllegalArgumentException {
      *
      * @return file used as a directory
      */
-    public Relative directory() {
+    public Address directory() {
       return directory;
     }
 
@@ -254,7 +254,7 @@ public abstract sealed class Malformation extends IllegalArgumentException {
      *
      * @return nested file
      */
-    public Relative file() {
+    public Address file() {
       return file;
     }
   }

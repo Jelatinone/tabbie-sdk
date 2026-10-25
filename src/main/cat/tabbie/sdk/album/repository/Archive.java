@@ -24,7 +24,7 @@ import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.album.revision.Scrutiny;
 import cat.tabbie.sdk.api.Observer;
-import cat.tabbie.sdk.platform.Relative;
+import cat.tabbie.sdk.platform.layout.Address;
 import lombok.NonNull;
 
 /**
@@ -72,7 +72,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * @param destination logical extraction directory
    * @return unevaluated image preparation producing an immutable set
    */
-  public Intermediate<Set<Image<?>>> unpack(@NonNull Reference.Captured archive, @NonNull Relative destination) {
+  public Intermediate<Set<Image<?>>> unpack(@NonNull Reference.Captured archive, @NonNull Address destination) {
     return inspect(archive).flatMap(found -> new Unpack(destination, found, this));
   }
 
@@ -201,7 +201,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * @param entries     inspected file entries of one archive, at least one
    * @param limits      processing bounds
    */
-  record Unpack(Relative destination, List<Entry> entries, Archive limits)
+  record Unpack(Address destination, List<Entry> entries, Archive limits)
       implements Intermediate.Step<Set<Image<?>>> {
 
     @Override
@@ -265,7 +265,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
             plate.observer().transfer(transfer);
           }
         };
-        Relative target = destination.resolve(Relative.decode(entry.path()));
+        Address target = destination.resolve(Address.decode(entry.path()));
         images.add(Image.create(target, plate.capture(retained, read)));
         plate.observer().transfer(files(images.size()));
       }
@@ -303,7 +303,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
      *                                  size or CRC is out of range
      */
     public Entry {
-      if (Relative.decode(path).isEmpty()) {
+      if (Address.decode(path).isEmpty()) {
         throw new IllegalArgumentException("A ZIP entry needs a path.");
       }
       catalog = Map.copyOf(catalog);
@@ -317,7 +317,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 
     @Override
     public Reference.Pending of() {
-      return new Reference.Pending(Relative.decode(path).getLast(), path, null, size);
+      return new Reference.Pending(Address.decode(path).getLast(), path, null, size);
     }
 
     @Override
@@ -426,7 +426,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
   private static List<String> resolve(String name) throws IOException {
     String value = name.endsWith("/") ? name.substring(0, name.length() - 1) : name;
     try {
-      List<String> components = Relative.decode(value);
+      List<String> components = Address.decode(value);
       if (components.isEmpty()) {
         throw new IllegalArgumentException("Empty ZIP path.");
       }

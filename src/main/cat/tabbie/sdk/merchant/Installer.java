@@ -7,7 +7,7 @@ import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.platform.Platform;
-import cat.tabbie.sdk.platform.Relative;
+import cat.tabbie.sdk.platform.layout.Address;
 import lombok.NonNull;
 
 /**
@@ -31,9 +31,8 @@ public interface Installer<Contextual extends Installer.Context> {
   Intermediate<Set<Image<?>>> install(@NonNull Contextual context) throws IOException;
 
   /**
-   * Selected target and logical mounts, independent of physical paths. A
-   * context carries no stash: captures run on the plate that collapses the
-   * installer's result.
+   * Selected target and World, independent of physical paths. A context carries
+   * no stash: captures run on the plate that collapses the installer's result.
    */
   interface Context {
 
@@ -55,42 +54,14 @@ public interface Installer<Contextual extends Installer.Context> {
     Platform platform();
 
     /**
-     * Returns the context mount relative to the installation's working
-     * directory, the mount itself for that directory.
+     * Returns the selected World's directory beneath the Cat. Content that
+     * belongs to a World is placed in it and {@link Address#require(Address)
+     * required} there. Callers that have not selected a World must reject
+     * World content themselves rather than name an arbitrary directory.
      *
-     * @return context mount
+     * @return World directory
      */
     @NonNull
-    Relative.Root contextRoot();
-
-    /**
-     * Returns the selected world's directory, as components beneath the context
-     * mount. World-scoped paths resolve beneath it. Every context has a world
-     * mount; callers that have not selected a world must reject world-scoped
-     * layouts themselves rather than bind an arbitrary directory.
-     *
-     * @return world directory relative to the context mount, empty when the
-     *         world is the context mount itself
-     */
-    @NonNull
-    Relative.World worldRoot();
-
-    /**
-     * Resolves a scoped logical path to a path relative to the installation's
-     * working directory, using this context's mounts. Core uses this resolver
-     * for every generated image.
-     *
-     * @param relative context- or world-scoped path
-     * @return installation-relative path
-     */
-    default Relative.Root resolve(@NonNull Relative relative) {
-      return switch (relative) {
-        case Relative.Root root -> contextRoot()
-            .resolve(root.components());
-        case Relative.World world -> contextRoot()
-            .resolve(worldRoot().components())
-            .resolve(world.components());
-      };
-    }
+    Address world();
   }
 }

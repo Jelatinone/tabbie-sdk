@@ -15,7 +15,7 @@ import cat.tabbie.sdk.addon.artifact.Plugin;
 import cat.tabbie.sdk.addon.artifact.Resourcepack;
 import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Version;
-import cat.tabbie.sdk.platform.Relative;
+import cat.tabbie.sdk.platform.layout.Address;
 import lombok.NonNull;
 
 /**
@@ -123,7 +123,7 @@ public sealed interface Distribution permits Java, Bedrock {
    * @param artifact reference artifact
    * @param context  reference context
    *
-   * @return scoped default layout
+   * @return default layout, beneath the Cat
    *
    * @throws IOException              when no default layout exists
    * @throws IllegalArgumentException when this distribution does not support the
@@ -147,13 +147,13 @@ public sealed interface Distribution permits Java, Bedrock {
       case Mod mod ->
         new Artifact.Layout(
             false,
-            Relative.root("mods"));
+            Address.of("mods"));
 
       // Plugin (.jar) -> plugins/
       case Plugin plugin ->
         new Artifact.Layout(
             false,
-            Relative.root("plugins"));
+            Address.of("plugins"));
 
       // Resource pack (.zip) -> resourcepacks/ on clients; servers deliver packs
       case Resourcepack.Java resourcepack -> {
@@ -163,27 +163,27 @@ public sealed interface Distribution permits Java, Bedrock {
         }
         yield new Artifact.Layout(
             false,
-            Relative.root("resourcepacks"));
+            Address.of("resourcepacks"));
       }
 
       // Resource pack (.mcpack) -> resource_packs/<id>/
       case Resourcepack.Bedrock resourcepack ->
         new Artifact.Layout(
             true,
-            Relative.root("resource_packs", directory));
+            Address.of("resource_packs", directory));
 
       // Datapack (.zip) -> <world>/datapacks/<id>/
       case Datapack datapack -> new Artifact.Layout(
           true,
-          Relative.world("datapacks", directory));
+          context.world().resolve("datapacks", directory));
 
       // Behaviour pack (.mcpack) -> <world>/behavior_packs/<id>/
       case Behaviourpack behaviourpack ->
         new Artifact.Layout(
             true,
-            Relative.world("behavior_packs", directory));
+            context.world().resolve("behavior_packs", directory));
 
-      // Self-contained modpack (.zip) -> context root, on mod loaders only
+      // Self-contained modpack (.zip) -> the Cat itself, on mod loaders only
       case Modpack modpack -> {
         if (!(this instanceof Java.Launcher)) {
           throw new IOException(String.format(
@@ -191,7 +191,7 @@ public sealed interface Distribution permits Java, Bedrock {
         }
         yield new Artifact.Layout(
             true,
-            Relative.root());
+            Address.root());
       }
 
     };

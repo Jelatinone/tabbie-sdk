@@ -16,7 +16,7 @@ import cat.tabbie.sdk.album.model.Refusal;
 import cat.tabbie.sdk.album.repository.Describe;
 import cat.tabbie.sdk.album.repository.Reference;
 import cat.tabbie.sdk.album.repository.Stash;
-import cat.tabbie.sdk.platform.Relative;
+import cat.tabbie.sdk.platform.layout.Address;
 import lombok.NonNull;
 
 /**
@@ -29,7 +29,7 @@ import lombok.NonNull;
  *
  * <p>
  * An image is always well formed: it changes something, and its file lies
- * beneath its mount. Describing a change that is not throws a
+ * beneath the Cat. Describing a change that is not throws a
  * {@link Malformation} saying why, so no image needs checking for a change
  * that does nothing.
  *
@@ -62,10 +62,10 @@ public sealed interface Image<State extends Image.Alteration> {
   /**
    * File this image changes.
    *
-   * @return changed file, beneath its mount
+   * @return changed file, beneath the Cat
    */
   @NonNull
-  Relative relative();
+  Address address();
 
   /**
    * Expected existence or content before the change.
@@ -94,123 +94,122 @@ public sealed interface Image<State extends Image.Alteration> {
   /**
    * Describes creation of a file from retained content, including zero bytes.
    *
-   * @param path  target file
-   * @param after retained content
+   * @param address target file
+   * @param after   retained content
    * @return resulting image
-   * @throws Malformation.Mount when the path is its mount
+   * @throws Malformation.Root when the address is the Cat itself
    */
-  static Image<File> create(@NonNull Relative path, @NonNull Reference.Captured after) {
-    return new Installation(new File.Absent(), new File.Present(after), path);
+  static Image<File> create(@NonNull Address address, @NonNull Reference.Captured after) {
+    return new Installation(new File.Absent(), new File.Present(after), address);
   }
 
   /**
    * Describes replacement of a file deleted and succeeded by another file
    * created.
    *
-   * @param path   target file
-   * @param before retained content before
-   * @param after  retained content after
+   * @param address target file
+   * @param before  retained content before
+   * @param after   retained content after
    * @return resulting image
    * @throws Malformation.Unchanged when both contents are the same
-   * @throws Malformation.Mount     when the path is its mount
+   * @throws Malformation.Root      when the address is the Cat itself
    */
-  static Image<File> replace(@NonNull Relative path, @NonNull Reference.Captured before,
+  static Image<File> replace(@NonNull Address address, @NonNull Reference.Captured before,
       @NonNull Reference.Captured after) {
-    return new Installation(new File.Present(before), new File.Present(after), path);
+    return new Installation(new File.Present(before), new File.Present(after), address);
   }
 
   /**
    * Describes deletion of a file whose complete content matches the reference.
    *
-   * @param path   target file
-   * @param before retained content before
+   * @param address target file
+   * @param before  retained content before
    * @return resulting image
-   * @throws Malformation.Mount when the path is its mount
+   * @throws Malformation.Root when the address is the Cat itself
    */
-  static Image<File> delete(@NonNull Relative path, @NonNull Reference.Captured before) {
-    return new Installation(new File.Present(before), new File.Absent(), path);
+  static Image<File> delete(@NonNull Address address, @NonNull Reference.Captured before) {
+    return new Installation(new File.Present(before), new File.Absent(), address);
   }
 
   /**
    * Describes changes to an existing file between explicit fragment states. The
    * fragment lists pair up into chunks.
    *
-   * @param path   target file
-   * @param before text before
-   * @param after  text after
+   * @param address target file
+   * @param before  text before
+   * @param after   text after
    * @return resulting image
    * @throws Malformation.Unchanged when no fragment changes
-   * @throws Malformation.Mount     when the path is its mount
+   * @throws Malformation.Root      when the address is the Cat itself
    */
-  static Image<Text> configure(@NonNull Relative path, @NonNull Text before, @NonNull Text after) {
-    return new Configuration(before, after, path);
+  static Image<Text> configure(@NonNull Address address, @NonNull Text before, @NonNull Text after) {
+    return new Configuration(before, after, address);
   }
 
   /**
    * Describes changes to an existing file. Each chunk contributes a fragment on
    * each side; the chunks' insertion/deletion ordering is not retained.
    *
-   * @param path   target file
-   * @param chunks changed chunks
+   * @param address target file
+   * @param chunks  changed chunks
    * @return resulting image
    * @throws Malformation.Unchanged when no chunk edits its text
-   * @throws Malformation.Mount     when the path is its mount
+   * @throws Malformation.Root      when the address is the Cat itself
    */
-  static Image<Text> configure(@NonNull Relative path, @NonNull List<Chunk> chunks) {
-    return new Configuration(chunks, path);
+  static Image<Text> configure(@NonNull Address address, @NonNull List<Chunk> chunks) {
+    return new Configuration(chunks, address);
   }
 
   /**
    * Describes text differences with three surrounding context lines.
    *
-   * @param path   target file
-   * @param before text before
-   * @param after  text after
+   * @param address target file
+   * @param before  text before
+   * @param after   text after
    * @return resulting image
    * @throws Malformation.Unchanged when the texts are equal
-   * @throws Malformation.Mount     when the path is its mount
+   * @throws Malformation.Root      when the address is the Cat itself
    */
-  static Image<Text> configure(@NonNull Relative path, @NonNull String before, @NonNull String after) {
-    return configure(path, Chunk.diff(before, after));
+  static Image<Text> configure(@NonNull Address address, @NonNull String before, @NonNull String after) {
+    return configure(address, Chunk.diff(before, after));
   }
 
   /**
    * Describes text differences, retaining only the differing regions and their
    * context rather than complete content expectations.
    *
-   * @param path         target file
+   * @param address      target file
    * @param before       text before
    * @param after        text after
    * @param contextLines number of context lines to keep
    * @return resulting image
    * @throws Malformation.Unchanged when the texts are equal
-   * @throws Malformation.Mount     when the path is its mount
+   * @throws Malformation.Root      when the address is the Cat itself
    */
-  static Image<Text> configure(@NonNull Relative path, @NonNull String before, @NonNull String after,
+  static Image<Text> configure(@NonNull Address address, @NonNull String before, @NonNull String after,
       int contextLines) {
-    return configure(path, Chunk.diff(before, after, contextLines));
+    return configure(address, Chunk.diff(before, after, contextLines));
   }
 
   /**
    * Checks that images can be exposed in any order, and so in parallel: every
-   * file appears once, and no file is also used as a directory under the same
-   * mount.
+   * file appears once, and no changed file lies beneath another.
    *
    * @param images generated images
    * @throws Malformation.Clash  when two images change the same file
    * @throws Malformation.Nested when a changed file lies beneath another
    */
   static void validate(@NonNull Collection<? extends Image<?>> images) {
-    Map<Relative, Image<?>> files = new LinkedHashMap<>();
+    Map<Address, Image<?>> files = new LinkedHashMap<>();
     for (Image<?> image : images) {
-      if (files.putIfAbsent(image.relative(), image) != null) {
-        throw new Malformation.Clash(image.relative());
+      if (files.putIfAbsent(image.address(), image) != null) {
+        throw new Malformation.Clash(image.address());
       }
     }
-    for (Relative file : files.keySet()) {
-      for (Relative parent = file.parent(); parent != null; parent = parent.parent()) {
-        if (files.containsKey(parent)) {
-          throw new Malformation.Nested(parent, file);
+    for (Address file : files.keySet()) {
+      for (Optional<Address> parent = file.parent(); parent.isPresent(); parent = parent.get().parent()) {
+        if (files.containsKey(parent.get())) {
+          throw new Malformation.Nested(parent.get(), file);
         }
       }
     }
@@ -258,8 +257,8 @@ public sealed interface Image<State extends Image.Alteration> {
    */
   static Optional<Image<?>> compose(@NonNull Image<?> first, @NonNull Image<?> second, @NonNull Stash stash)
       throws IOException {
-    if (!first.relative().equals(second.relative())) {
-      throw new Malformation.Unrelated(first.relative(), second.relative());
+    if (!first.address().equals(second.address())) {
+      throw new Malformation.Unrelated(first.address(), second.address());
     }
     return switch (first) {
       case Installation earlier -> switch (second) {
@@ -402,36 +401,36 @@ public sealed interface Image<State extends Image.Alteration> {
    *
    * @param before   complete content or absence expected before the change
    * @param after    complete content or absence described after the change
-   * @param relative changed file, beneath its mount
+   * @param address  changed file, beneath the Cat
    */
   record Installation(
-      @NonNull File before, @NonNull File after, @NonNull Relative relative)
+      @NonNull File before, @NonNull File after, @NonNull Address address)
       implements Image<Image.File> {
 
     /**
-     * Rejects the mount itself as a file, and a change that changes nothing.
+     * Rejects the Cat itself as a file, and a change that changes nothing.
      *
-     * @throws Malformation.Mount     when the path is its mount
+     * @throws Malformation.Root      when the address is the Cat itself
      * @throws Malformation.Unchanged when both states are the same, including
      *                                both absent
      */
     public Installation {
-      if (relative.isMount()) {
-        throw new Malformation.Mount(relative);
+      if (address.isRoot()) {
+        throw new Malformation.Root(address);
       }
       if (before.same(after)) {
-        throw new Malformation.Unchanged(relative);
+        throw new Malformation.Unchanged(address);
       }
     }
 
     @Override
     public Installation preimage() {
-      return new Installation(after, before, relative);
+      return new Installation(after, before, address);
     }
 
     @Override
     public Scrutiny<File> expose(@NonNull Plate plate) throws IOException {
-      try (Lease.Exclusive file = plate.compose(relative)) {
+      try (Lease.Exclusive file = plate.compose(address)) {
         File found = File.of(file);
         if (!before.same(found)) {
           return new Scrutiny.Fail<>(found);
@@ -458,13 +457,13 @@ public sealed interface Image<State extends Image.Alteration> {
      *
      * @param before   state before
      * @param after    state after
-     * @param relative changed file, beneath its mount
+     * @param address  changed file, beneath the Cat
      * @return the installation, or empty when the states are the same
      */
-    static Optional<Image<?>> between(@NonNull File before, @NonNull File after, @NonNull Relative relative) {
+    static Optional<Image<?>> between(@NonNull File before, @NonNull File after, @NonNull Address address) {
       return before.same(after)
           ? Optional.empty()
-          : Optional.of(new Installation(before, after, relative));
+          : Optional.of(new Installation(before, after, address));
     }
 
     /**
@@ -477,9 +476,9 @@ public sealed interface Image<State extends Image.Alteration> {
      */
     Optional<Image<?>> compose(@NonNull Installation later) {
       if (!after.same(later.before())) {
-        throw new Malformation.Discontinuous(relative);
+        throw new Malformation.Discontinuous(address);
       }
-      return between(before, later.after(), relative);
+      return between(before, later.after(), address);
     }
 
     /**
@@ -496,11 +495,11 @@ public sealed interface Image<State extends Image.Alteration> {
      */
     Optional<Image<?>> fold(@NonNull Configuration later, @NonNull Stash stash) throws IOException {
       if (!(after instanceof File.Present(Reference.Captured installed))) {
-        throw new Malformation.Discontinuous(relative);
+        throw new Malformation.Discontinuous(address);
       }
       String configured = later.apply(stash.text(installed));
       Reference.Captured content = stash.capture(Describe.of(installed.fileName(), configured));
-      return between(before, new File.Present(content), relative);
+      return between(before, new File.Present(content), address);
     }
   }
 
@@ -518,29 +517,29 @@ public sealed interface Image<State extends Image.Alteration> {
    * plate's refusal when the file is gone or cannot be written.
    *
    * @param chunks   text changes
-   * @param relative changed file, beneath its mount
+   * @param address  changed file, beneath the Cat
    */
   record Configuration(
-      @NonNull List<Chunk> chunks, @NonNull Relative relative)
+      @NonNull List<Chunk> chunks, @NonNull Address address)
       implements Image<Image.Text> {
 
     /**
-     * Copies and validates the chunks, and rejects the mount itself as a file
+     * Copies and validates the chunks, and rejects the Cat itself as a file
      * and chunks that change nothing.
      *
      * @throws IllegalArgumentException when the chunks are out of order or
      *                                  overlap
-     * @throws Malformation.Mount       when the path is its mount
+     * @throws Malformation.Root        when the address is the Cat itself
      * @throws Malformation.Unchanged   when no chunk edits its text
      */
     public Configuration {
       chunks = List.copyOf(chunks);
       Chunk.validateChunks(chunks);
-      if (relative.isMount()) {
-        throw new Malformation.Mount(relative);
+      if (address.isRoot()) {
+        throw new Malformation.Root(address);
       }
       if (chunks.stream().noneMatch(Chunk::edits)) {
-        throw new Malformation.Unchanged(relative);
+        throw new Malformation.Unchanged(address);
       }
     }
 
@@ -549,14 +548,14 @@ public sealed interface Image<State extends Image.Alteration> {
      *
      * @param before   text before
      * @param after    text after
-     * @param relative changed file, beneath its mount
-     * @throws Malformation.Mount     when the path is its mount
+     * @param address  changed file, beneath the Cat
+     * @throws Malformation.Root      when the address is the Cat itself
      * @throws Malformation.Unchanged when no fragment changes
      */
     public Configuration(
-        @NonNull Text before, @NonNull Text after, @NonNull Relative relative) {
+        @NonNull Text before, @NonNull Text after, @NonNull Address address) {
 
-      this(Chunk.between(before.fragments(), after.fragments()), relative);
+      this(Chunk.between(before.fragments(), after.fragments()), address);
     }
 
     @Override
@@ -581,12 +580,12 @@ public sealed interface Image<State extends Image.Alteration> {
           chunks.stream()
               .map(Chunk::invert)
               .toList(),
-          relative);
+          address);
     }
 
     @Override
     public Scrutiny<Text> expose(@NonNull Plate plate) throws IOException {
-      try (Lease.Exclusive file = plate.compose(relative)) {
+      try (Lease.Exclusive file = plate.compose(address)) {
         Describe current = file.read();
         String text = current.text();
         if (!Chunk.matches(chunks, text)) {
@@ -608,12 +607,12 @@ public sealed interface Image<State extends Image.Alteration> {
      * Describes chunks of a file as a change, unless none of them edits.
      *
      * @param chunks   text changes
-     * @param relative changed file, beneath its mount
+     * @param address  changed file, beneath the Cat
      * @return the configuration, or empty when no chunk edits its text
      */
-    static Optional<Image<?>> between(@NonNull List<Chunk> chunks, @NonNull Relative relative) {
+    static Optional<Image<?>> between(@NonNull List<Chunk> chunks, @NonNull Address address) {
       return chunks.stream().anyMatch(Chunk::edits)
-          ? Optional.of(new Configuration(chunks, relative))
+          ? Optional.of(new Configuration(chunks, address))
           : Optional.empty();
     }
 
@@ -627,7 +626,7 @@ public sealed interface Image<State extends Image.Alteration> {
      */
     String apply(@NonNull String text) {
       if (!Chunk.matches(chunks, text)) {
-        throw new Malformation.Discontinuous(relative);
+        throw new Malformation.Discontinuous(address);
       }
       return Chunk.apply(chunks, text);
     }
@@ -645,9 +644,9 @@ public sealed interface Image<State extends Image.Alteration> {
       try {
         composed = Chunk.compose(chunks, later.chunks());
       } catch (IllegalArgumentException exception) {
-        throw new Malformation.Discontinuous(relative, exception);
+        throw new Malformation.Discontinuous(address, exception);
       }
-      return between(composed, relative);
+      return between(composed, address);
     }
 
     /**
@@ -666,11 +665,11 @@ public sealed interface Image<State extends Image.Alteration> {
      */
     Optional<Image<?>> fold(@NonNull Installation later, @NonNull Stash stash) throws IOException {
       if (!(later.before() instanceof File.Present(Reference.Captured configured))) {
-        throw new Malformation.Discontinuous(relative);
+        throw new Malformation.Discontinuous(address);
       }
       String original = preimage().apply(stash.text(configured));
       Reference.Captured content = stash.capture(Describe.of(configured.fileName(), original));
-      return Installation.between(new File.Present(content), later.after(), relative);
+      return Installation.between(new File.Present(content), later.after(), address);
     }
   }
 }
@@ -682,7 +681,7 @@ public sealed interface Image<State extends Image.Alteration> {
  * @param settled state a file returned to when its changes cancelled: a later
  *                installation of it must continue from that state
  */
-record Folding(Map<Relative, Image<?>> net, Map<Relative, Image.Alteration> settled) {
+record Folding(Map<Address, Image<?>> net, Map<Address, Image.Alteration> settled) {
 
   /**
    * Starts an empty reduction.
@@ -702,19 +701,19 @@ record Folding(Map<Relative, Image<?>> net, Map<Relative, Image.Alteration> sett
    *                                    captured
    */
   void fold(Image<?> image, Stash stash) throws IOException {
-    Relative relative = image.relative();
-    Image<?> previous = net.remove(relative);
+    Address address = image.address();
+    Image<?> previous = net.remove(address);
     if (previous == null) {
-      Image.Alteration state = settled.remove(relative);
+      Image.Alteration state = settled.remove(address);
       if (state instanceof Image.File file && image instanceof Image.Installation installation
           && !file.same(installation.before())) {
-        throw new Malformation.Discontinuous(relative);
+        throw new Malformation.Discontinuous(address);
       }
-      net.put(relative, image);
+      net.put(address, image);
       return;
     }
     Image.compose(previous, image, stash).ifPresentOrElse(
-        composed -> net.put(relative, composed),
-        () -> settled.put(relative, previous.before()));
+        composed -> net.put(address, composed),
+        () -> settled.put(address, previous.before()));
   }
 }
