@@ -23,4 +23,5 @@ module cat.tabbie.sdk {
   exports cat.tabbie.sdk.minecraft;
   exports cat.tabbie.sdk.minecraft.distribution;
   exports cat.tabbie.sdk.platform;
+  exports cat.tabbie.sdk.platform.layout;
 }
