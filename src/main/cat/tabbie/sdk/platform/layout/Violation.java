@@ -11,9 +11,9 @@ import lombok.experimental.FieldDefaults;
 
 /**
  * Thrown when work asks a tree of {@link Node nodes} for something it does not
- * declare or allow. It is found while describing work, before anything is
- * carried out, so nothing has changed. It is the layout's counterpart of a
- * plate's {@link cat.tabbie.sdk.album.model.Refusal Refusal}, which refuses an
+ * hold or allow. It is found while work describes its changes, before any of
+ * them is carried out, so nothing has changed. It is the tree's counterpart of
+ * a plate's {@link cat.tabbie.sdk.album.model.Refusal Refusal}, which refuses an
  * allowed operation when it is carried out.
  */
 public abstract sealed class Violation extends IllegalArgumentException {
@@ -38,10 +38,10 @@ public abstract sealed class Violation extends IllegalArgumentException {
   }
 
   /**
-   * An address leads beneath a declared file, where nothing can lie.
+   * An address leads beneath a file, where nothing can lie.
    */
   @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-  public static final class Undeclared extends Violation {
+  public static final class Terminal extends Violation {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -51,12 +51,12 @@ public abstract sealed class Violation extends IllegalArgumentException {
     String name;
 
     /**
-     * Describes a step beneath a declared file.
+     * Describes a step beneath a file.
      *
      * @param address address of the file
      * @param name    the name beneath it
      */
-    public Undeclared(@NonNull Address address, @NonNull String name) {
+    public Terminal(@NonNull Address address, @NonNull String name) {
       super("Nothing can lie beneath the file %s, such as %s.".formatted(shown(address), name));
       this.address = address;
       this.name = name;
@@ -74,10 +74,42 @@ public abstract sealed class Violation extends IllegalArgumentException {
     /**
      * Returns the name beneath the file.
      *
-     * @return undeclared name
+     * @return name beneath it
      */
     public String name() {
       return name;
+    }
+  }
+
+  /**
+   * The tree holds nothing at an address: nothing is declared there, and
+   * nothing exists there.
+   */
+  @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+  public static final class Missing extends Violation {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    transient Address address;
+
+    /**
+     * Describes an address the tree holds nothing at.
+     *
+     * @param address the first address on the way that the tree does not hold
+     */
+    public Missing(@NonNull Address address) {
+      super("Nothing is declared or present at %s.".formatted(shown(address)));
+      this.address = address;
+    }
+
+    /**
+     * Returns the first address on the way that the tree does not hold.
+     *
+     * @return missing address
+     */
+    public Address address() {
+      return address;
     }
   }
 
@@ -174,7 +206,7 @@ public abstract sealed class Violation extends IllegalArgumentException {
    * place it.
    */
   @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-  public static final class Missing extends Violation {
+  public static final class Unplaced extends Violation {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -186,7 +218,7 @@ public abstract sealed class Violation extends IllegalArgumentException {
      *
      * @param type type of the content
      */
-    public Missing(@NonNull Class<?> type) {
+    public Unplaced(@NonNull Class<?> type) {
       super("The layout declares no directory accepting %s.".formatted(type.getSimpleName()));
       this.type = type;
     }

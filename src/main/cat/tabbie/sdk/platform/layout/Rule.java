@@ -7,9 +7,10 @@ import lombok.NonNull;
 /**
  * What a tree of {@link Node nodes} allows at one of them. Rules compose: a
  * node holds any set of them, and an operation on a node is allowed only when
- * it holds every rule the operation needs. A declared node has its own rules;
- * content beneath a directory that the tree does not declare, such as a mod
- * placed in {@code mods}, has the directory's.
+ * it holds every rule the operation needs. A declared node has the rules it was
+ * declared with; a node a plate adds, such as a mod placed in {@code mods},
+ * takes the permissions of the directory above it but never what that
+ * directory accepts.
  */
 public sealed interface Rule permits Rule.Permission, Rule.Accepts {
 

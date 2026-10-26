@@ -1,32 +1,39 @@
 package cat.tabbie.sdk.platform.layout;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import cat.tabbie.sdk.platform.Address;
 import lombok.NonNull;
 
 /**
- * A place in the declared shape of a root, such as a Cat, at its own
- * {@link Address}: a declared directory or file, or content beneath a declared
- * directory that is not itself declared. Each has the {@link Rule rules} that
- * say what may happen to it. A declared directory holds its declared children,
- * so the directory at the root address is the whole tree. The distribution
- * build a Cat runs declares that tree, and it is kept with the Cat, so every
- * change made under it can name the tree it was made under.
+ * A place in the shape of a root, such as a Cat: a directory or a file at its
+ * own {@link Address}, with the {@link Rule rules} that say what may happen to
+ * it. A directory holds its children, so the directory at the root address is
+ * the whole tree.
+ *
+ * <p>
+ * A tree is either a declaration or a plate's live tree. A declaration says
+ * what goes where and what may happen there: the distribution build a Cat runs
+ * declares one, and core may declare more. A
+ * {@link cat.tabbie.sdk.album.model.Plate Plate} keeps a live tree: the
+ * declaration with every file that exists beneath the plate's root
+ * {@link Directory#add(Address) added}, kept current as work creates and
+ * deletes files, so work running on the plate sees what earlier work did.
  *
  * <p>
  * Nodes carry no meaning beyond their addresses and rules, so a tree never
  * needs a special kind of node for one game feature. Moving between nodes
- * never looks at a filesystem: {@link #locate(Address) locating} follows
- * declared names, and {@link Directory#find(Class) finding} lists the declared
- * directories that accept a type. A node's {@link #address()} leaves the tree
- * as a plain address, and locating that address from the root of the tree
- * finds the node again.
+ * never looks at a filesystem: {@link #locate(Address) locating} follows the
+ * tree's names, and {@link Directory#find(Class) finding} lists the directories
+ * that accept a type. A node's {@link #address()} leaves the tree as a plain
+ * address, and locating that address from the root finds the node again.
  */
-public sealed interface Node permits Node.Directory, Node.File, Node.Beneath {
+public sealed interface Node permits Node.Directory, Node.File {
 
   /**
    * Returns where this node is.
@@ -85,7 +92,8 @@ public sealed interface Node permits Node.Directory, Node.File, Node.Beneath {
    *
    * @param names single-name components, none for this node itself
    * @return the node there
-   * @throws Violation.Undeclared     when a step leads beneath a declared file
+   * @throws Violation.Missing        when the tree holds nothing at a step
+   * @throws Violation.Terminal       when a step leads beneath a file
    * @throws IllegalArgumentException when a component is not a single portable
    *                                  filename
    */
@@ -94,47 +102,57 @@ public sealed interface Node permits Node.Directory, Node.File, Node.Beneath {
   }
 
   /**
-   * Locates the node at an address relative to this one, one step per
-   * component: onto a declared child, or onto content a directory does not
-   * declare, which the directory governs. From the root, the address of any
-   * node in the tree locates that node.
+   * Locates the node at an address relative to this one, following the tree's
+   * names one component at a time.
    *
    * @param tail address relative to this node
    * @return the node there, or this node for the root address
-   * @throws Violation.Undeclared when a step leads beneath a declared file
+   * @throws Violation.Missing  when the tree holds nothing at a step
+   * @throws Violation.Terminal when a step leads beneath a file
    */
   default Node locate(@NonNull Address tail) {
-    Node located = this;
-    for (String name : tail.components()) {
-      located = step(located, name);
+    Node nearest = nearest(tail);
+    int reached = nearest.address().components().size() - address().components().size();
+    if (reached < tail.components().size()) {
+      throw new Violation.Missing(nearest.address().resolve(tail.components().get(reached)));
     }
-    return located;
+    return nearest;
   }
 
   /**
-   * Takes one step down from a node.
+   * Finds the deepest node the tree holds along an address relative to this
+   * one: the node at the address itself when the tree holds it, and otherwise
+   * the last directory on the way that it does. Work describing a file that
+   * does not exist yet checks this node's rules, since the directories created
+   * above the file take their permissions from it.
+   *
+   * @param tail address relative to this node
+   * @return deepest node along the address, or this node for the root address
+   * @throws Violation.Terminal when a step leads beneath a file
    */
-  private static Node step(Node node, String name) {
-    return switch (node) {
-      case Directory directory -> directory.children().stream()
-          .filter(child -> child.name().equals(name))
-          .findFirst()
-          .orElseGet(() -> new Beneath(directory.address().resolve(name), directory));
-      case File file -> throw new Violation.Undeclared(file.address(), name);
-      case Beneath beneath -> new Beneath(beneath.address().resolve(name), beneath.governor());
-    };
+  default Node nearest(@NonNull Address tail) {
+    Node nearest = this;
+    for (String name : tail.components()) {
+      Optional<Node> next = switch (nearest) {
+        case Directory directory -> directory.child(name);
+        case File file -> throw new Violation.Terminal(file.address(), name);
+      };
+      if (next.isEmpty()) {
+        return nearest;
+      }
+      nearest = next.get();
+    }
+    return nearest;
   }
 
   /**
-   * A declared directory, holding declared children. Content it governs but
-   * does not declare, such as the mods placed in a mods directory, may lie
-   * beneath it as its rules allow. The directory at the root address stands
-   * for the root itself.
+   * A directory, holding its children. The directory at the root address
+   * stands for the root itself.
    *
    * @param address  address of the directory, the root address for the root
-   * @param rules    what may happen to it and to undeclared content beneath it
-   * @param children declared directories and files, each directly beneath it
-   *                 and uniquely named
+   * @param rules    what may happen to it and beneath it
+   * @param children directories and files, each directly beneath it and
+   *                 uniquely named
    */
   record Directory(
       @NonNull Address address,
@@ -144,22 +162,19 @@ public sealed interface Node permits Node.Directory, Node.File, Node.Beneath {
     /**
      * Copies the rules and children, and checks the children.
      *
-     * @throws IllegalArgumentException when a child is undeclared content, does
-     *                                  not lie directly beneath this directory,
-     *                                  or shares a name with another
+     * @throws IllegalArgumentException when a child does not lie directly
+     *                                  beneath this directory, or shares a name
+     *                                  with another
      */
     public Directory {
       rules = Set.copyOf(rules);
       children = List.copyOf(children);
-      if (children.stream().anyMatch(Beneath.class::isInstance)) {
-        throw new IllegalArgumentException("A directory declares only directories and files.");
-      }
       Optional<Address> parent = Optional.of(address);
       if (children.stream().anyMatch(child -> !child.address().parent().equals(parent))) {
-        throw new IllegalArgumentException("A declared child lies directly beneath its directory.");
+        throw new IllegalArgumentException("A child lies directly beneath its directory.");
       }
       if (children.stream().map(Node::name).distinct().count() != children.size()) {
-        throw new IllegalArgumentException("A directory declares each name only once.");
+        throw new IllegalArgumentException("A directory holds each name only once.");
       }
     }
 
@@ -175,10 +190,10 @@ public sealed interface Node permits Node.Directory, Node.File, Node.Beneath {
     }
 
     /**
-     * Finds the declared directories that accept content of a type, this one
-     * included, in declaration order: a directory before its children, and
-     * children in the order they are declared. Only declared directories are
-     * found, so nothing the tree does not declare is searched.
+     * Finds the directories that accept content of a type, this one included,
+     * in tree order: a directory before its children, and children in the
+     * order they are held. Only declared directories accept content, since
+     * directories a plate adds never take what their parent accepts.
      *
      * @param type type of the content to place
      * @return the accepting directories, possibly none
@@ -188,8 +203,81 @@ public sealed interface Node permits Node.Directory, Node.File, Node.Beneath {
     }
 
     /**
-     * Lists this directory and its declared descendant directories that accept
-     * a type, in declaration order.
+     * Adds a file that exists beneath this directory, as a plate does when
+     * work creates one or when the plate finds one as it opens. Directories
+     * missing above the file are added too. Each added node takes the
+     * permissions of the directory above it, never what that directory
+     * accepts.
+     *
+     * @param tail address of the file relative to this directory
+     * @return this tree with the file added, or this tree when a file is
+     *         already there
+     * @throws Violation.Terminal       when the file would lie beneath a file
+     * @throws IllegalArgumentException when the address names this directory,
+     *                                  or a directory is already there
+     */
+    public Directory add(@NonNull Address tail) {
+      if (tail.isRoot()) {
+        throw new IllegalArgumentException("A file is added beneath a directory, not in its place.");
+      }
+      String name = tail.components().getFirst();
+      Address rest = new Address(tail.components().subList(1, tail.components().size()));
+      Optional<Node> existing = child(name);
+      if (rest.isRoot()) {
+        if (existing.isEmpty()) {
+          return with(new File(address.resolve(name), inherited()));
+        }
+        if (existing.get() instanceof Directory) {
+          throw new IllegalArgumentException("A directory is already where the file would be added.");
+        }
+        return this;
+      }
+      Node next = existing.orElseGet(() -> new Directory(address.resolve(name), inherited(), List.of()));
+      Directory below = switch (next) {
+        case Directory directory -> directory;
+        case File file -> throw new Violation.Terminal(file.address(), rest.components().getFirst());
+      };
+      Directory grown = below.add(rest);
+      return grown == below ? this : with(grown);
+    }
+
+    /**
+     * Finds the child of a name.
+     */
+    private Optional<Node> child(String name) {
+      return children.stream()
+          .filter(child -> child.name().equals(name))
+          .findFirst();
+    }
+
+    /**
+     * Returns this directory with a child put in place of the one of its name,
+     * or after the others when it has none.
+     */
+    private Directory with(Node child) {
+      List<Node> changed = new ArrayList<>(children);
+      int index = children.stream().map(Node::name).toList().indexOf(child.name());
+      if (index < 0) {
+        changed.add(child);
+      } else {
+        changed.set(index, child);
+      }
+      return new Directory(address, rules, changed);
+    }
+
+    /**
+     * Returns the rules a node added beneath this directory takes: its
+     * permissions, without what it accepts.
+     */
+    private Set<Rule> inherited() {
+      return rules.stream()
+          .filter(Rule.Permission.class::isInstance)
+          .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /**
+     * Lists this directory and its descendant directories that accept a type,
+     * in tree order.
      */
     private Stream<Directory> accepting(Class<?> type) {
       return Stream.concat(
@@ -202,8 +290,8 @@ public sealed interface Node permits Node.Directory, Node.File, Node.Beneath {
   }
 
   /**
-   * A declared file. A file holds no content of other kinds, so it accepts
-   * nothing, and nothing lies beneath it.
+   * A file. A file holds no content of other kinds, so it accepts nothing, and
+   * nothing lies beneath it.
    *
    * @param address address of the file
    * @param rules   what may happen to it
@@ -229,53 +317,13 @@ public sealed interface Node permits Node.Directory, Node.File, Node.Beneath {
   }
 
   /**
-   * Content the tree does not declare, beneath a declared directory, such as
-   * {@code mods/sodium.jar}. It may be a file or a directory. The directory
-   * governs it, so it has the directory's rules.
-   *
-   * @param address  address of the content
-   * @param governor nearest declared directory above it
-   */
-  record Beneath(@NonNull Address address, @NonNull Directory governor) implements Node {
-
-    /**
-     * Checks that the governor is the nearest declared directory above the
-     * address.
-     *
-     * @throws IllegalArgumentException when the address does not lie beneath
-     *                                  the governor, or the governor declares
-     *                                  the first step towards it
-     */
-    public Beneath {
-      if (!address.within(governor.address())) {
-        throw new IllegalArgumentException("Undeclared content lies beneath the directory that governs it.");
-      }
-      String step = address.components().get(governor.address().components().size());
-      if (governor.children().stream().anyMatch(child -> child.name().equals(step))) {
-        throw new IllegalArgumentException("A directory governs only content it does not declare.");
-      }
-    }
-
-    /**
-     * Returns the rules of the directory that governs this content.
-     *
-     * @return the governor's rules
-     */
-    @Override
-    public Set<Rule> rules() {
-      return governor.rules();
-    }
-  }
-
-  /**
-   * The declared directories that accept one type of content, as
+   * The directories that accept one type of content, as
    * {@link Directory#find(Class)} found them. Several directories may accept
    * the same type: work placing the content picks among them, knowing the
    * distribution it installs for, or requires {@link #unique() exactly one}.
    *
    * @param type        type of the content to place
-   * @param directories accepting directories, in declaration order, possibly
-   *                    none
+   * @param directories accepting directories, in tree order, possibly none
    */
   record Accepting(@NonNull Class<?> type, @NonNull List<Directory> directories) {
 
@@ -304,12 +352,12 @@ public sealed interface Node permits Node.Directory, Node.File, Node.Beneath {
      * the same way wherever the tree puts it.
      *
      * @return the only accepting directory
-     * @throws Violation.Missing   when no directory accepts the type
+     * @throws Violation.Unplaced  when no directory accepts the type
      * @throws Violation.Ambiguous when several do
      */
     public Directory unique() {
       if (directories.isEmpty()) {
-        throw new Violation.Missing(type);
+        throw new Violation.Unplaced(type);
       }
       if (directories.size() > 1) {
         throw new Violation.Ambiguous(type, directories.stream().map(Directory::address).toList());
