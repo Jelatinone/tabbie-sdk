@@ -5,11 +5,11 @@ import java.util.Set;
 import lombok.NonNull;
 
 /**
- * What a {@link Layout} allows at one of its {@link Node nodes}. Rules compose:
- * a node holds any set of them, and an operation is allowed only when the node
- * that governs its address holds every rule it needs. A declared node governs
- * itself; a directory also governs content beneath it that the layout does not
- * declare, such as a mod placed in {@code mods}.
+ * What a tree of {@link Node nodes} allows at one of them. Rules compose: a
+ * node holds any set of them, and an operation on a node is allowed only when
+ * it holds every rule the operation needs. A declared node has its own rules;
+ * content beneath a directory that the tree does not declare, such as a mod
+ * placed in {@code mods}, has the directory's.
  */
 public sealed interface Rule permits Rule.Permission, Rule.Accepts {
 

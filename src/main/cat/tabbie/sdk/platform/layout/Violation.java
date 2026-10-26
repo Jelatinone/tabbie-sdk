@@ -1,6 +1,8 @@
 package cat.tabbie.sdk.platform.layout;
 
 import java.io.Serial;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.platform.Address;
 import lombok.AccessLevel;
@@ -8,11 +10,11 @@ import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
 
 /**
- * Thrown when work asks a {@link Layout} for something it does not declare or
- * allow. It is found while describing work, before anything is carried out, so
- * nothing has changed. It is the layout's counterpart of a plate's
- * {@link cat.tabbie.sdk.album.model.Refusal Refusal}, which refuses an allowed
- * operation when it is carried out.
+ * Thrown when work asks a tree of {@link Node nodes} for something it does not
+ * declare or allow. It is found while describing work, before anything is
+ * carried out, so nothing has changed. It is the layout's counterpart of a
+ * plate's {@link cat.tabbie.sdk.album.model.Refusal Refusal}, which refuses an
+ * allowed operation when it is carried out.
  */
 public abstract sealed class Violation extends IllegalArgumentException {
 
@@ -80,8 +82,7 @@ public abstract sealed class Violation extends IllegalArgumentException {
   }
 
   /**
-   * The node governing an address does not hold the permission an operation
-   * needs.
+   * A node does not hold the permission an operation on it needs.
    */
   @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
   public static final class Forbidden extends Violation {
@@ -165,6 +166,87 @@ public abstract sealed class Violation extends IllegalArgumentException {
      */
     public Class<?> type() {
       return type;
+    }
+  }
+
+  /**
+   * No declared directory accepts content of a type, so there is nowhere to
+   * place it.
+   */
+  @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+  public static final class Missing extends Violation {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    Class<?> type;
+
+    /**
+     * Describes content of a type that no directory accepts.
+     *
+     * @param type type of the content
+     */
+    public Missing(@NonNull Class<?> type) {
+      super("The layout declares no directory accepting %s.".formatted(type.getSimpleName()));
+      this.type = type;
+    }
+
+    /**
+     * Returns the type of the content.
+     *
+     * @return content type
+     */
+    public Class<?> type() {
+      return type;
+    }
+  }
+
+  /**
+   * Several declared directories accept content of a type, where the work
+   * placing it required exactly one.
+   */
+  @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+  public static final class Ambiguous extends Violation {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    Class<?> type;
+
+    transient List<Address> addresses;
+
+    /**
+     * Describes content of a type that several directories accept.
+     *
+     * @param type      type of the content
+     * @param addresses addresses of the accepting directories
+     */
+    public Ambiguous(@NonNull Class<?> type, @NonNull List<Address> addresses) {
+      super("The layout declares several directories accepting %s: %s.".formatted(
+          type.getSimpleName(),
+          addresses.stream()
+              .map(Violation::shown)
+              .collect(Collectors.joining(", "))));
+      this.type = type;
+      this.addresses = List.copyOf(addresses);
+    }
+
+    /**
+     * Returns the type of the content.
+     *
+     * @return content type
+     */
+    public Class<?> type() {
+      return type;
+    }
+
+    /**
+     * Returns the addresses of the accepting directories.
+     *
+     * @return immutable addresses, in declaration order
+     */
+    public List<Address> addresses() {
+      return addresses;
     }
   }
 }
