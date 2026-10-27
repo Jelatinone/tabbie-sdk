@@ -1,18 +1,22 @@
 /**
- * The shape of a root, such as a Cat: a tree of {@link Node nodes} held by the
- * {@link Node.Directory directory} standing for the root, each node with
+ * The tree of a root, such as a Cat: {@link Node nodes} beneath the
+ * {@link Node.Directory directory} standing for the root, each a file or a
+ * directory, and each {@link Node.Declared declared} by a layout or
+ * {@link Node.Present present} without one. Declared nodes hold
  * {@link Rule rules} saying what may happen there: which types of content a
  * directory {@link Rule.Accepts accepts}, and which
- * {@link Rule.Permission permissions} it grants.
+ * {@link Rule.Permission permissions} hold. Every other node follows the
+ * permissions of the directory above it.
  *
  * <p>
- * A declaration is such a tree, saying what goes where. A plate keeps a live
- * one: the declaration with the files that exist beneath the plate's root
- * {@link Node.Directory#add(cat.tabbie.sdk.platform.Address) added}. Every node
- * has its own {@link cat.tabbie.sdk.platform.Address Address}, and locating an
- * address from a node follows only the tree's names, never a filesystem. A type
- * finds the directories {@link Node.Accepting accepting} it. Asking for
- * something the tree does not hold or allow is a {@link Violation}.
+ * A distribution build declares a layout, and a plate mounts it, with core's
+ * own layer on top, as the tree of its root. The plate implements every node
+ * as a view of its own files, so the tree shows what exists on that plate as
+ * work changes it. Every node has its own
+ * {@link cat.tabbie.sdk.platform.Address Address}: locating an address from a
+ * node goes to exactly that node, and a type finds the declared directories
+ * {@link Node.Accepting accepting} it. Asking for something the tree does not
+ * hold or allow is a {@link Violation}.
  *
  * <p>
  * A {@link Lease} holds one file for reading, writing, or both until it
