@@ -2,10 +2,13 @@ package cat.tabbie.sdk.addon.artifact;
 
 import java.util.Set;
 
+import cat.tabbie.sdk.album.revision.Image;
+import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
+import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Describe;
 import lombok.NonNull;
 
@@ -19,13 +22,14 @@ import lombok.NonNull;
 public sealed interface Resourcepack extends Artifact {
 
   /**
-   * Java resource content. Client placement has a common default; server
-   * resource-pack delivery requires an explicit caller layout.
+   * Java resource content, placed as one file where a client's layout accepts
+   * it. Servers deliver resource packs themselves, so their layouts accept
+   * none.
    */
   sealed interface Java extends Resourcepack {
 
     /**
-     * An artifact using the shared named-file and ZIP capture installer.
+     * An artifact placed as one file by the shared installer.
      *
      * @param coordinates  exact provider file coordinates
      * @param artifactName non-blank display name
@@ -55,8 +59,7 @@ public sealed interface Resourcepack extends Artifact {
     }
 
     /**
-     * An artifact whose content images are described by a caller-supplied
-     * installer, checked like the shared installer's.
+     * An artifact whose images are described by a caller-supplied installer.
      *
      * @param coordinates  exact provider file coordinates
      * @param artifactName non-blank display name
@@ -95,7 +98,7 @@ public sealed interface Resourcepack extends Artifact {
   sealed interface Bedrock extends Resourcepack {
 
     /**
-     * An artifact using the shared named-file and ZIP capture installer.
+     * An artifact unpacked into a directory of its own.
      *
      * @param coordinates  exact provider file coordinates
      * @param artifactName non-blank display name
@@ -122,11 +125,28 @@ public sealed interface Resourcepack extends Artifact {
         relations = Set.copyOf(relations);
         Artifact.validate(Bedrock.class, coordinates, artifactName, labels, relations);
       }
+
+      /**
+       * Unpacks the pack into a directory of its own, named by its artifact
+       * identity, beneath the directory of the collapsing plate's tree that
+       * accepts Bedrock resource packs, so two packs never collide.
+       *
+       * @param context selected target
+       * @return unevaluated capture producing validated immutable images
+       * @throws IllegalArgumentException when the target is not explicitly
+       *                                  supported
+       */
+      @Override
+      public Intermediate<Set<Image<?>>> install(@NonNull Artifact.Context context) {
+        require(context);
+        Address own = Address.of(artifactId().id().toString());
+        return Intermediate.of(plate -> plate.root().find(getClass()).unique())
+            .flatMap(directory -> context.archive().unpack(source(), directory, own));
+      }
     }
 
     /**
-     * An artifact whose content images are described by a caller-supplied
-     * installer, checked like the shared installer's.
+     * An artifact whose images are described by a caller-supplied installer.
      *
      * @param coordinates  exact provider file coordinates
      * @param artifactName non-blank display name

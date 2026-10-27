@@ -272,18 +272,16 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
     Map<String, String> runtimeOptions();
 
     /**
-     * Immutable context with a selected World and runtime settings.
+     * Immutable context with runtime settings.
      *
      * @param label          selected target
      * @param platform       target platform
-     * @param world          selected World's directory
      * @param maximumMemory  positive memory bound in bytes, or empty
      * @param runtimeOptions runtime options
      */
     record Default(
         @NonNull Label label,
         @NonNull Platform platform,
-        @NonNull Address world,
         @NonNull Optional<Long> maximumMemory,
         @NonNull Map<String, String> runtimeOptions) implements Context {
 
@@ -304,10 +302,9 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
        *
        * @param label    selected target
        * @param platform target platform
-       * @param world    selected World's directory
        */
-      public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Address world) {
-        this(label, platform, world, Optional.empty(), Map.of());
+      public Default(@NonNull Label label, @NonNull Platform platform) {
+        this(label, platform, Optional.empty(), Map.of());
       }
     }
   }

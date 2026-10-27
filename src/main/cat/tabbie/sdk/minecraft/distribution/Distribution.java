@@ -1,21 +1,13 @@
 package cat.tabbie.sdk.minecraft.distribution;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
 import cat.tabbie.sdk.addon.artifact.Artifact;
-import cat.tabbie.sdk.addon.artifact.Behaviourpack;
-import cat.tabbie.sdk.addon.artifact.Datapack;
-import cat.tabbie.sdk.addon.artifact.Mod;
-import cat.tabbie.sdk.addon.artifact.Modpack;
-import cat.tabbie.sdk.addon.artifact.Plugin;
-import cat.tabbie.sdk.addon.artifact.Resourcepack;
 import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Version;
-import cat.tabbie.sdk.platform.Address;
 import lombok.NonNull;
 
 /**
@@ -110,90 +102,5 @@ public sealed interface Distribution permits Java, Bedrock {
    */
   default boolean supports(@NonNull Class<? extends Artifact> family) {
     return capabilities().stream().anyMatch(capability -> capability.isAssignableFrom(family));
-  }
-
-  /**
-   * Determines the default layout of an artifact on this distribution. Each
-   * unpacked pack receives its own directory named by its artifact identity, so
-   * two packs never collide. Content without a meaningful default, such as
-   * server resource-pack delivery or modpacks on distributions without mod
-   * loading, requires a caller layout override. This method does not discover
-   * installation directories.
-   *
-   * @param artifact reference artifact
-   * @param context  reference context
-   *
-   * @return default layout
-   *
-   * @throws IOException              when no default layout exists
-   * @throws IllegalArgumentException when this distribution does not support the
-   *                                  environment or artifact type
-   */
-  @SuppressWarnings("unused")
-  default Artifact.Layout layout(@NonNull Artifact artifact, @NonNull Artifact.Context context) throws IOException {
-    Environment environment = context.label().environment();
-    if (!environments().contains(environment)) {
-      throw new IllegalArgumentException(String.format(
-          "Distribution %s does not support the %s environment", id(), environment));
-    }
-    if (!supports(artifact.getClass())) {
-      throw new IllegalArgumentException(String.format(
-          "Distribution %s does not support %s artifacts", id(), artifact.getClass().getSimpleName()));
-    }
-    String directory = artifact.artifactId().id().toString();
-
-    return switch (artifact) {
-      // Mod (.jar) -> mods/
-      case Mod mod ->
-        new Artifact.Layout(
-            false,
-            Address.of("mods"));
-
-      // Plugin (.jar) -> plugins/
-      case Plugin plugin ->
-        new Artifact.Layout(
-            false,
-            Address.of("plugins"));
-
-      // Resource pack (.zip) -> resourcepacks/ on clients; servers deliver packs
-      case Resourcepack.Java resourcepack -> {
-        if (environment == Environment.SERVER) {
-          throw new IOException(String.format(
-              "Distribution %s has no default server resource-pack delivery; supply a layout.", id()));
-        }
-        yield new Artifact.Layout(
-            false,
-            Address.of("resourcepacks"));
-      }
-
-      // Resource pack (.mcpack) -> resource_packs/<id>/
-      case Resourcepack.Bedrock resourcepack ->
-        new Artifact.Layout(
-            true,
-            Address.of("resource_packs", directory));
-
-      // Datapack (.zip) -> <world>/datapacks/<id>/
-      case Datapack datapack -> new Artifact.Layout(
-          true,
-          context.world().resolve("datapacks", directory));
-
-      // Behaviour pack (.mcpack) -> <world>/behavior_packs/<id>/
-      case Behaviourpack behaviourpack ->
-        new Artifact.Layout(
-            true,
-            context.world().resolve("behavior_packs", directory));
-
-      // Self-contained modpack (.zip) -> the root itself, on mod loaders only
-      case Modpack modpack -> {
-        if (!(this instanceof Java.Launcher)) {
-          throw new IOException(String.format(
-              "Distribution %s has no default modpack placement; supply a layout.", id()));
-        }
-        yield new Artifact.Layout(
-            true,
-            Address.root());
-      }
-
-    };
   }
 }

@@ -2,6 +2,8 @@ package cat.tabbie.sdk.addon.artifact;
 
 import java.util.Set;
 
+import cat.tabbie.sdk.album.revision.Image;
+import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.minecraft.Label;
@@ -19,7 +21,7 @@ import lombok.NonNull;
 public sealed interface Behaviourpack extends Artifact {
 
   /**
-   * An artifact using the shared named-file and ZIP capture installer.
+   * An artifact that cannot be installed until the World class exists.
    *
    * @param coordinates  exact provider file coordinates
    * @param artifactName non-blank display name
@@ -46,11 +48,32 @@ public sealed interface Behaviourpack extends Artifact {
       relations = Set.copyOf(relations);
       Artifact.validate(Behaviourpack.class, coordinates, artifactName, labels, relations);
     }
+
+    /**
+     * Refuses to install until a World can be found, since behaviour packs
+     * belong to a World.
+     *
+     * @param context selected target
+     * @return never
+     * @throws UnsupportedOperationException always, until the World class
+     *                                       exists
+     */
+    @Override
+    public Intermediate<Set<Image<?>>> install(@NonNull Artifact.Context context) {
+      // TODO: Installing a behaviour pack needs the World class. A behaviour
+      // pack unpacks into <world>/behavior_packs/<id>/, but a layout cannot name
+      // a Cat's Worlds, so no directory accepts behaviour packs, and finding one
+      // by where they are allowed is not the way. Before,
+      // Installer.Context#world() named the selected World's directory,
+      // Distribution.layout resolved behavior_packs/<id>/ beneath it, and
+      // Artifact.Context#layout required the result to lie inside that World.
+      throw new UnsupportedOperationException(
+          "Installing a behaviour pack needs the World class, which is not built yet.");
+    }
   }
 
   /**
-   * An artifact whose content images are described by a caller-supplied
-   * installer, checked like the shared installer's.
+   * An artifact whose images are described by a caller-supplied installer.
    *
    * @param coordinates  exact provider file coordinates
    * @param artifactName non-blank display name

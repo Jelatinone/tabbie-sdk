@@ -6,7 +6,6 @@ import java.util.Set;
 import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.minecraft.Label;
-import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Platform;
 import lombok.NonNull;
 
@@ -26,14 +25,21 @@ public interface Installer<Contextual extends Installer.Context> {
    *
    * @param context target context
    * @return unevaluated capture producing validated images
-   * @throws IOException when layout resolution fails
+   * @throws IOException when the content cannot be described
    */
   Intermediate<Set<Image<?>>> install(@NonNull Contextual context) throws IOException;
 
   /**
-   * Selected target and World, independent of physical paths. A context carries
-   * no stash: captures run on the plate that collapses the installer's result.
+   * Selected target, independent of physical paths. A context carries no stash
+   * and no tree: captures run on the plate that collapses the installer's
+   * result, and installers find where content goes in that plate's tree.
    */
+  // TODO: Selecting a World needs the World class. This context named the
+  // selected World's directory through world(), an Address beneath the same
+  // root as the installer's images; Distribution.layout resolved datapacks and
+  // behaviour packs beneath it, and Artifact.Context#layout required them to
+  // lie inside it. Installers should reach a World through the plate's tree
+  // with find and locate instead, rather than through the context.
   interface Context {
 
     /**
@@ -52,17 +58,5 @@ public interface Installer<Contextual extends Installer.Context> {
      */
     @NonNull
     Platform platform();
-
-    /**
-     * Returns the selected World's directory, beneath the same root as the
-     * installer's images. Content that
-     * belongs to a World is placed in it and {@link Address#require(Address)
-     * required} there. Callers that have not selected a World must reject
-     * World content themselves rather than name an arbitrary directory.
-     *
-     * @return World directory
-     */
-    @NonNull
-    Address world();
   }
 }

@@ -1,12 +1,10 @@
 package cat.tabbie.sdk.addon.artifact;
 
 import java.io.IOException;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.Identity;
-import cat.tabbie.sdk.album.model.Plate;
 import cat.tabbie.sdk.album.repository.Archive;
 import cat.tabbie.sdk.album.repository.Stash;
 import cat.tabbie.sdk.album.revision.Image;
@@ -25,9 +23,9 @@ import lombok.NonNull;
 
 /**
  * Provider-described content and its logical placement. Installers capture
- * bytes from the artifact's source into the context's retention backend and
+ * bytes from the artifact's source into the collapsing plate's stash and
  * describe changes without writing to the target installation filesystem.
- * Sources and retention backends remain caller-owned. File coordinates
+ * Sources remain caller-owned. File coordinates
  * identify the exact provider-scoped payload; relations name catalog
  * coordinates at any level, matched by {@link Coordinate#includes(Coordinate)}.
  */
@@ -121,28 +119,27 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
   }
 
   /**
-   * Captures the source into the stash of the plate that collapses the result,
-   * and places it at the selected layout in that plate's tree: as one file
-   * named after the source, or unpacked beneath the layout directory. Nothing
-   * is read until the result is collapsed, and a placement the tree does not
-   * allow fails with its violation.
+   * Places the source as one file, named after it, in the directory of the
+   * collapsing plate's tree that accepts this artifact's type, then captures
+   * it into that plate's stash. Families whose source is an archive to
+   * unpack, such as modpacks, install otherwise. Nothing is read until the
+   * result is collapsed, and a placement the tree does not allow fails with
+   * its violation, such as {@link Violation.Unplaced} when no directory
+   * accepts the type.
    *
    * @param context selected target
    * @return unevaluated capture producing validated immutable images
-   * @throws IOException              when no layout can be determined
+   * @throws IOException              when the content cannot be described
    * @throws IllegalArgumentException when the target is not explicitly
    *                                  supported
    */
   @Override
   default Intermediate<Set<Image<?>>> install(@NonNull Context context) throws IOException {
-    Layout layout = context.layout(this);
-    Intermediate<Set<Image<?>>> placed = layout.unpack()
-        ? Intermediate.of(Plate::root)
-            .flatMap(root -> context.archive().unpack(source(), root, layout.address()))
-        : new Stash.Capture(source())
-            .flatMap(captured -> Intermediate.of(plate -> Set.<Image<?>>of(
-                Image.create(plate.root(), layout.address().resolve(source().fileName()), captured))));
-    return placed.map(Artifact::checked);
+    require(context);
+    Address file = Address.of(source().fileName());
+    return Intermediate.of(plate -> plate.root().find(getClass()).unique().require(file))
+        .flatMap(directory -> new Stash.Capture(source())
+            .map(captured -> Set.<Image<?>>of(Image.create(directory, file, captured))));
   }
 
   /**
@@ -200,19 +197,9 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
   }
 
   /**
-   * Checks installer output and returns an immutable copy.
-   *
-   * @param images generated images
-   * @return validated immutable images
-   */
-  private static Set<Image<?>> checked(Set<Image<?>> images) {
-    Image.validate(images);
-    return Set.copyOf(images);
-  }
-
-  /**
-   * An artifact whose images are described by a caller-supplied installer. The
-   * same target support and image checks as the shared installer apply.
+   * An artifact whose images are described by a caller-supplied installer,
+   * which runs only for an explicitly supported target and must not describe
+   * two images that collide.
    */
   sealed interface Custom extends Artifact
       permits Mod.Custom, Plugin.Custom, Datapack.Custom, Behaviourpack.Custom, Modpack.Custom,
@@ -240,7 +227,10 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
     @Override
     default Intermediate<Set<Image<?>>> install(@NonNull Context context) throws IOException {
       require(context);
-      return installer().install(context).map(Artifact::checked);
+      return installer().install(context).map(images -> {
+        Image.validate(images);
+        return Set.copyOf(images);
+      });
     }
   }
 
@@ -294,19 +284,12 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
   }
 
   /**
-   * Selected target and World, and per-artifact layout overrides, independent
-   * of physical paths.
+   * Selected target and the limits for unpacking archives, independent of
+   * physical paths. Where content goes is not the context's to say: an
+   * artifact finds the directory accepting its type in the tree of the plate
+   * that collapses its installation.
    */
   interface Context extends Installer.Context {
-
-    /**
-     * Returns per-artifact layout overrides.
-     *
-     * @return per-artifact layout overrides
-     */
-    default Map<Identity<Artifact>, Layout> layouts() {
-      return Map.of();
-    }
 
     /**
      * Returns the limits applied when unpacking archives.
@@ -319,83 +302,12 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
     }
 
     /**
-     * Selects an override or the distribution's default layout. Datapacks and
-     * behaviour packs belong to a World, so their layout must lie in
-     * {@link #world()}, whichever was selected.
-     *
-     * @param artifact selected artifact
-     * @return layout
-     * @throws IOException              when no default or override exists
-     * @throws Address.External         when World content would lie outside the
-     *                                  World
-     * @throws IllegalArgumentException when the target is not explicitly
-     *                                  supported
-     */
-    default Layout layout(@NonNull Artifact artifact) throws IOException {
-      artifact.require(this);
-      Layout override = layouts().get(artifact.artifactId());
-      Layout layout = override != null
-          ? override
-          : label().distribution().layout(artifact, this);
-      return switch (artifact) {
-        case Datapack _, Behaviourpack _ -> layout.require(world());
-        case Mod _, Plugin _, Modpack _, Resourcepack _, Custom _ -> layout;
-      };
-    }
-
-    /**
-     * Immutable context with a selected World and layout overrides.
+     * Immutable context of a selected target.
      *
      * @param label    selected target
      * @param platform target platform
-     * @param world    selected World's directory
-     * @param layouts  per-artifact layout overrides
      */
-    record Default(
-        @NonNull Label label,
-        @NonNull Platform platform,
-        @NonNull Address world,
-        @NonNull Map<Identity<Artifact>, Layout> layouts) implements Context {
-
-      /**
-       * Copies the layout overrides.
-       */
-      public Default {
-        layouts = Map.copyOf(layouts);
-      }
-
-      /**
-       * Creates a context without layout overrides.
-       *
-       * @param label    selected target
-       * @param platform target platform
-       * @param world    selected World's directory
-       */
-      public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Address world) {
-        this(label, platform, world, Map.of());
-      }
-    }
-  }
-
-  /**
-   * Placement of content. A named-file layout names the directory receiving
-   * the file; an unpacking layout names the exact extraction root.
-   *
-   * @param unpack  whether the content is a ZIP archive to extract
-   * @param address destination directory
-   */
-  record Layout(boolean unpack, @NonNull Address address) {
-
-    /**
-     * Requires this layout's destination to lie in a directory.
-     *
-     * @param directory directory the destination must lie in
-     * @return this layout
-     * @throws Address.External when the destination lies elsewhere
-     */
-    public Layout require(@NonNull Address directory) {
-      address.require(directory);
-      return this;
+    record Default(@NonNull Label label, @NonNull Platform platform) implements Context {
     }
   }
 }

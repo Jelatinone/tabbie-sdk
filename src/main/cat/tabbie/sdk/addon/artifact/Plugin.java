@@ -17,7 +17,7 @@ import lombok.NonNull;
 public sealed interface Plugin extends Artifact {
 
   /**
-   * An artifact using the shared named-file and ZIP capture installer.
+   * An artifact placed as one file by the shared installer.
    *
    * @param coordinates  exact provider file coordinates
    * @param artifactName non-blank display name
@@ -47,8 +47,7 @@ public sealed interface Plugin extends Artifact {
   }
 
   /**
-   * An artifact whose content images are described by a caller-supplied
-   * installer, checked like the shared installer's.
+   * An artifact whose images are described by a caller-supplied installer.
    *
    * @param coordinates  exact provider file coordinates
    * @param artifactName non-blank display name
