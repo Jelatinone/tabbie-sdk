@@ -8,6 +8,8 @@ import cat.tabbie.sdk.api.Observer;
 import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Command;
 import cat.tabbie.sdk.platform.Toolchain;
+import cat.tabbie.sdk.platform.layout.Lease;
+import cat.tabbie.sdk.platform.layout.Refusal;
 import lombok.NonNull;
 
 /**

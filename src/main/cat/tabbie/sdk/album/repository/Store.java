@@ -2,6 +2,8 @@ package cat.tabbie.sdk.album.repository;
 
 import java.io.IOException;
 
+import cat.tabbie.sdk.platform.Describe;
+
 /**
  * A source with a lifetime: it describes its own primary content
  * ({@link Describe}) and may hold resources, such as a cache or a connection,

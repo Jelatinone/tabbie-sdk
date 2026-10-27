@@ -1,5 +1,7 @@
 package cat.tabbie.sdk.api;
 
+import java.util.Locale;
+
 import lombok.NonNull;
 
 /**
@@ -77,5 +79,55 @@ public interface Observer<Observe, Transfer> {
      */
     @NonNull
     String render();
+  }
+
+  /**
+   * Unit a report counts its progress in, such as the bytes of a transfer or
+   * the entries of an archive.
+   */
+  enum Operand {
+
+    /**
+     * Bytes, in the largest binary unit that keeps the count at least one,
+     * such as {@code 3.2 MiB}.
+     */
+    BYTE {
+      @Override
+      public String render(long count) {
+        if (count < 1024) {
+          return count + " B";
+        }
+        int exponent = (63 - Long.numberOfLeadingZeros(count)) / 10;
+        return String.format(Locale.ROOT, "%.1f %ciB", count / Math.pow(1024, exponent), "KMGTPE".charAt(exponent - 1));
+      }
+    },
+
+    /**
+     * Central-directory entries, files and directories alike.
+     */
+    ENTRY {
+      @Override
+      public String render(long count) {
+        return String.format(Locale.ROOT, count == 1 ? "%d entry" : "%d entries", count);
+      }
+    },
+
+    /**
+     * Files.
+     */
+    FILE {
+      @Override
+      public String render(long count) {
+        return String.format(Locale.ROOT, count == 1 ? "%d file" : "%d files", count);
+      }
+    };
+
+    /**
+     * Renders a count in this unit.
+     *
+     * @param count count to render
+     * @return human-readable count
+     */
+    public abstract String render(long count);
   }
 }

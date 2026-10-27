@@ -1,15 +1,16 @@
-package cat.tabbie.sdk.album.model;
+package cat.tabbie.sdk.platform.layout;
 
 import java.io.IOException;
 
-import cat.tabbie.sdk.album.repository.Describe;
 import cat.tabbie.sdk.platform.Address;
+import cat.tabbie.sdk.platform.Describe;
 import lombok.NonNull;
 
 /**
- * A caller-owned hold on one file of a {@link Plate}. Whatever exclusion the
- * plate applies lasts until the lease closes, so work can read a file, decide,
- * and write it without the file changing in between. A lease reads, writes, or
+ * A caller-owned hold on one file of a
+ * {@link cat.tabbie.sdk.album.model.Plate Plate}. Whatever exclusion the plate
+ * applies lasts until the lease closes, so work can read a file, decide, and
+ * write it without the file changing in between. A lease reads, writes, or
  * does both; {@link Mutual} is the lease that does both.
  *
  * <p>

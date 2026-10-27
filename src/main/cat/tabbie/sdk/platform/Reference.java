@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.album.repository;
+package cat.tabbie.sdk.platform;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -6,10 +6,10 @@ import java.io.OutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Locale;
 import java.util.OptionalLong;
 
 import cat.tabbie.sdk.api.Observer;
-import cat.tabbie.sdk.platform.Address;
 import lombok.NonNull;
 
 /**
@@ -90,7 +90,7 @@ public sealed interface Reference permits Reference.Pending, Reference.Captured 
     /**
      * Copies a stream to a sink to EOF, computing its SHA-256 digest and size
      * and verifying them against this evidence. Neither stream is closed. Each
-     * read is reported as a {@link Stash.Transfer} of this path. On failure the
+     * read is reported as a {@link Transfer} of this path. On failure the
      * observer is notified and the sink may hold partial bytes, which the
      * caller must not publish.
      *
@@ -101,7 +101,7 @@ public sealed interface Reference permits Reference.Pending, Reference.Captured 
      * @throws IOException when reading or writing fails or evidence differs
      */
     public Captured transfer(@NonNull InputStream source, @NonNull OutputStream sink,
-        @NonNull Observer<? super Captured, ? super Stash.Transfer> observer) throws IOException {
+        @NonNull Observer<? super Captured, ? super Transfer> observer) throws IOException {
       try {
         MessageDigest digest = sha256();
         OptionalLong total = expectedSize != null
@@ -117,7 +117,7 @@ public sealed interface Reference permits Reference.Pending, Reference.Captured 
           }
           digest.update(buffer, 0, read);
           sink.write(buffer, 0, read);
-          observer.transfer(new Stash.Transfer(path.canonical(), size, total));
+          observer.transfer(new Transfer(path.canonical(), size, total));
         }
         String hash = HexFormat.of().formatHex(digest.digest());
         if (expectedSize != null && expectedSize != size) {
@@ -170,6 +170,47 @@ public sealed interface Reference permits Reference.Pending, Reference.Captured 
      */
     public Pending expected() {
       return new Pending(fileName, sha256, size);
+    }
+  }
+
+  /**
+   * Progress of one transfer of bytes, such as a capture, as reported to an
+   * observer. A transfer that has read all it expected, or whose total is
+   * unknown, renders as the amount read so far.
+   *
+   * @param subject         what is being transferred, such as a file name or
+   *                        an archive entry's path
+   * @param transferredSize bytes read so far
+   * @param expectedSize    total expected bytes, when known
+   */
+  record Transfer(
+      @NonNull String subject,
+      long transferredSize,
+      @NonNull OptionalLong expectedSize) implements Observer.Renderable {
+
+    /**
+     * Checks non-negative counts.
+     *
+     * @throws IllegalArgumentException when a count is negative
+     */
+    public Transfer {
+      if (transferredSize < 0) {
+        throw new IllegalArgumentException("Transferred bytes must be non-negative.");
+      }
+      if (expectedSize.isPresent() && expectedSize.getAsLong() < 0) {
+        throw new IllegalArgumentException("Expected bytes must be non-negative or empty.");
+      }
+    }
+
+    @Override
+    public String render() {
+      String read = Observer.Operand.BYTE.render(transferredSize);
+      if (expectedSize.isEmpty() || expectedSize.getAsLong() == transferredSize) {
+        return String.format("%s  %s", subject, read);
+      }
+      long total = expectedSize.getAsLong();
+      return String.format(Locale.ROOT, "%s  %s of %s (%d%%)", subject, read, Observer.Operand.BYTE.render(total),
+          total == 0 ? 100 : transferredSize * 100 / total);
     }
   }
 

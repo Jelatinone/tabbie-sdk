@@ -6,12 +6,12 @@ import java.util.Optional;
 import java.util.Set;
 
 import cat.tabbie.sdk.Identity;
-import cat.tabbie.sdk.album.repository.Describe;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Command;
+import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Platform;
 import cat.tabbie.sdk.platform.Toolchain;
 import lombok.NonNull;

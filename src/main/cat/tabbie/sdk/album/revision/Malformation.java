@@ -12,8 +12,9 @@ import lombok.experimental.FieldDefaults;
  * change would be malformed. An image that exists is never malformed:
  * constructing, composing, reducing and validating images throw a subtype
  * that says exactly why instead of producing one. It is the description-time
- * counterpart of a plate's {@link cat.tabbie.sdk.album.model.Refusal Refusal},
- * which refuses a well-formed change when it is carried out.
+ * counterpart of a plate's
+ * {@link cat.tabbie.sdk.platform.layout.Refusal Refusal}, which refuses a
+ * well-formed change when it is carried out.
  */
 public abstract sealed class Malformation extends IllegalArgumentException {
 

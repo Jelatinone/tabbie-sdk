@@ -49,9 +49,10 @@ public sealed interface Scrutiny<T> {
    * <ul>
    * <li>An {@link Image.Installation} fails with the file found when the file
    * is not in its before state, because it was changed, deleted or created
-   * since rehearsal, and with the plate's {@link cat.tabbie.sdk.album.model.Refusal
-   * Refusal} when its path is blocked, because it is a directory, lies beneath
-   * a file, or cannot be written.</li>
+   * since rehearsal, and with the plate's
+   * {@link cat.tabbie.sdk.platform.layout.Refusal Refusal} when its path is
+   * blocked, because it is a directory, lies beneath a file, or cannot be
+   * written.</li>
    * <li>An {@link Image.Configuration} fails with the file's current text when
    * its lines no longer match its chunks' before fragments, and with the
    * plate's refusal when the file is gone or cannot be written.</li>

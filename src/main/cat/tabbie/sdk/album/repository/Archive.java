@@ -25,6 +25,8 @@ import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.album.revision.Scrutiny;
 import cat.tabbie.sdk.api.Observer;
 import cat.tabbie.sdk.platform.Address;
+import cat.tabbie.sdk.platform.Describe;
+import cat.tabbie.sdk.platform.Reference;
 import lombok.NonNull;
 
 /**
@@ -93,10 +95,10 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * acting.
    *
    * <p>
-   * It reports to the plate's observer as it runs: a {@link Stash.Transfer} as
-   * the archive is copied into scratch space; then an {@link Observe} for each
-   * central-directory entry as it is checked; then the file entries found, or
-   * the failure that ended it.
+   * It reports to the plate's observer as it runs: a
+   * {@link Reference.Transfer} as the archive is copied into scratch space;
+   * then an {@link Observe} for each central-directory entry as it is checked;
+   * then the file entries found, or the failure that ended it.
    *
    * @param archive retained archive, reopened from the plate's stash
    * @param limits  processing bounds
@@ -105,7 +107,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 
     @Override
     public String name() {
-      return String.format("Inspect %s (%s)", archive.fileName(), Operand.BYTE.render(archive.size()));
+      return String.format("Inspect %s (%s)", archive.fileName(), Observer.Operand.BYTE.render(archive.size()));
     }
 
     @Override
@@ -113,7 +115,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
       try {
         List<Entry> found = scan(plate);
         plate.observer().verified(
-            new Observe<>(archive.fileName(), found.size(), found.size(), Operand.FILE));
+            new Observe<>(archive.fileName(), found.size(), found.size(), Observer.Operand.FILE));
         return new Scrutiny.Pass<>(found);
       } catch (IOException | RuntimeException failure) {
         plate.observer().failed(failure);
@@ -157,7 +159,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
               files.add(entry);
             }
             plate.observer().transfer(
-                new Observe<>(archive.fileName(), ++checked, zip.size(), Operand.ENTRY));
+                new Observe<>(archive.fileName(), ++checked, zip.size(), Observer.Operand.ENTRY));
           }
           for (List<String> path : paths.keySet()) {
             for (int depth = path.size() - 1; depth > 0; depth--) {
@@ -192,10 +194,11 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * catalog and each entry's size and CRC. A capture that fails throws.
    *
    * <p>
-   * It reports to the plate's observer as it runs: a {@link Stash.Transfer} as
-   * the archive is copied into scratch space, and as each entry's capture reads
-   * it, when the stash reports them; an {@link Observe} for each file once its
-   * capture completes; then the files unpacked, or the failure that ended it.
+   * It reports to the plate's observer as it runs: a
+   * {@link Reference.Transfer} as the archive is copied into scratch space, and
+   * as each entry's capture reads it, when the stash reports them; an
+   * {@link Observe} for each file once its capture completes; then the files
+   * unpacked, or the failure that ended it.
    *
    * @param destination logical extraction directory
    * @param entries     inspected file entries of one archive, at least one
@@ -206,7 +209,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 
     @Override
     public String name() {
-      return String.format("Unpack %s from %s into %s", Operand.FILE.render(entries.size()),
+      return String.format("Unpack %s from %s into %s", Observer.Operand.FILE.render(entries.size()),
           entries.getFirst().archive().of().fileName(), destination.canonical());
     }
 
@@ -233,7 +236,8 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
     }
 
     private Observe<Integer> files(int completed) {
-      return new Observe<>(entries.getFirst().archive().of().fileName(), completed, entries.size(), Operand.FILE);
+      return new Observe<>(entries.getFirst().archive().of().fileName(), completed, entries.size(),
+          Observer.Operand.FILE);
     }
 
     private List<Image<?>> extract(ZipFile zip, Plate plate) throws IOException {
@@ -258,10 +262,10 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
             return entry.entryStream(zip.getInputStream(found));
           }
         };
-        Observer<Reference.Captured, Stash.Transfer> read = new Observer<>() {
+        Observer<Reference.Captured, Reference.Transfer> read = new Observer<>() {
 
           @Override
-          public void transfer(Stash.Transfer transfer) {
+          public void transfer(Reference.Transfer transfer) {
             plate.observer().transfer(transfer);
           }
         };
@@ -418,7 +422,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
       for (int read; (read = bounded.read(buffer)) != -1;) {
         output.write(buffer, 0, read);
         copied += read;
-        plate.observer().transfer(new Stash.Transfer(pending.fileName(), copied, total));
+        plate.observer().transfer(new Reference.Transfer(pending.fileName(), copied, total));
       }
     }
   }
@@ -483,8 +487,8 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
   /**
    * Progress or outcome of an archive step, as reported to its plate's
    * observer: a count of entries or files completed out of a known total.
-   * Bytes are reported as {@link Stash.Transfer transfers} instead. Progress
-   * and outcome share this shape; an outcome has completed its total.
+   * Bytes are reported as {@link Reference.Transfer transfers} instead.
+   * Progress and outcome share this shape; an outcome has completed its total.
    *
    * @param <Count>   counted amount type
    * @param subject   what the step is working through, such as an archive's
@@ -498,7 +502,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
       @NonNull String subject,
       @NonNull Count completed,
       @NonNull Count total,
-      @NonNull Operand unit) implements Observer.Renderable {
+      @NonNull Observer.Operand unit) implements Observer.Renderable {
 
     /**
      * Checks non-negative amounts.
@@ -520,54 +524,5 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
           : String.format(Locale.ROOT, "%s  %s of %s (%d%%)", subject, unit.render(done), unit.render(whole),
               whole == 0 ? 100 : done * 100 / whole);
     }
-  }
-
-  /**
-   * Unit an archive step counts its progress in.
-   */
-  public enum Operand {
-
-    /**
-     * Bytes, in the largest binary unit that keeps the count at least one,
-     * such as {@code 3.2 MiB}.
-     */
-    BYTE {
-      @Override
-      public String render(long count) {
-        if (count < 1024) {
-          return count + " B";
-        }
-        int exponent = (63 - Long.numberOfLeadingZeros(count)) / 10;
-        return String.format(Locale.ROOT, "%.1f %ciB", count / Math.pow(1024, exponent), "KMGTPE".charAt(exponent - 1));
-      }
-    },
-
-    /**
-     * Central-directory entries, files and directories alike.
-     */
-    ENTRY {
-      @Override
-      public String render(long count) {
-        return String.format(Locale.ROOT, count == 1 ? "%d entry" : "%d entries", count);
-      }
-    },
-
-    /**
-     * Files.
-     */
-    FILE {
-      @Override
-      public String render(long count) {
-        return String.format(Locale.ROOT, count == 1 ? "%d file" : "%d files", count);
-      }
-    };
-
-    /**
-     * Renders a count in this unit.
-     *
-     * @param count count to render
-     * @return human-readable count
-     */
-    public abstract String render(long count);
   }
 }

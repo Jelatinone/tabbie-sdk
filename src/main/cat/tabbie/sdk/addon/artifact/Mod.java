@@ -2,11 +2,11 @@ package cat.tabbie.sdk.addon.artifact;
 
 import java.util.Set;
 
-import cat.tabbie.sdk.album.repository.Describe;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
+import cat.tabbie.sdk.platform.Describe;
 import lombok.NonNull;
 
 /**

@@ -13,5 +13,10 @@
  * address from a node follows only the tree's names, never a filesystem. A type
  * finds the directories {@link Node.Accepting accepting} it. Asking for
  * something the tree does not hold or allow is a {@link Violation}.
+ *
+ * <p>
+ * A {@link Lease} holds one file for reading, writing, or both until it
+ * closes, and a {@link Refusal} says why a plate would not carry out an
+ * operation the tree allows.
  */
 package cat.tabbie.sdk.platform.layout;

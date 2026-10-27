@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.album.model;
+package cat.tabbie.sdk.platform.layout;
 
 import java.io.Serial;
 import java.nio.file.FileSystemException;

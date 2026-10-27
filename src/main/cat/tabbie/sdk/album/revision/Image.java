@@ -10,13 +10,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import cat.tabbie.sdk.album.model.Lease;
 import cat.tabbie.sdk.album.model.Plate;
-import cat.tabbie.sdk.album.model.Refusal;
-import cat.tabbie.sdk.album.repository.Describe;
-import cat.tabbie.sdk.album.repository.Reference;
 import cat.tabbie.sdk.album.repository.Stash;
 import cat.tabbie.sdk.platform.Address;
+import cat.tabbie.sdk.platform.Describe;
+import cat.tabbie.sdk.platform.Reference;
+import cat.tabbie.sdk.platform.layout.Lease;
+import cat.tabbie.sdk.platform.layout.Refusal;
 import lombok.NonNull;
 
 /**

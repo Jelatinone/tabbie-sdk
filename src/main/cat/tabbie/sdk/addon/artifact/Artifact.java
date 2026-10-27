@@ -7,7 +7,7 @@ import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.album.repository.Archive;
-import cat.tabbie.sdk.album.repository.Describe;
+import cat.tabbie.sdk.album.repository.Stash;
 import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.merchant.Installer;
@@ -17,6 +17,7 @@ import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
 import cat.tabbie.sdk.platform.Address;
+import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Platform;
 import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
@@ -133,7 +134,7 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
   @Override
   default Intermediate<Set<Image<?>>> install(@NonNull Context context) throws IOException {
     Layout layout = context.layout(this);
-    return source().capture()
+    return new Stash.Capture(source())
         .flatMap(captured -> layout.unpack()
             ? context.archive().unpack(captured, layout.address())
             : Intermediate.of(Set.<Image<?>>of(

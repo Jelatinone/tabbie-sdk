@@ -13,8 +13,8 @@ import lombok.experimental.FieldDefaults;
  * Thrown when work asks a tree of {@link Node nodes} for something it does not
  * hold or allow. It is found while work describes its changes, before any of
  * them is carried out, so nothing has changed. It is the tree's counterpart of
- * a plate's {@link cat.tabbie.sdk.album.model.Refusal Refusal}, which refuses an
- * allowed operation when it is carried out.
+ * a plate's {@link Refusal}, which refuses an allowed operation when it is
+ * carried out.
  */
 public abstract sealed class Violation extends IllegalArgumentException {
 

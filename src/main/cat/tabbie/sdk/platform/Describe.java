@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.album.repository;
+package cat.tabbie.sdk.platform;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -9,17 +9,18 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.api.Observer;
 import lombok.NonNull;
 
 /**
  * The source role: a reusable, inspectable description of how to obtain
- * bytes. Providers describe artifact content this way; a {@link Stash}
- * describes retained content this way too. Describing performs no I/O;
- * {@link #open} is repeatable and independent of any prior inspection, so a
- * description can be reopened later without retaining an open handle to
- * whatever it was derived from.
+ * bytes. Providers describe artifact content this way; a
+ * {@link cat.tabbie.sdk.album.repository.Stash Stash} describes retained
+ * content this way too, and captures it with a
+ * {@link cat.tabbie.sdk.album.repository.Stash.Capture Capture}. Describing
+ * performs no I/O; {@link #open} is repeatable and independent of any prior
+ * inspection, so a description can be reopened later without retaining an
+ * open handle to whatever it was derived from.
  */
 public interface Describe {
 
@@ -91,18 +92,6 @@ public interface Describe {
   }
 
   /**
-   * Describes capturing this content into the stash of whatever plate
-   * collapses the result, reporting its transfer to the plate's observer.
-   * Nothing is read until then.
-   *
-   * @return unevaluated capture, passing with the captured reference
-   */
-  @NonNull
-  default Intermediate<Reference.Captured> capture() {
-    return new Stash.Capture(this);
-  }
-
-  /**
    * Describes a private copy of bytes, carrying their digest and size as
    * evidence so whatever writes them verifies exactly these bytes.
    *
@@ -152,6 +141,16 @@ public interface Describe {
  * @param opened whether the stream was already handed out
  */
 record StreamSource(Reference.Pending of, InputStream source, AtomicBoolean opened) implements Describe {
+
+  /**
+   * Single-use description of a caller-owned stream, which stays open.
+   *
+   * @param of     expected identity
+   * @param source caller-owned stream
+   */
+  public StreamSource(Reference.Pending of, InputStream source) {
+    this(of, source, new AtomicBoolean());
+  }
 
   @Override
   public InputStream open() throws IOException {

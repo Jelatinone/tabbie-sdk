@@ -3,9 +3,10 @@
  * {@link cat.tabbie.sdk.album.revision.Intermediate Intermediate} or
  * {@link cat.tabbie.sdk.album.revision.Image Image}: it leases the files
  * beneath its root, captures content into the stash, and supplies scratch
- * space and an observer. A {@link Lease} holds one file for reading, writing,
- * or both until it closes, and a {@link Refusal} says why a plate would not
- * carry out an operation.
+ * space and an observer. A {@link cat.tabbie.sdk.platform.layout.Lease Lease}
+ * holds one file for reading, writing, or both until it closes, and a
+ * {@link cat.tabbie.sdk.platform.layout.Refusal Refusal} says why a plate would
+ * not carry out an operation.
  *
  * <p>
  * The SDK defines plates and leases but implements neither: whoever runs the

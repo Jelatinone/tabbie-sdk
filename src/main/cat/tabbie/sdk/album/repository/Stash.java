@@ -1,13 +1,14 @@
 package cat.tabbie.sdk.album.repository;
 
 import java.io.IOException;
-import java.util.Locale;
 import java.util.OptionalLong;
 
 import cat.tabbie.sdk.album.model.Plate;
 import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.album.revision.Scrutiny;
 import cat.tabbie.sdk.api.Observer;
+import cat.tabbie.sdk.platform.Describe;
+import cat.tabbie.sdk.platform.Reference;
 import lombok.NonNull;
 
 /**
@@ -23,8 +24,8 @@ import lombok.NonNull;
  *
  * <p>
  * Its methods are immediate effects. Work captures through the {@link Plate}
- * it runs on, which is a stash; {@link Describe#capture()} describes a capture
- * to run when collapsed.
+ * it runs on, which is a stash; a {@link Capture} describes a capture to run
+ * when collapsed.
  */
 public interface Stash {
 
@@ -41,7 +42,7 @@ public interface Stash {
    */
   @NonNull
   Reference.Captured capture(@NonNull Describe source,
-      @NonNull Observer<? super Reference.Captured, ? super Transfer> observer) throws IOException;
+      @NonNull Observer<? super Reference.Captured, ? super Reference.Transfer> observer) throws IOException;
 
   /**
    * Captures a source without progress callbacks.
@@ -95,56 +96,15 @@ public interface Stash {
   }
 
   /**
-   * Progress of one transfer of bytes, such as a capture, as reported to an
-   * observer. A transfer that has read all it expected, or whose total is
-   * unknown, renders as the amount read so far.
-   *
-   * @param subject         what is being transferred, such as a file name or
-   *                        an archive entry's path
-   * @param transferredSize bytes read so far
-   * @param expectedSize    total expected bytes, when known
-   */
-  record Transfer(
-      @NonNull String subject,
-      long transferredSize,
-      @NonNull OptionalLong expectedSize) implements Observer.Renderable {
-
-    /**
-     * Checks non-negative counts.
-     *
-     * @throws IllegalArgumentException when a count is negative
-     */
-    public Transfer {
-      if (transferredSize < 0) {
-        throw new IllegalArgumentException("Transferred bytes must be non-negative.");
-      }
-      if (expectedSize.isPresent() && expectedSize.getAsLong() < 0) {
-        throw new IllegalArgumentException("Expected bytes must be non-negative or empty.");
-      }
-    }
-
-    @Override
-    public String render() {
-      String read = Archive.Operand.BYTE.render(transferredSize);
-      if (expectedSize.isEmpty() || expectedSize.getAsLong() == transferredSize) {
-        return String.format("%s  %s", subject, read);
-      }
-      long total = expectedSize.getAsLong();
-      return String.format(Locale.ROOT, "%s  %s of %s (%d%%)", subject, read, Archive.Operand.BYTE.render(total),
-          total == 0 ? 100 : transferredSize * 100 / total);
-    }
-  }
-
-  /**
    * A capture described to run later: collapsing it captures the source into
    * the plate's stash and passes with the captured reference. Capturing changes
    * no file beneath the plate's root, so it runs alike while rehearsing and
    * acting.
    *
    * <p>
-   * It reports to the plate's observer as it runs: each {@link Transfer} as
-   * the stash reads the source, then the completed transfer, or the failure
-   * that ended it.
+   * It reports to the plate's observer as it runs: each
+   * {@link Reference.Transfer} as the stash reads the source, then the
+   * completed transfer, or the failure that ended it.
    *
    * @param source description of the bytes to capture
    */
@@ -155,21 +115,21 @@ public interface Stash {
       Reference.Pending pending = source.of();
       return pending.expectedSize() == null
           ? String.format("Capture %s", pending.fileName())
-          : String.format("Capture %s (%s)", pending.fileName(), Archive.Operand.BYTE.render(pending.expectedSize()));
+          : String.format("Capture %s (%s)", pending.fileName(), Observer.Operand.BYTE.render(pending.expectedSize()));
     }
 
     @Override
     public Scrutiny<Reference.Captured> collapse(@NonNull Plate plate) throws IOException {
-      Observer<Reference.Captured, Transfer> reports = new Observer<>() {
+      Observer<Reference.Captured, Reference.Transfer> reports = new Observer<>() {
 
         @Override
-        public void transfer(Transfer transfer) {
+        public void transfer(Reference.Transfer transfer) {
           plate.observer().transfer(transfer);
         }
 
         @Override
         public void verified(Reference.Captured captured) {
-          plate.observer().verified(new Transfer(source.of().path().canonical(), captured.size(),
+          plate.observer().verified(new Reference.Transfer(source.of().path().canonical(), captured.size(),
               OptionalLong.of(captured.size())));
         }
 
