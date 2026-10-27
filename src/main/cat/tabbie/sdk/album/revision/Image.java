@@ -18,6 +18,7 @@ import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.platform.layout.Lease;
 import cat.tabbie.sdk.platform.layout.Node;
 import cat.tabbie.sdk.platform.layout.Refusal;
+import cat.tabbie.sdk.platform.layout.Rule;
 import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
 
@@ -94,103 +95,137 @@ public sealed interface Image<State extends Image.Alteration> {
   Image<State> preimage();
 
   /**
-   * Describes creation of a file from retained content, including zero bytes.
+   * Describes creation of a file from retained content, including zero bytes,
+   * at a tail beneath a directory of a plate's tree where the tree holds
+   * nothing. Directories missing above the file are created with it.
    *
-   * @param address target file
-   * @param after   retained content
-   * @return resulting image
-   * @throws Malformation.Root when the address is the root itself
+   * @param directory directory of the plate's tree to create beneath
+   * @param tail      address of the file relative to the directory
+   * @param after     retained content
+   * @return resulting image, recording the file's address beneath the root
+   * @throws Violation                when the tree does not allow the file
+   *                                  there, as
+   *                                  {@link Node.Directory#require(Address)}
+   *                                  refuses
+   * @throws IllegalArgumentException when the tail names the directory itself
    */
-  static Image<File> create(@NonNull Address address, @NonNull Reference.Captured after) {
-    return new Installation(new File.Absent(), new File.Present(after), address);
-  }
-
-  /**
-   * Describes replacement of a file deleted and succeeded by another file
-   * created.
-   *
-   * @param address target file
-   * @param before  retained content before
-   * @param after   retained content after
-   * @return resulting image
-   * @throws Malformation.Unchanged when both contents are the same
-   * @throws Malformation.Root      when the address is the root itself
-   */
-  static Image<File> replace(@NonNull Address address, @NonNull Reference.Captured before,
+  static Image<File> create(@NonNull Node.Directory directory, @NonNull Address tail,
       @NonNull Reference.Captured after) {
-    return new Installation(new File.Present(before), new File.Present(after), address);
+    directory.require(tail);
+    return new Installation(new File.Absent(), new File.Present(after), directory.address().resolve(tail));
   }
 
   /**
-   * Describes deletion of a file whose complete content matches the reference.
+   * Describes creation of a declared file from retained content, including
+   * zero bytes, where a layout names the file but nothing is on disk yet,
+   * such as a {@code server.properties} the game would otherwise write on
+   * first boot. A present file exists already, so only a declared one can be
+   * created; a declared file found on disk when the image is exposed fails
+   * like any file not in its before state.
    *
-   * @param address target file
-   * @param before  retained content before
+   * @param file  declared file of a plate's tree
+   * @param after retained content
    * @return resulting image
-   * @throws Malformation.Root when the address is the root itself
+   * @throws Violation.Forbidden when the file is not
+   *                             {@link Rule.Permission#CREATABLE creatable}
    */
-  static Image<File> delete(@NonNull Address address, @NonNull Reference.Captured before) {
-    return new Installation(new File.Present(before), new File.Absent(), address);
+  static Image<File> create(@NonNull Node.Declared.File file, @NonNull Reference.Captured after) {
+    file.require(Rule.Permission.CREATABLE);
+    return new Installation(new File.Absent(), new File.Present(after), file.address());
   }
 
   /**
-   * Describes changes to an existing file between explicit fragment states. The
-   * fragment lists pair up into chunks.
+   * Describes replacement of a file of a plate's tree, deleted and succeeded
+   * by another file created.
    *
-   * @param address target file
-   * @param before  text before
-   * @param after   text after
+   * @param file   file of the plate's tree
+   * @param before retained content before
+   * @param after  retained content after
    * @return resulting image
+   * @throws Violation.Forbidden    when the file is not editable
+   * @throws Malformation.Unchanged when both contents are the same
+   */
+  static Image<File> replace(@NonNull Node.File file, @NonNull Reference.Captured before,
+      @NonNull Reference.Captured after) {
+    file.require(Rule.Permission.EDITABLE);
+    return new Installation(new File.Present(before), new File.Present(after), file.address());
+  }
+
+  /**
+   * Describes deletion of a file of a plate's tree whose complete content
+   * matches the reference.
+   *
+   * @param file   file of the plate's tree
+   * @param before retained content before
+   * @return resulting image
+   * @throws Violation.Forbidden when the file is not deletable
+   */
+  static Image<File> delete(@NonNull Node.File file, @NonNull Reference.Captured before) {
+    file.require(Rule.Permission.DELETABLE);
+    return new Installation(new File.Present(before), new File.Absent(), file.address());
+  }
+
+  /**
+   * Describes changes to a file of a plate's tree between explicit fragment
+   * states. The fragment lists pair up into chunks.
+   *
+   * @param file   file of the plate's tree
+   * @param before text before
+   * @param after  text after
+   * @return resulting image
+   * @throws Violation.Forbidden    when the file is not readable and editable
    * @throws Malformation.Unchanged when no fragment changes
-   * @throws Malformation.Root      when the address is the root itself
    */
-  static Image<Text> configure(@NonNull Address address, @NonNull Text before, @NonNull Text after) {
-    return new Configuration(before, after, address);
+  static Image<Text> configure(@NonNull Node.File file, @NonNull Text before, @NonNull Text after) {
+    file.require(Rule.Permission.READABLE).require(Rule.Permission.EDITABLE);
+    return new Configuration(before, after, file.address());
   }
 
   /**
-   * Describes changes to an existing file. Each chunk contributes a fragment on
-   * each side; the chunks' insertion/deletion ordering is not retained.
+   * Describes changes to a file of a plate's tree. Each chunk contributes a
+   * fragment on each side; the chunks' insertion/deletion ordering is not
+   * retained.
    *
-   * @param address target file
-   * @param chunks  changed chunks
+   * @param file   file of the plate's tree
+   * @param chunks changed chunks
    * @return resulting image
+   * @throws Violation.Forbidden    when the file is not readable and editable
    * @throws Malformation.Unchanged when no chunk edits its text
-   * @throws Malformation.Root      when the address is the root itself
    */
-  static Image<Text> configure(@NonNull Address address, @NonNull List<Chunk> chunks) {
-    return new Configuration(chunks, address);
+  static Image<Text> configure(@NonNull Node.File file, @NonNull List<Chunk> chunks) {
+    file.require(Rule.Permission.READABLE).require(Rule.Permission.EDITABLE);
+    return new Configuration(chunks, file.address());
   }
 
   /**
    * Describes text differences with three surrounding context lines.
    *
-   * @param address target file
-   * @param before  text before
-   * @param after   text after
+   * @param file   file of the plate's tree
+   * @param before text before
+   * @param after  text after
    * @return resulting image
+   * @throws Violation.Forbidden    when the file is not readable and editable
    * @throws Malformation.Unchanged when the texts are equal
-   * @throws Malformation.Root      when the address is the root itself
    */
-  static Image<Text> configure(@NonNull Address address, @NonNull String before, @NonNull String after) {
-    return configure(address, Chunk.diff(before, after));
+  static Image<Text> configure(@NonNull Node.File file, @NonNull String before, @NonNull String after) {
+    return configure(file, Chunk.diff(before, after));
   }
 
   /**
    * Describes text differences, retaining only the differing regions and their
    * context rather than complete content expectations.
    *
-   * @param address      target file
+   * @param file         file of the plate's tree
    * @param before       text before
    * @param after        text after
    * @param contextLines number of context lines to keep
    * @return resulting image
+   * @throws Violation.Forbidden    when the file is not readable and editable
    * @throws Malformation.Unchanged when the texts are equal
-   * @throws Malformation.Root      when the address is the root itself
    */
-  static Image<Text> configure(@NonNull Address address, @NonNull String before, @NonNull String after,
+  static Image<Text> configure(@NonNull Node.File file, @NonNull String before, @NonNull String after,
       int contextLines) {
-    return configure(address, Chunk.diff(before, after, contextLines));
+    return configure(file, Chunk.diff(before, after, contextLines));
   }
 
   /**
@@ -547,7 +582,7 @@ public sealed interface Image<State extends Image.Alteration> {
         throw new Malformation.Discontinuous(address);
       }
       String configured = later.apply(stash.text(installed));
-      Reference.Captured content = stash.capture(Describe.of(installed.fileName(), configured));
+      Reference.Captured content = stash.capture(Describe.of(address.fileName().orElseThrow(), configured));
       return between(before, new File.Present(content), address);
     }
   }
@@ -665,7 +700,7 @@ public sealed interface Image<State extends Image.Alteration> {
           return new Scrutiny.Fail<>(new Text(Chunk.fragmentsOf(text)));
         }
         String changed = Chunk.apply(chunks, text);
-        file.update(_ -> Describe.of(current.of().fileName(), changed));
+        file.update(_ -> Describe.of(node.name(), changed));
         return new Scrutiny.Pass<>(new Text(Chunk.fragmentsOf(changed)));
       }
     }
@@ -735,7 +770,7 @@ public sealed interface Image<State extends Image.Alteration> {
         throw new Malformation.Discontinuous(address);
       }
       String original = preimage().apply(stash.text(configured));
-      Reference.Captured content = stash.capture(Describe.of(configured.fileName(), original));
+      Reference.Captured content = stash.capture(Describe.of(address.fileName().orElseThrow(), original));
       return Installation.between(new File.Present(content), later.after(), address);
     }
   }

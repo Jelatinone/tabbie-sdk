@@ -8,6 +8,7 @@ import java.util.function.Function;
 
 import cat.tabbie.sdk.album.model.Plate;
 import cat.tabbie.sdk.album.revision.Intermediate.Step.Effect;
+import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
 
 /**
@@ -314,6 +315,9 @@ public sealed interface Intermediate<Result> {
 
     /**
      * One effect performed with the collapsing plate, passing with its result.
+     * An effect the plate's tree does not allow, such as an image described
+     * where the tree forbids it, fails with the tree's violation rather than
+     * throwing it.
      *
      * @param <T>    result type
      * @param action effect
@@ -322,7 +326,11 @@ public sealed interface Intermediate<Result> {
 
       @Override
       public Scrutiny<T> collapse(@NonNull Plate plate) throws IOException {
-        return new Scrutiny.Pass<>(action.run(plate));
+        try {
+          return new Scrutiny.Pass<>(action.run(plate));
+        } catch (Violation violation) {
+          return new Scrutiny.Fail<>(null, violation);
+        }
       }
     }
   }

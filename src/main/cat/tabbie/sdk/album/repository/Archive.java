@@ -28,6 +28,7 @@ import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.platform.layout.Lease;
 import cat.tabbie.sdk.platform.layout.Node;
+import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
 
 /**
@@ -67,27 +68,33 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    *
    * <p>
    * The archive is read twice, once to inspect it and once to capture its file
-   * entries, so it must already be retained: both reopen it from the stash of
-   * the plate that collapses the result, and its entries are captured into the
-   * same stash. Streams opened during execution are closed.
+   * entries, so it is first captured into the stash of the plate that
+   * collapses the result: both reopen it from there, and its entries are
+   * captured into the same stash. Every file is created beneath a destination
+   * in a directory of that plate's tree, which must allow creating it there.
+   * Streams opened during execution are closed.
    *
-   * @param archive     retained archive
-   * @param destination logical extraction directory
+   * @param archive     archive to unpack, named by its source
+   * @param directory   directory of the collapsing plate's tree to unpack
+   *                    beneath
+   * @param destination address of the extraction directory relative to it,
+   *                    the root address for the directory itself
    * @return unevaluated image preparation producing an immutable set
    */
-  public Intermediate<Set<Image<?>>> unpack(@NonNull Reference.Captured archive, @NonNull Address destination) {
-    return inspect(archive).flatMap(found -> new Unpack(destination, found, this));
+  public Intermediate<Set<Image<?>>> unpack(@NonNull Describe archive, @NonNull Node.Directory directory,
+      @NonNull Address destination) {
+    return inspect(archive).flatMap(found -> new Unpack(directory, destination, found, this));
   }
 
   /**
-   * Describes explicit central-directory inspection using execution-owned
-   * scratch space, independent of extraction.
+   * Describes capturing an archive, then explicit central-directory inspection
+   * using execution-owned scratch space, independent of extraction.
    *
-   * @param archive retained archive
+   * @param archive archive to inspect, named by its source
    * @return unevaluated inspection, producing the archive's file entries
    */
-  public Intermediate<List<Entry>> inspect(@NonNull Reference.Captured archive) {
-    return new Inspect(archive, this);
+  public Intermediate<List<Entry>> inspect(@NonNull Describe archive) {
+    return new Stash.Capture(archive).flatMap(captured -> new Inspect(archive.path(), captured, this));
   }
 
   /**
@@ -101,14 +108,16 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * then an {@link Observe} for each central-directory entry as it is checked;
    * then the file entries found, or the failure that ended it.
    *
+   * @param path    the archive's path within its source, naming it in reports
    * @param archive retained archive, reopened from the plate's stash
    * @param limits  processing bounds
    */
-  record Inspect(Reference.Captured archive, Archive limits) implements Intermediate.Step<List<Entry>> {
+  record Inspect(Address path, Reference.Captured archive, Archive limits)
+      implements Intermediate.Step<List<Entry>> {
 
     @Override
     public String name() {
-      return String.format("Inspect %s (%s)", archive.fileName(), Observer.Operand.BYTE.render(archive.size()));
+      return String.format("Inspect %s (%s)", fileName(), Observer.Operand.BYTE.render(archive.size()));
     }
 
     @Override
@@ -116,12 +125,16 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
       try {
         List<Entry> found = scan(plate);
         plate.observer().verified(
-            new Observe<>(archive.fileName(), found.size(), found.size(), Observer.Operand.FILE));
+            new Observe<>(fileName(), found.size(), found.size(), Observer.Operand.FILE));
         return new Scrutiny.Pass<>(found);
       } catch (IOException | RuntimeException failure) {
         plate.observer().failed(failure);
         throw failure;
       }
+    }
+
+    private String fileName() {
+      return path.fileName().orElseThrow();
     }
 
     private List<Entry> scan(Plate plate) throws IOException {
@@ -159,7 +172,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
               files.add(entry);
             }
             plate.observer().transfer(
-                new Observe<>(archive.fileName(), ++checked, zip.size(), Observer.Operand.ENTRY));
+                new Observe<>(fileName(), ++checked, zip.size(), Observer.Operand.ENTRY));
           }
           for (List<String> path : paths.keySet()) {
             for (int depth = path.size() - 1; depth > 0; depth--) {
@@ -200,19 +213,21 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * {@link Reference.Transfer} as the archive is copied into scratch space, and
    * as each entry's capture reads it, when the stash reports them; an
    * {@link Observe} for each file once its capture completes; then the files
-   * unpacked, or the failure that ended it.
+   * unpacked, the tree's violation when it does not allow a file where the
+   * archive puts it, or the failure that ended it.
    *
-   * @param destination logical extraction directory
+   * @param directory   directory of the plate's tree to unpack beneath
+   * @param destination address of the extraction directory relative to it
    * @param entries     inspected file entries of one archive, at least one
    * @param limits      processing bounds
    */
-  record Unpack(Address destination, List<Entry> entries, Archive limits)
+  record Unpack(Node.Directory directory, Address destination, List<Entry> entries, Archive limits)
       implements Intermediate.Step<Set<Image<?>>> {
 
     @Override
     public String name() {
       return String.format("Unpack %s from %s into %s", Observer.Operand.FILE.render(entries.size()),
-          entries.getFirst().archive().of().fileName(), destination.canonical());
+          entries.getFirst().archive().fileName(), directory.address().resolve(destination).canonical());
     }
 
     @Override
@@ -228,6 +243,9 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
             scratch.delete();
           }
         }
+      } catch (Violation violation) {
+        plate.observer().failed(violation);
+        return new Scrutiny.Fail<>(null, violation);
       } catch (IOException | RuntimeException failure) {
         plate.observer().failed(failure);
         throw failure;
@@ -235,7 +253,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
     }
 
     private Observe<Integer> files(int completed) {
-      return new Observe<>(entries.getFirst().archive().of().fileName(), completed, entries.size(),
+      return new Observe<>(entries.getFirst().archive().fileName(), completed, entries.size(),
           Observer.Operand.FILE);
     }
 
@@ -251,6 +269,11 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
           throw new IOException("ZIP entries differ from the inspected catalog.");
         }
         Describe retained = new Describe() {
+          @Override
+          public Address path() {
+            return entry.path();
+          }
+
           @Override
           public Reference.Pending of() {
             return entry.of();
@@ -268,8 +291,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
             plate.observer().transfer(transfer);
           }
         };
-        Address target = destination.resolve(entry.path());
-        images.add(Image.create(target, plate.capture(retained, read)));
+        images.add(Image.create(directory, destination.resolve(entry.path()), plate.capture(retained, read)));
         plate.observer().transfer(files(images.size()));
       }
       return images;
@@ -320,7 +342,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 
     @Override
     public Reference.Pending of() {
-      return new Reference.Pending(path, null, size);
+      return new Reference.Pending(null, size);
     }
 
     @Override
@@ -427,6 +449,11 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
     return new Describe() {
 
       @Override
+      public Address path() {
+        return archive.path();
+      }
+
+      @Override
       public Reference.Pending of() {
         return pending;
       }
@@ -456,7 +483,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 
           private void report(int read) {
             copied += read;
-            plate.observer().transfer(new Reference.Transfer(pending.fileName(), copied, total));
+            plate.observer().transfer(new Reference.Transfer(archive.fileName(), copied, total));
           }
         };
       }

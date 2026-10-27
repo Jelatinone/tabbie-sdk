@@ -31,8 +31,9 @@ public interface Stash {
 
   /**
    * Captures a source: reads it, verifies any evidence it declares, and
-   * retains its bytes under its own identity. Implementations may use
-   * {@link Reference.Pending#transfer} to digest while writing.
+   * retains its bytes under their own identity. Implementations may use
+   * {@link Describe#transfer(java.io.OutputStream, Observer)} to digest while
+   * writing.
    *
    * @param source   description of the bytes to capture
    * @param observer transfer callbacks; callbacks must not throw
@@ -60,7 +61,9 @@ public interface Stash {
   /**
    * Describes retained bytes by reference. Describing performs no I/O; opening
    * the result yields exactly the retained bytes, and fails when they are not
-   * retained here or were reclaimed.
+   * retained here or were reclaimed. Its {@link Describe#path() path} is one
+   * the bytes were captured under; when identical bytes were captured under
+   * several, it may be any of them.
    *
    * @param reference captured reference previously produced by this stash or
    *                  one sharing its storage
@@ -114,8 +117,8 @@ public interface Stash {
     public String name() {
       Reference.Pending pending = source.of();
       return pending.expectedSize() == null
-          ? String.format("Capture %s", pending.fileName())
-          : String.format("Capture %s (%s)", pending.fileName(), Observer.Operand.BYTE.render(pending.expectedSize()));
+          ? String.format("Capture %s", source.fileName())
+          : String.format("Capture %s (%s)", source.fileName(), Observer.Operand.BYTE.render(pending.expectedSize()));
     }
 
     @Override
@@ -129,7 +132,7 @@ public interface Stash {
 
         @Override
         public void verified(Reference.Captured captured) {
-          plate.observer().verified(new Reference.Transfer(source.of().path().canonical(), captured.size(),
+          plate.observer().verified(new Reference.Transfer(source.path().canonical(), captured.size(),
               OptionalLong.of(captured.size())));
         }
 

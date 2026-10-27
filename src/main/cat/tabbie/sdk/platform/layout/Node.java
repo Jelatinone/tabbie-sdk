@@ -208,10 +208,10 @@ public sealed interface Node permits Node.File, Node.Directory, Node.Declared, N
 
   /**
    * A file. Nothing lies beneath a file, and a file accepts no content. A file
-   * the tree holds is read and written through its own leases, and is never
-   * created again: a declared file not on disk yet is filled by
+   * the tree holds is read and written through its own leases, never created
+   * through its directory: a declared file not on disk yet is created by
    * {@link Lease.Write#replace(cat.tabbie.sdk.platform.Describe) replacing}
-   * it.
+   * it, which needs it to be {@link Rule.Permission#CREATABLE creatable}.
    */
   sealed interface File extends Node permits Node.Declared.File, Node.Present.File {
 
@@ -316,31 +316,24 @@ public sealed interface Node permits Node.File, Node.Directory, Node.Declared, N
     }
 
     /**
-     * Leases the place at a tail beneath this directory for creating a file
-     * there, once the tree allows it. Following the tail as far as the tree
-     * holds nodes, every step must be a directory and nothing may be held at
-     * the tail itself, and the deepest directory reached must be
+     * Requires the tree to allow creating a file at a tail beneath this
+     * directory. Following the tail as far as the tree holds nodes, every step
+     * must be a directory and nothing may be held at the tail itself, and the
+     * deepest directory reached must be
      * {@link Rule.Permission#CREATABLE creatable}: the directories created
      * above the file take their permissions from it.
      *
-     * @apiNote The default checks the tree, then leases the place through
-     *          {@link #claim(Address)}.
      * @param tail address of the file relative to this directory
-     * @return open lease, owned by the caller
+     * @return this directory
      * @throws Violation.Terminal       when a step leads beneath a file
      * @throws Violation.Occupied       when the tree already holds a node at
      *                                  the tail
      * @throws Violation.Forbidden      when the deepest directory reached is
      *                                  not creatable
-     * @throws Refusal                  with {@link Refusal.Held} when the plate
-     *                                  does not wait and the place is leased
-     * @throws IOException              when the lease cannot be taken
      * @throws IllegalArgumentException when the tail names this directory
-     * @throws IllegalStateException    when no plate has mounted this
-     *                                  directory
      */
     @NonNull
-    default Lease.Create create(@NonNull Address tail) throws IOException {
+    default Node.Directory require(@NonNull Address tail) {
       if (tail.isRoot()) {
         throw new IllegalArgumentException("A file is created beneath a directory, not in its place.");
       }
@@ -361,6 +354,29 @@ public sealed interface Node permits Node.File, Node.Directory, Node.Declared, N
         };
       }
       deepest.require(Rule.Permission.CREATABLE);
+      return this;
+    }
+
+    /**
+     * Leases the place at a tail beneath this directory for creating a file
+     * there, once the tree allows it, as {@link #require(Address)} checks.
+     *
+     * @apiNote The default checks the tree, then leases the place through
+     *          {@link #claim(Address)}.
+     * @param tail address of the file relative to this directory
+     * @return open lease, owned by the caller
+     * @throws Violation                when the tree does not allow the file,
+     *                                  as {@link #require(Address)} refuses
+     * @throws Refusal                  with {@link Refusal.Held} when the plate
+     *                                  does not wait and the place is leased
+     * @throws IOException              when the lease cannot be taken
+     * @throws IllegalArgumentException when the tail names this directory
+     * @throws IllegalStateException    when no plate has mounted this
+     *                                  directory
+     */
+    @NonNull
+    default Lease.Create create(@NonNull Address tail) throws IOException {
+      require(tail);
       return claim(tail);
     }
 

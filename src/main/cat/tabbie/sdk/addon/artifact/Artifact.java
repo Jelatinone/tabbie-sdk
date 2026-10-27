@@ -6,6 +6,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.Identity;
+import cat.tabbie.sdk.album.model.Plate;
 import cat.tabbie.sdk.album.repository.Archive;
 import cat.tabbie.sdk.album.repository.Stash;
 import cat.tabbie.sdk.album.revision.Image;
@@ -121,9 +122,10 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
 
   /**
    * Captures the source into the stash of the plate that collapses the result,
-   * and places it at the selected layout: as one named file, or unpacked
-   * beneath the layout directory. Nothing is read until the result is
-   * collapsed.
+   * and places it at the selected layout in that plate's tree: as one file
+   * named after the source, or unpacked beneath the layout directory. Nothing
+   * is read until the result is collapsed, and a placement the tree does not
+   * allow fails with its violation.
    *
    * @param context selected target
    * @return unevaluated capture producing validated immutable images
@@ -134,12 +136,13 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
   @Override
   default Intermediate<Set<Image<?>>> install(@NonNull Context context) throws IOException {
     Layout layout = context.layout(this);
-    return new Stash.Capture(source())
-        .flatMap(captured -> layout.unpack()
-            ? context.archive().unpack(captured, layout.address())
-            : Intermediate.of(Set.<Image<?>>of(
-                Image.create(layout.address().resolve(captured.fileName()), captured))))
-        .map(Artifact::checked);
+    Intermediate<Set<Image<?>>> placed = layout.unpack()
+        ? Intermediate.of(Plate::root)
+            .flatMap(root -> context.archive().unpack(source(), root, layout.address()))
+        : new Stash.Capture(source())
+            .flatMap(captured -> Intermediate.of(plate -> Set.<Image<?>>of(
+                Image.create(plate.root(), layout.address().resolve(source().fileName()), captured))));
+    return placed.map(Artifact::checked);
   }
 
   /**

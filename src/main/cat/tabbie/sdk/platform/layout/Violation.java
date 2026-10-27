@@ -114,9 +114,10 @@ public abstract sealed class Violation extends IllegalArgumentException {
   }
 
   /**
-   * The tree already holds a node where a file is to be created: a file or a
-   * directory that exists, or one a layout declares. A file the tree holds is
-   * written through its own node, never created again.
+   * The tree already holds a node where a file is to be created through a
+   * directory: a file or a directory that exists, or one a layout declares. A
+   * file the tree holds is written through its own node instead, which creates
+   * a declared file not on disk yet.
    */
   @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
   public static final class Occupied extends Violation {

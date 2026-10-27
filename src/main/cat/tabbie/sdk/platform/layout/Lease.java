@@ -75,12 +75,16 @@ public sealed interface Lease extends AutoCloseable {
 
     /**
      * Replaces the whole file with content verified against the evidence it
-     * declares, or writes it when a declared file is not on disk yet. The path
-     * never holds partial content.
+     * declares, or creates it when a declared file is not on disk yet. The
+     * path never holds partial content. Replacing needs the file to be
+     * editable; creating it needs the file to be creatable, as creating any
+     * file does.
      *
      * @param content bytes to write
-     * @throws Violation.Forbidden   when the file is not
-     *                               {@link Rule.Permission#EDITABLE editable}
+     * @throws Violation.Forbidden   when the file is on disk and not
+     *                               {@link Rule.Permission#EDITABLE editable},
+     *                               or not on disk and not
+     *                               {@link Rule.Permission#CREATABLE creatable}
      * @throws Refusal               with {@link Refusal.Occupied} when
      *                               something other than a file is at the path
      *                               or a file lies above it, or
