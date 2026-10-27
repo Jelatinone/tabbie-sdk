@@ -1,6 +1,5 @@
 package cat.tabbie.sdk.album.model;
 
-import java.io.IOException;
 import java.nio.file.Path;
 
 import cat.tabbie.sdk.album.repository.Stash;
@@ -9,7 +8,7 @@ import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Command;
 import cat.tabbie.sdk.platform.Toolchain;
 import cat.tabbie.sdk.platform.layout.Lease;
-import cat.tabbie.sdk.platform.layout.Refusal;
+import cat.tabbie.sdk.platform.layout.Node;
 import lombok.NonNull;
 
 /**
@@ -21,18 +20,21 @@ import lombok.NonNull;
  * same work rehearses or acts depending only on the plate it is given.
  *
  * <p>
- * Work reaches files only through {@link Lease leases}, taken by
- * {@link Address}. How a plate excludes other work while a lease is open
- * is its own choice. Content reaches the stash through the plate as well, since
- * a plate is a {@link Stash}: captures land alike while rehearsing and acting,
- * because retaining content changes no file beneath the root.
+ * Work reaches files only through the {@link Node nodes} of the plate's
+ * {@link #root() root} and {@link #scratch() scratch} trees and the
+ * {@link Lease leases} they grant. The plate mounts its root's layout, with
+ * core's own layer on top, and implements every node as a view of its own
+ * files, so its trees show each change as it is carried out. How a plate
+ * excludes other work while a lease is open is its own choice. Content reaches
+ * the stash through the plate as well, since a plate is a {@link Stash}:
+ * captures land alike while rehearsing and acting, because retaining content
+ * changes no file beneath the root.
  *
  * <p>
  * A plate for acting reaches the real files beneath its root. A plate for
  * rehearsing lays an overlay over them, so writes land elsewhere and later
- * reads see them. Scratch
- * space is part of neither: it is a real directory while rehearsing and acting
- * alike, so work uses it directly.
+ * reads see them. Scratch space is part of neither: it is a real directory
+ * while rehearsing and acting alike.
  *
  * @apiNote A plate is caller-owned and shared by every step of the work it is
  *          given to. Implementations used by work that runs in parallel must be
@@ -42,15 +44,25 @@ import lombok.NonNull;
 public interface Plate extends Command.Resolver, Stash {
 
   /**
-   * Supplies an existing execution-owned directory for temporary files. It is
-   * always on the default filesystem and never beneath the plate's root, and it
-   * is deleted when the surrounding rehearse or act ends, so nothing may expect
-   * it to exist afterwards.
+   * Supplies the tree of the files beneath this plate's root: the layout
+   * mounted on it, with what exists there.
    *
-   * @return scratch directory
+   * @return directory standing for the root
    */
   @NonNull
-  Path scratch();
+  Node.Directory root();
+
+  /**
+   * Supplies the tree of an existing execution-owned directory for temporary
+   * files. It is always on the default filesystem and never beneath the
+   * plate's root, every permission holds throughout it, and it is deleted when
+   * the surrounding rehearse or act ends, so nothing may expect it to exist
+   * afterwards.
+   *
+   * @return directory standing for scratch space
+   */
+  @NonNull
+  Node.Directory scratch();
 
   /**
    * Supplies an observer of the work's steps. Every step shares it, so it
@@ -66,7 +78,9 @@ public interface Plate extends Command.Resolver, Stash {
 
   /**
    * Binds an address to a physical path, only for rendering the arguments of a
-   * command an outside process runs. Work reads and writes files through
+   * command an outside process runs. Commands are described before any plate
+   * runs them and may name files the process creates, so this binds the
+   * address itself rather than a node. Work reads and writes files through
    * leases, never through this path: while rehearsing, it names the real file
    * rather than the overlay.
    *
@@ -88,41 +102,4 @@ public interface Plate extends Command.Resolver, Stash {
   @Override
   @NonNull
   Path toolchain(@NonNull Toolchain toolchain);
-
-  /**
-   * Leases a file for reading.
-   *
-   * @param address file beneath this plate's root
-   * @return open lease, owned by the caller
-   * @throws Refusal     with {@link Refusal.Held} when the plate does not wait
-   *                     and the path is leased for writing
-   * @throws IOException when the lease cannot be taken
-   */
-  @NonNull
-  Lease.Read read(@NonNull Address address) throws IOException;
-
-  /**
-   * Leases a file for writing.
-   *
-   * @param address file beneath this plate's root
-   * @return open lease, owned by the caller
-   * @throws Refusal     with {@link Refusal.Held} when the plate does not wait
-   *                     and the path is leased
-   * @throws IOException when the lease cannot be taken
-   */
-  @NonNull
-  Lease.Write write(@NonNull Address address) throws IOException;
-
-  /**
-   * Leases a file for reading and writing, for work that checks a file before
-   * it changes it.
-   *
-   * @param address file beneath this plate's root
-   * @return open lease, owned by the caller
-   * @throws Refusal     with {@link Refusal.Held} when the plate does not wait
-   *                     and the path is leased
-   * @throws IOException when the lease cannot be taken
-   */
-  @NonNull
-  Lease.Mutual mutual(@NonNull Address address) throws IOException;
 }

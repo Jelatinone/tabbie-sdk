@@ -16,7 +16,9 @@ import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.platform.layout.Lease;
+import cat.tabbie.sdk.platform.layout.Node;
 import cat.tabbie.sdk.platform.layout.Refusal;
+import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
 
 /**
@@ -430,18 +432,20 @@ public sealed interface Image<State extends Image.Alteration> {
 
     @Override
     public Scrutiny<File> expose(@NonNull Plate plate) throws IOException {
-      try (Lease.Mutual file = plate.mutual(address)) {
-        File found = File.of(file);
-        if (!before.same(found)) {
-          return new Scrutiny.Fail<>(found);
+      try {
+        Optional<Node> held = held(plate);
+        if (held.isEmpty()) {
+          return created(plate);
         }
-        switch (after) {
-          case File.Absent _ -> file.delete();
-          case File.Present(Reference.Captured content) when found instanceof File.Absent ->
-            file.create(plate.retained(content));
-          case File.Present(Reference.Captured content) -> file.update(_ -> plate.retained(content));
-        }
-        return new Scrutiny.Pass<>(after);
+        return switch (held.get()) {
+          case Node.File file -> changed(file, plate);
+          case Node.Directory _ -> new Scrutiny.Fail<>(null,
+              new Refusal(new Refusal.Occupied(address, Refusal.Kind.FILE, Refusal.Kind.DIRECTORY)));
+        };
+      } catch (Violation violation) {
+        // A path beneath a file, or a change the tree does not permit, has no
+        // file state to report
+        return new Scrutiny.Fail<>(null, violation);
       } catch (Refusal refusal) {
         // A path no file can occupy, or one that may not be written, has no
         // file state to report
@@ -449,6 +453,51 @@ public sealed interface Image<State extends Image.Alteration> {
           case Refusal.Mismatch _, Refusal.Denied _ -> new Scrutiny.Fail<>(null, refusal);
           case Refusal.Held _ -> throw refusal;
         };
+      }
+    }
+
+    /**
+     * Locates the node the plate's tree holds at this image's file, or empty
+     * when it holds nothing there.
+     */
+    private Optional<Node> held(Plate plate) {
+      try {
+        return Optional.of(plate.root().locate(address));
+      } catch (Violation.Missing _) {
+        return Optional.empty();
+      }
+    }
+
+    /**
+     * Creates this image's file where the tree holds nothing, when nothing is
+     * what it expects there.
+     */
+    private Scrutiny<File> created(Plate plate) throws IOException {
+      File found = new File.Absent();
+      if (!before.same(found) || !(after instanceof File.Present(Reference.Captured content))) {
+        return new Scrutiny.Fail<>(found);
+      }
+      try (Lease.Create file = plate.root().create(address)) {
+        file.create(plate.retained(content));
+      }
+      return new Scrutiny.Pass<>(after);
+    }
+
+    /**
+     * Brings a file the tree holds from its before state to its after state;
+     * a declared file not on disk yet is in the absent state.
+     */
+    private Scrutiny<File> changed(Node.File node, Plate plate) throws IOException {
+      try (Lease.Mutual file = node.mutual()) {
+        File found = File.of(file);
+        if (!before.same(found)) {
+          return new Scrutiny.Fail<>(found);
+        }
+        switch (after) {
+          case File.Absent _ -> file.delete();
+          case File.Present(Reference.Captured content) -> file.replace(plate.retained(content));
+        }
+        return new Scrutiny.Pass<>(after);
       }
     }
 
@@ -585,7 +634,31 @@ public sealed interface Image<State extends Image.Alteration> {
 
     @Override
     public Scrutiny<Text> expose(@NonNull Plate plate) throws IOException {
-      try (Lease.Mutual file = plate.mutual(address)) {
+      try {
+        return switch (plate.root().locate(address)) {
+          case Node.File file -> configured(file);
+          case Node.Directory _ -> new Scrutiny.Fail<>(null,
+              new Refusal(new Refusal.Occupied(address, Refusal.Kind.FILE, Refusal.Kind.DIRECTORY)));
+        };
+      } catch (Violation violation) {
+        // The tree holds nothing here, the path lies beneath a file, or the
+        // tree does not permit the change
+        return new Scrutiny.Fail<>(null, violation);
+      } catch (Refusal refusal) {
+        // The file is gone, is not a file, or may not be written
+        return switch (refusal.reason()) {
+          case Refusal.Mismatch _, Refusal.Denied _ -> new Scrutiny.Fail<>(null, refusal);
+          case Refusal.Held _ -> throw refusal;
+        };
+      }
+    }
+
+    /**
+     * Applies the chunks to a file the tree holds, when its lines still match
+     * their before fragments.
+     */
+    private Scrutiny<Text> configured(Node.File node) throws IOException {
+      try (Lease.Mutual file = node.mutual()) {
         Describe current = file.read();
         String text = current.text();
         if (!Chunk.matches(chunks, text)) {
@@ -594,12 +667,6 @@ public sealed interface Image<State extends Image.Alteration> {
         String changed = Chunk.apply(chunks, text);
         file.update(_ -> Describe.of(current.of().fileName(), changed));
         return new Scrutiny.Pass<>(new Text(Chunk.fragmentsOf(changed)));
-      } catch (Refusal refusal) {
-        // The file is gone, is not a file, or may not be written
-        return switch (refusal.reason()) {
-          case Refusal.Mismatch _, Refusal.Denied _ -> new Scrutiny.Fail<>(null, refusal);
-          case Refusal.Held _ -> throw refusal;
-        };
       }
     }
 

@@ -114,7 +114,40 @@ public abstract sealed class Violation extends IllegalArgumentException {
   }
 
   /**
-   * A node does not hold the permission an operation on it needs.
+   * The tree already holds a node where a file is to be created: a file or a
+   * directory that exists, or one a layout declares. A file the tree holds is
+   * written through its own node, never created again.
+   */
+  @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+  public static final class Occupied extends Violation {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    transient Address address;
+
+    /**
+     * Describes a node held where a file is to be created.
+     *
+     * @param address address of the node the tree holds
+     */
+    public Occupied(@NonNull Address address) {
+      super("The tree already holds %s, where a file would be created.".formatted(shown(address)));
+      this.address = address;
+    }
+
+    /**
+     * Returns the address of the node the tree holds.
+     *
+     * @return occupied address
+     */
+    public Address address() {
+      return address;
+    }
+  }
+
+  /**
+   * A permission an operation on a node needs does not hold there.
    */
   @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
   public static final class Forbidden extends Violation {

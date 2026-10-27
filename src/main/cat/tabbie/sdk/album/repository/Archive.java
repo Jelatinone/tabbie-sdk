@@ -4,8 +4,6 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -14,6 +12,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.UUID;
 import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -27,6 +26,8 @@ import cat.tabbie.sdk.api.Observer;
 import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Reference;
+import cat.tabbie.sdk.platform.layout.Lease;
+import cat.tabbie.sdk.platform.layout.Node;
 import lombok.NonNull;
 
 /**
@@ -128,10 +129,9 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
         throw new IOException("ZIP byte limit exceeded.");
       }
       Describe source = plate.retained(archive);
-      Path scratch = Files.createTempFile(plate.scratch(), "tabbie-archive-", ".zip");
+      Node.File copied = limits.copy(source, plate);
       try {
-        limits.copy(source, scratch, plate);
-        try (ZipFile zip = new ZipFile(scratch.toFile())) {
+        try (ZipFile zip = new ZipFile(copied.path().toFile())) {
           if (zip.size() > limits.entries()) {
             throw new IOException("ZIP entry limit exceeded.");
           }
@@ -181,7 +181,9 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
           throw new IOException("Invalid ZIP content.", failure);
         }
       } finally {
-        Files.deleteIfExists(scratch);
+        try (Lease.Write scratch = copied.write()) {
+          scratch.delete();
+        }
       }
     }
   }
@@ -216,23 +218,20 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
     @Override
     public Scrutiny<Set<Image<?>>> collapse(@NonNull Plate plate) throws IOException {
       try {
-        Path scratch = Files.createTempFile(plate.scratch(), "tabbie-archive-", ".zip");
-        try (ZipFile zip = open(scratch, plate)) {
+        Node.File copied = limits.copy(entries.getFirst().archive(), plate);
+        try (ZipFile zip = new ZipFile(copied.path().toFile())) {
           Set<Image<?>> unpacked = validated(extract(zip, plate));
           plate.observer().verified(files(unpacked.size()));
           return new Scrutiny.Pass<>(unpacked);
         } finally {
-          Files.deleteIfExists(scratch);
+          try (Lease.Write scratch = copied.write()) {
+            scratch.delete();
+          }
         }
       } catch (IOException | RuntimeException failure) {
         plate.observer().failed(failure);
         throw failure;
       }
-    }
-
-    private ZipFile open(Path scratch, Plate plate) throws IOException {
-      limits.copy(entries.getFirst().archive(), scratch, plate);
-      return new ZipFile(scratch.toFile());
     }
 
     private Observe<Integer> files(int completed) {
@@ -406,25 +405,62 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
   }
 
   /**
-   * Copies an archive into scratch space within the compressed byte limit,
-   * reporting each read as a transfer of the archive.
+   * Copies an archive into a new file in the plate's scratch space within the
+   * compressed byte limit, reporting each read as a transfer of the archive.
    */
-  private void copy(Describe archive, Path scratch, Plate plate)
-      throws IOException {
+  private Node.File copy(Describe archive, Plate plate) throws IOException {
+    Address name = Address.of("tabbie-archive-%s.zip".formatted(UUID.randomUUID()));
+    try (Lease.Create scratch = plate.scratch().create(name)) {
+      return scratch.create(bounded(archive, plate));
+    }
+  }
+
+  /**
+   * Describes an archive read within the compressed byte limit, reporting each
+   * read to the plate's observer as a transfer of the archive.
+   */
+  private Describe bounded(Describe archive, Plate plate) {
     Reference.Pending pending = archive.of();
     OptionalLong total = pending.expectedSize() != null
         ? OptionalLong.of(pending.expectedSize())
         : OptionalLong.empty();
-    try (InputStream input = archive.open(); OutputStream output = Files.newOutputStream(scratch)) {
-      InputStream bounded = bound(input, archiveBytes);
-      byte[] buffer = new byte[8192];
-      long copied = 0;
-      for (int read; (read = bounded.read(buffer)) != -1;) {
-        output.write(buffer, 0, read);
-        copied += read;
-        plate.observer().transfer(new Reference.Transfer(pending.fileName(), copied, total));
+    return new Describe() {
+
+      @Override
+      public Reference.Pending of() {
+        return pending;
       }
-    }
+
+      @Override
+      public InputStream open() throws IOException {
+        return new FilterInputStream(bound(archive.open(), archiveBytes)) {
+          private long copied = 0;
+
+          @Override
+          public int read() throws IOException {
+            int value = in.read();
+            if (value != -1) {
+              report(1);
+            }
+            return value;
+          }
+
+          @Override
+          public int read(byte[] buffer, int offset, int length) throws IOException {
+            int read = in.read(buffer, offset, length);
+            if (read > 0) {
+              report(read);
+            }
+            return read;
+          }
+
+          private void report(int read) {
+            copied += read;
+            plate.observer().transfer(new Reference.Transfer(pending.fileName(), copied, total));
+          }
+        };
+      }
+    };
   }
 
   private static List<String> resolve(String name) throws IOException {

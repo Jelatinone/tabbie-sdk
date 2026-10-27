@@ -1,5 +1,7 @@
 package cat.tabbie.sdk.platform.layout;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -26,11 +28,14 @@ import lombok.NonNull;
  * A {@link cat.tabbie.sdk.album.model.Plate Plate} implements the nodes of its
  * tree as views of its own files, so a change carried out on the plate shows
  * in its tree at once, and the same work sees a rehearsal's overlay or the Cat
- * itself depending only on the plate it runs on. A plate implements only each
- * node's {@link #address()} and {@link #parent()}, a directory's
- * {@link Directory#children() children}, and a declared node's
- * {@link Declared#rules() rules}; everything else here follows from those.
- * Plates' nodes are safe for concurrent use.
+ * itself depending only on the plate it runs on. Work reaches files only
+ * through the {@link Lease leases} nodes grant: a file's to read or change it,
+ * and a directory's to create a file beneath it. A plate implements only each
+ * node's {@link #address()}, {@link #parent()} and {@link #path()}, a
+ * directory's {@link Directory#children() children} and
+ * {@link Directory#claim(Address) claims}, a file's leases, and a declared
+ * node's {@link Declared#rules() rules}; everything else here follows from
+ * those. Plates' nodes are safe for concurrent use.
  *
  * <p>
  * Nodes carry no meaning beyond their addresses and rules, so a tree never
@@ -59,6 +64,18 @@ public sealed interface Node permits Node.File, Node.Directory, Node.Declared, N
    */
   @NonNull
   Optional<Node.Directory> parent();
+
+  /**
+   * Returns this node's physical path, only for handing it to something
+   * outside the tree, such as a command an outside process runs or a ZIP
+   * reader. Work reads and writes files through leases, never through this
+   * path: while rehearsing, it names the real file rather than the overlay.
+   *
+   * @return physical path
+   * @throws IllegalStateException when no plate has mounted this node
+   */
+  @NonNull
+  Path path();
 
   /**
    * Returns the directory standing for the root of this node's tree, by
@@ -182,24 +199,59 @@ public sealed interface Node permits Node.File, Node.Directory, Node.Declared, N
   }
 
   /**
-   * Lists a directory, if it accepts a type, and then the declared
-   * directories beneath it that do, in tree order.
+   * Describes asking a layout no plate has mounted for what only a plate
+   * binds.
    */
-  private static Stream<Node.Declared.Directory> accepting(Node.Directory directory, Class<?> type) {
-    Stream<Node.Declared.Directory> own = directory instanceof Node.Declared.Directory declared
-        && declared.accepts(type)
-            ? Stream.of(declared)
-            : Stream.empty();
-    return Stream.concat(own, directory.children().stream()
-        .filter(Node.Declared.Directory.class::isInstance)
-        .map(Node.Declared.Directory.class::cast)
-        .flatMap(child -> accepting(child, type)));
+  private static IllegalStateException unmounted() {
+    return new IllegalStateException("A layout no plate has mounted leases no file and binds no path.");
   }
 
   /**
-   * A file. Nothing lies beneath a file, and a file accepts no content.
+   * A file. Nothing lies beneath a file, and a file accepts no content. A file
+   * the tree holds is read and written through its own leases, and is never
+   * created again: a declared file not on disk yet is filled by
+   * {@link Lease.Write#replace(cat.tabbie.sdk.platform.Describe) replacing}
+   * it.
    */
   sealed interface File extends Node permits Node.Declared.File, Node.Present.File {
+
+    /**
+     * Leases this file for reading.
+     *
+     * @return open lease, owned by the caller
+     * @throws Refusal               with {@link Refusal.Held} when the plate
+     *                               does not wait and the file is leased for
+     *                               writing
+     * @throws IOException           when the lease cannot be taken
+     * @throws IllegalStateException when no plate has mounted this file
+     */
+    @NonNull
+    Lease.Read read() throws IOException;
+
+    /**
+     * Leases this file for writing.
+     *
+     * @return open lease, owned by the caller
+     * @throws Refusal               with {@link Refusal.Held} when the plate
+     *                               does not wait and the file is leased
+     * @throws IOException           when the lease cannot be taken
+     * @throws IllegalStateException when no plate has mounted this file
+     */
+    @NonNull
+    Lease.Write write() throws IOException;
+
+    /**
+     * Leases this file for reading and writing, for work that checks a file
+     * before it changes it.
+     *
+     * @return open lease, owned by the caller
+     * @throws Refusal               with {@link Refusal.Held} when the plate
+     *                               does not wait and the file is leased
+     * @throws IOException           when the lease cannot be taken
+     * @throws IllegalStateException when no plate has mounted this file
+     */
+    @NonNull
+    Lease.Mutual mutual() throws IOException;
   }
 
   /**
@@ -246,8 +298,87 @@ public sealed interface Node permits Node.File, Node.Directory, Node.Declared, N
      */
     @NonNull
     default Accepting find(@NonNull Class<?> type) {
-      return new Accepting(type, accepting(this, type).toList());
+      return new Accepting(type, accepting(type).toList());
     }
+
+    /**
+     * Lists this directory, if it accepts a type, and then the declared
+     * directories beneath it that do, in tree order.
+     */
+    private Stream<Node.Declared.Directory> accepting(Class<?> type) {
+      Stream<Node.Declared.Directory> own = this instanceof Node.Declared.Directory declared && declared.accepts(type)
+          ? Stream.of(declared)
+          : Stream.empty();
+      return Stream.concat(own, children().stream()
+          .filter(Node.Declared.Directory.class::isInstance)
+          .map(Node.Directory.class::cast)
+          .flatMap(child -> child.accepting(type)));
+    }
+
+    /**
+     * Leases the place at a tail beneath this directory for creating a file
+     * there, once the tree allows it. Following the tail as far as the tree
+     * holds nodes, every step must be a directory and nothing may be held at
+     * the tail itself, and the deepest directory reached must be
+     * {@link Rule.Permission#CREATABLE creatable}: the directories created
+     * above the file take their permissions from it.
+     *
+     * @apiNote The default checks the tree, then leases the place through
+     *          {@link #claim(Address)}.
+     * @param tail address of the file relative to this directory
+     * @return open lease, owned by the caller
+     * @throws Violation.Terminal       when a step leads beneath a file
+     * @throws Violation.Occupied       when the tree already holds a node at
+     *                                  the tail
+     * @throws Violation.Forbidden      when the deepest directory reached is
+     *                                  not creatable
+     * @throws Refusal                  with {@link Refusal.Held} when the plate
+     *                                  does not wait and the place is leased
+     * @throws IOException              when the lease cannot be taken
+     * @throws IllegalArgumentException when the tail names this directory
+     * @throws IllegalStateException    when no plate has mounted this
+     *                                  directory
+     */
+    @NonNull
+    default Lease.Create create(@NonNull Address tail) throws IOException {
+      if (tail.isRoot()) {
+        throw new IllegalArgumentException("A file is created beneath a directory, not in its place.");
+      }
+      List<String> names = tail.components();
+      Node.Directory deepest = this;
+      for (int step = 0; step < names.size(); step++) {
+        Optional<Node> held = deepest.child(names.get(step));
+        if (held.isEmpty()) {
+          break;
+        }
+        if (step == names.size() - 1) {
+          throw new Violation.Occupied(held.get().address());
+        }
+        String below = names.get(step + 1);
+        deepest = switch (held.get()) {
+          case Node.Directory directory -> directory;
+          case Node.File file -> throw new Violation.Terminal(file.address(), below);
+        };
+      }
+      deepest.require(Rule.Permission.CREATABLE);
+      return claim(tail);
+    }
+
+    /**
+     * Leases the place at a tail beneath this directory for creating a file
+     * there, without checking the tree. Work creates files through
+     * {@link #create(Address)}, which checks the tree first.
+     *
+     * @param tail address of the file relative to this directory, where the
+     *             tree holds nothing
+     * @return open lease, owned by the caller
+     * @throws Refusal               with {@link Refusal.Held} when the plate
+     *                               does not wait and the place is leased
+     * @throws IOException           when the lease cannot be taken
+     * @throws IllegalStateException when no plate has mounted this directory
+     */
+    @NonNull
+    Lease.Create claim(@NonNull Address tail) throws IOException;
   }
 
   /**
@@ -320,6 +451,46 @@ public sealed interface Node permits Node.File, Node.Directory, Node.Declared, N
          */
         public Default(@NonNull Address address, @NonNull Set<Rule> rules) {
           this(Optional.empty(), address, rules);
+        }
+
+        /**
+         * Refuses a path, since no plate has mounted this file.
+         *
+         * @throws IllegalStateException always
+         */
+        @Override
+        public Path path() {
+          throw unmounted();
+        }
+
+        /**
+         * Refuses a lease, since no plate has mounted this file.
+         *
+         * @throws IllegalStateException always
+         */
+        @Override
+        public Lease.Read read() {
+          throw unmounted();
+        }
+
+        /**
+         * Refuses a lease, since no plate has mounted this file.
+         *
+         * @throws IllegalStateException always
+         */
+        @Override
+        public Lease.Write write() {
+          throw unmounted();
+        }
+
+        /**
+         * Refuses a lease, since no plate has mounted this file.
+         *
+         * @throws IllegalStateException always
+         */
+        @Override
+        public Lease.Mutual mutual() {
+          throw unmounted();
         }
       }
     }
@@ -426,6 +597,26 @@ public sealed interface Node permits Node.File, Node.Directory, Node.Declared, N
               files.stream()
                   .map(file -> new Node.Declared.File.Default(self, file.address(), file.rules())))
               .toList();
+        }
+
+        /**
+         * Refuses a path, since no plate has mounted this directory.
+         *
+         * @throws IllegalStateException always
+         */
+        @Override
+        public Path path() {
+          throw unmounted();
+        }
+
+        /**
+         * Refuses a lease, since no plate has mounted this directory.
+         *
+         * @throws IllegalStateException always
+         */
+        @Override
+        public Lease.Create claim(@NonNull Address tail) {
+          throw unmounted();
         }
       }
     }
