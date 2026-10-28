@@ -1,11 +1,15 @@
 package cat.tabbie.sdk.album.model;
 
+import java.io.IOException;
 import java.nio.file.Path;
+import java.util.OptionalLong;
 
 import cat.tabbie.sdk.album.repository.Stash;
 import cat.tabbie.sdk.api.Observer;
 import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Command;
+import cat.tabbie.sdk.platform.Describe;
+import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.platform.Toolchain;
 import cat.tabbie.sdk.platform.layout.Lease;
 import cat.tabbie.sdk.platform.layout.Node;
@@ -74,6 +78,39 @@ public interface Plate extends Command.Resolver, Stash {
   @NonNull
   default Observer<? super Observer.Renderable, ? super Observer.Renderable> observer() {
     return Observer.none();
+  }
+
+  /**
+   * Captures a source into this plate's stash, reporting to its observer as it
+   * runs: each {@link Reference.Transfer} as the stash reads the source, then
+   * the completed transfer, or the failure that ended it.
+   *
+   * @param source description of the bytes to capture
+   * @return verified reference to the retained bytes
+   * @throws IOException when the source cannot be read, its evidence differs,
+   *                     or the bytes cannot be retained
+   */
+  @Override
+  @NonNull
+  default Reference.Captured capture(@NonNull Describe source) throws IOException {
+    return capture(source, new Observer<>() {
+
+      @Override
+      public void transfer(Reference.Transfer transfer) {
+        observer().transfer(transfer);
+      }
+
+      @Override
+      public void verified(Reference.Captured captured) {
+        observer().verified(new Reference.Transfer(source.path().canonical(), captured.size(),
+            OptionalLong.of(captured.size())));
+      }
+
+      @Override
+      public void failed(Exception failure) {
+        observer().failed(failure);
+      }
+    });
   }
 
   /**

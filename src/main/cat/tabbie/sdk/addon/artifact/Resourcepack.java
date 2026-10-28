@@ -1,14 +1,13 @@
 package cat.tabbie.sdk.addon.artifact;
 
+import java.io.IOException;
 import java.util.Set;
 
 import cat.tabbie.sdk.album.revision.Image;
-import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
-import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Describe;
 import lombok.NonNull;
 
@@ -128,20 +127,18 @@ public sealed interface Resourcepack extends Artifact {
 
       /**
        * Unpacks the pack into a directory of its own, named by its artifact
-       * identity, beneath the directory of the collapsing plate's tree that
+       * identity, beneath the directory of the context's plate that
        * accepts Bedrock resource packs, so two packs never collide.
        *
        * @param context selected target
-       * @return unevaluated capture producing validated immutable images
+       * @return validated immutable images
        * @throws IllegalArgumentException when the target is not explicitly
        *                                  supported
        */
       @Override
-      public Intermediate<Set<Image<?>>> install(@NonNull Artifact.Context context) {
+      public Set<Image<?>> install(@NonNull Artifact.Context context) throws IOException {
         require(context);
-        Address own = Address.of(artifactId().id().toString());
-        return Intermediate.of(plate -> plate.root().find(getClass()).unique())
-            .flatMap(directory -> context.archive().unpack(source(), directory, own));
+        return beneath(context).unpack(source(), artifactId().id().toString());
       }
     }
 

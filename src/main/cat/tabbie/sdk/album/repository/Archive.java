@@ -4,6 +4,7 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.Serial;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -15,6 +16,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 
@@ -58,8 +60,8 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
   }
 
   /**
-   * Describes inspection of the archive's central directory, followed by
-   * capture of every file entry and assembly of the complete image set.
+   * Inspects the archive's central directory, then captures every file entry
+   * and assembles the complete image set.
    * Supports stored/deflated ZIP and ZIP64. Rejects traversal, duplicates,
    * file/directory collisions, unsupported compression, encryption, corrupt
    * data, exceeded bounds, and archives without files. Parent directories
@@ -68,18 +70,40 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    *
    * <p>
    * The archive is read twice, once to inspect it and once to capture its file
-   * entries, so it is first captured into the stash of the plate that
-   * collapses the result: both reopen it from there, and its entries are
-   * captured into the same stash. Every file is created beneath a destination
-   * in a directory of that plate's tree, which must allow creating it there.
-   * Streams opened during execution are closed.
+   * entries, so it is first captured into the plate's stash: both reopen it
+   * from there, and its entries are captured into the same stash. Every file
+   * is created beneath a destination in a directory of that plate's tree,
+   * which must allow creating it there. Streams opened while unpacking are
+   * closed.
+   *
+   * @param archive     archive to unpack, named by its source
+   * @param directory   directory of the plate's tree to unpack beneath
+   * @param destination address of the extraction directory relative to it,
+   *                    the root address for the directory itself
+   * @param plate       plate whose stash keeps the archive and its entries
+   * @return immutable images creating the archive's files
+   * @throws IOException when the archive cannot be captured or is refused
+   * @throws Violation   when the tree does not allow a file where the archive
+   *                     puts it
+   */
+  public Set<Image<?>> unpack(@NonNull Describe archive, @NonNull Node.Directory directory,
+      @NonNull Address destination, @NonNull Plate plate) throws IOException {
+    return new Unpack(directory, destination, inspect(archive, plate), this).unpack(plate);
+  }
+
+  /**
+   * Describes unpacking an archive for work that runs later: collapsing it
+   * unpacks as {@link #unpack(Describe, Node.Directory, Address, Plate)} does
+   * on the collapsing plate, whose tree the directory must belong to, and a
+   * file the tree does not allow fails with its violation rather than
+   * throwing it.
    *
    * @param archive     archive to unpack, named by its source
    * @param directory   directory of the collapsing plate's tree to unpack
    *                    beneath
    * @param destination address of the extraction directory relative to it,
    *                    the root address for the directory itself
-   * @return unevaluated image preparation producing an immutable set
+   * @return unevaluated unpacking producing an immutable set
    */
   public Intermediate<Set<Image<?>>> unpack(@NonNull Describe archive, @NonNull Node.Directory directory,
       @NonNull Address destination) {
@@ -87,8 +111,23 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
   }
 
   /**
-   * Describes capturing an archive, then explicit central-directory inspection
-   * using execution-owned scratch space, independent of extraction.
+   * Captures an archive, then inspects its central directory using
+   * execution-owned scratch space, independent of extraction.
+   *
+   * @param archive archive to inspect, named by its source
+   * @param plate   plate whose stash keeps the archive
+   * @return the archive's file entries
+   * @throws IOException when the archive cannot be captured or is refused
+   */
+  public List<Entry> inspect(@NonNull Describe archive, @NonNull Plate plate) throws IOException {
+    return new Inspect(archive.path(), plate.capture(archive), this).inspect(plate);
+  }
+
+  /**
+   * Describes capturing and inspecting an archive for work that runs later,
+   * such as reading a manifest inside a modpack while resolving it: collapsing
+   * it inspects as {@link #inspect(Describe, Plate)} does on the collapsing
+   * plate.
    *
    * @param archive archive to inspect, named by its source
    * @return unevaluated inspection, producing the archive's file entries
@@ -122,11 +161,15 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 
     @Override
     public Scrutiny<List<Entry>> collapse(@NonNull Plate plate) throws IOException {
+      return new Scrutiny.Pass<>(inspect(plate));
+    }
+
+    List<Entry> inspect(Plate plate) throws IOException {
       try {
         List<Entry> found = scan(plate);
         plate.observer().verified(
             new Observe<>(fileName(), found.size(), found.size(), Observer.Operand.FILE));
-        return new Scrutiny.Pass<>(found);
+        return found;
       } catch (IOException | RuntimeException failure) {
         plate.observer().failed(failure);
         throw failure;
@@ -139,14 +182,14 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 
     private List<Entry> scan(Plate plate) throws IOException {
       if (archive.size() > limits.archiveBytes()) {
-        throw new IOException("ZIP byte limit exceeded.");
+        throw new Rejection.Exceeded("ZIP byte limit exceeded.");
       }
       Describe source = plate.retained(archive);
       Node.File copied = limits.copy(source, plate);
       try {
         try (ZipFile zip = new ZipFile(copied.path().toFile())) {
           if (zip.size() > limits.entries()) {
-            throw new IOException("ZIP entry limit exceeded.");
+            throw new Rejection.Exceeded("ZIP entry limit exceeded.");
           }
           Map<List<String>, Boolean> paths = new HashMap<>();
           List<ZipEntry> files = new ArrayList<>();
@@ -158,16 +201,16 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
             ZipEntry entry = iterator.nextElement();
             List<String> path = resolve(entry.getName());
             if (paths.putIfAbsent(path, entry.isDirectory()) != null)
-              throw new IOException("Duplicate ZIP destination: " + path);
+              throw new Rejection.Malformed("Duplicate ZIP destination: " + path, null);
             if (entry.getMethod() != ZipEntry.STORED && entry.getMethod() != ZipEntry.DEFLATED)
-              throw new IOException("Unsupported ZIP compression: " + entry.getName());
+              throw new Rejection.Unsupported("Unsupported ZIP compression: " + entry.getName());
             if (entry.getSize() < 0 || entry.getSize() > limits.expandedBytes() - expanded)
-              throw new IOException("ZIP expanded-byte limit exceeded.");
+              throw new Rejection.Exceeded("ZIP expanded-byte limit exceeded.");
             expanded += entry.getSize();
             sizes.put(entry.getName(), entry.getSize());
             if (entry.isDirectory()) {
               if (entry.getSize() != 0 || entry.getCrc() != 0)
-                throw new IOException("Invalid ZIP directory entry.");
+                throw new Rejection.Malformed("Invalid ZIP directory entry.", null);
             } else {
               files.add(entry);
             }
@@ -178,20 +221,21 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
             for (int depth = path.size() - 1; depth > 0; depth--) {
               List<String> parent = path.subList(0, depth);
               if (Boolean.FALSE.equals(paths.get(parent))) {
-                throw new IOException("ZIP file is also used as a directory: " + String.join("/", parent));
+                throw new Rejection.Malformed(
+                    "ZIP file is also used as a directory: " + String.join("/", parent), null);
               }
             }
           }
           if (files.isEmpty())
-            throw new IOException("ZIP contains no files.");
+            throw new Rejection.Malformed("ZIP contains no files.", null);
           Map<String, Long> catalog = Map.copyOf(sizes);
           List<Entry> result = new ArrayList<>();
           for (ZipEntry entry : files) {
             result.add(new Entry(source, Address.parse(entry.getName()), entry.getSize(), entry.getCrc(), catalog));
           }
           return List.copyOf(result);
-        } catch (IllegalArgumentException failure) {
-          throw new IOException("Invalid ZIP content.", failure);
+        } catch (ZipException | IllegalArgumentException failure) {
+          throw new Rejection.Malformed("Invalid ZIP content.", failure);
         }
       } finally {
         try (Lease.Write scratch = copied.write()) {
@@ -233,19 +277,27 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
     @Override
     public Scrutiny<Set<Image<?>>> collapse(@NonNull Plate plate) throws IOException {
       try {
+        return new Scrutiny.Pass<>(unpack(plate));
+      } catch (Violation violation) {
+        // Unpacking already reported it to the observer
+        return new Scrutiny.Fail<>(null, violation);
+      }
+    }
+
+    Set<Image<?>> unpack(Plate plate) throws IOException {
+      try {
         Node.File copied = limits.copy(entries.getFirst().archive(), plate);
         try (ZipFile zip = new ZipFile(copied.path().toFile())) {
           Set<Image<?>> unpacked = validated(extract(zip, plate));
           plate.observer().verified(files(unpacked.size()));
-          return new Scrutiny.Pass<>(unpacked);
+          return unpacked;
+        } catch (ZipException failure) {
+          throw new Rejection.Malformed("Invalid ZIP content.", failure);
         } finally {
           try (Lease.Write scratch = copied.write()) {
             scratch.delete();
           }
         }
-      } catch (Violation violation) {
-        plate.observer().failed(violation);
-        return new Scrutiny.Fail<>(null, violation);
       } catch (IOException | RuntimeException failure) {
         plate.observer().failed(failure);
         throw failure;
@@ -259,14 +311,14 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
 
     private List<Image<?>> extract(ZipFile zip, Plate plate) throws IOException {
       if (zip.size() != entries.getFirst().catalog().size()) {
-        throw new IOException("ZIP entries differ from the inspected catalog.");
+        throw new Rejection.Malformed("ZIP entries differ from the inspected catalog.", null);
       }
       List<Image<?>> images = new ArrayList<>(entries.size());
       for (Entry entry : entries) {
         ZipEntry found = zip.getEntry(entry.path().canonical());
         if (found == null || found.isDirectory() || found.getSize() != entry.size()
             || found.getCrc() != entry.crc()) {
-          throw new IOException("ZIP entries differ from the inspected catalog.");
+          throw new Rejection.Malformed("ZIP entries differ from the inspected catalog.", null);
         }
         Describe retained = new Describe() {
           @Override
@@ -353,17 +405,17 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
         for (ZipEntry current; (current = zip.getNextEntry()) != null;) {
           Long expectedSize = catalog.get(current.getName());
           if (expectedSize == null || !visited.add(current.getName())) {
-            throw new IOException("ZIP local entries differ from the inspected catalog.");
+            throw new Rejection.Malformed("ZIP local entries differ from the inspected catalog.", null);
           }
           if (current.getName().equals(path.canonical())) {
             return entryStream(zip);
           }
           long skipped = bound(zip, expectedSize).transferTo(OutputStream.nullOutputStream());
           if (skipped != expectedSize) {
-            throw new IOException("ZIP skipped entry size differs from the inspected catalog.");
+            throw new Rejection.Malformed("ZIP skipped entry size differs from the inspected catalog.", null);
           }
         }
-        throw new IOException("Retained ZIP entry is missing: " + path.canonical());
+        throw new Rejection.Malformed("Retained ZIP entry is missing: " + path.canonical(), null);
       } catch (IOException | RuntimeException failure) {
         try {
           zip.close();
@@ -400,13 +452,13 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
             count += read;
             if (count > size) {
               failed = true;
-              throw new IOException("ZIP entry size exceeded.");
+              throw new Rejection.Malformed("ZIP entry size exceeded.", null);
             }
             checksum.update(bytes, offset, read);
           } else if (read == -1 && !finished) {
             finished = true;
             if (count != size || checksum.getValue() != crc) {
-              throw new IOException("ZIP entry size or CRC mismatch: " + path.canonical());
+              throw new Rejection.Malformed("ZIP entry size or CRC mismatch: " + path.canonical(), null);
             }
           }
           return read;
@@ -499,7 +551,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
       }
       return components;
     } catch (IllegalArgumentException failure) {
-      throw new IOException("Unsafe ZIP path: " + name, failure);
+      throw new Rejection.Unsafe("Unsafe ZIP path: " + name, failure);
     }
   }
 
@@ -511,7 +563,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
       public int read() throws IOException {
         int value = in.read();
         if (value != -1 && remaining-- <= 0) {
-          throw new IOException("ZIP byte limit exceeded.");
+          throw new Rejection.Exceeded("ZIP byte limit exceeded.");
         }
         return value;
       }
@@ -586,6 +638,108 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
           ? String.format("%s  %s", subject, unit.render(done))
           : String.format(Locale.ROOT, "%s  %s of %s (%d%%)", subject, unit.render(done), unit.render(whole),
               whole == 0 ? 100 : done * 100 / whole);
+    }
+  }
+
+  /**
+   * Thrown when an archive is refused rather than unreadable: it breaks the
+   * limits it is processed within, names an unsafe path, needs a feature that
+   * is not supported, or is malformed. The same bytes are refused again, so a
+   * rejection is reported rather than retried, unlike other I/O failures.
+   */
+  public abstract static sealed class Rejection extends IOException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Describes a refused archive.
+     *
+     * @param message sentence saying why the archive is refused
+     * @param cause   failure that revealed it, or null
+     */
+    protected Rejection(@NonNull String message, Throwable cause) {
+      super(message, cause);
+    }
+
+    /**
+     * The archive breaks a limit it is processed within: its compressed
+     * size, its number of entries, or its expanded size. A caller may retry
+     * with wider limits.
+     */
+    public static final class Exceeded extends Rejection {
+
+      @Serial
+      private static final long serialVersionUID = 1L;
+
+      /**
+       * Describes an archive beyond its limits.
+       *
+       * @param message sentence naming the limit broken
+       */
+      public Exceeded(@NonNull String message) {
+        super(message, null);
+      }
+    }
+
+    /**
+     * An entry's path is unsafe to extract, such as one that leaves the
+     * extraction directory.
+     */
+    public static final class Unsafe extends Rejection {
+
+      @Serial
+      private static final long serialVersionUID = 1L;
+
+      /**
+       * Describes an archive with an unsafe entry path.
+       *
+       * @param message sentence naming the entry
+       * @param cause   failure that revealed it, or null
+       */
+      public Unsafe(@NonNull String message, Throwable cause) {
+        super(message, cause);
+      }
+    }
+
+    /**
+     * An entry needs a feature that is not supported, such as its
+     * compression method.
+     */
+    public static final class Unsupported extends Rejection {
+
+      @Serial
+      private static final long serialVersionUID = 1L;
+
+      /**
+       * Describes an archive needing an unsupported feature.
+       *
+       * @param message sentence naming the entry and the feature
+       */
+      public Unsupported(@NonNull String message) {
+        super(message, null);
+      }
+    }
+
+    /**
+     * The archive is not a valid ZIP, its structure cannot be extracted, such
+     * as a file also used as a directory, or its content differs from its
+     * catalog.
+     */
+    public static final class Malformed extends Rejection {
+
+      @Serial
+      private static final long serialVersionUID = 1L;
+
+      /**
+       * Describes a malformed archive.
+       *
+       * @param message sentence saying what is malformed
+       * @param cause   failure that revealed it, or null
+       */
+      public Malformed(@NonNull String message, Throwable cause) {
+        super(message, cause);
+      }
     }
   }
 }

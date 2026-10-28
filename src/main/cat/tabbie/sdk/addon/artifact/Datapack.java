@@ -3,7 +3,6 @@ package cat.tabbie.sdk.addon.artifact;
 import java.util.Set;
 
 import cat.tabbie.sdk.album.revision.Image;
-import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.minecraft.Label;
@@ -57,7 +56,7 @@ public sealed interface Datapack extends Artifact {
      *                                       exists
      */
     @Override
-    public Intermediate<Set<Image<?>>> install(@NonNull Artifact.Context context) {
+    public Set<Image<?>> install(@NonNull Artifact.Context context) {
       // TODO: Installing a datapack needs the World class. A datapack unpacks
       // into <world>/datapacks/<id>/, but a layout cannot name a Cat's Worlds,
       // so no directory accepts datapacks, and finding one by where they are

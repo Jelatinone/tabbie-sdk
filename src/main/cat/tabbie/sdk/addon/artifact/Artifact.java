@@ -5,17 +5,14 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.Identity;
-import cat.tabbie.sdk.album.repository.Archive;
-import cat.tabbie.sdk.album.repository.Stash;
+import cat.tabbie.sdk.album.model.Plate;
 import cat.tabbie.sdk.album.revision.Image;
-import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
-import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Platform;
 import cat.tabbie.sdk.platform.layout.Violation;
@@ -23,9 +20,9 @@ import lombok.NonNull;
 
 /**
  * Provider-described content and its logical placement. Installers capture
- * bytes from the artifact's source into the collapsing plate's stash and
- * describe changes without writing to the target installation filesystem.
- * Sources remain caller-owned. File coordinates
+ * bytes from the artifact's source into the stash of the plate it is
+ * installed on and describe changes without writing to the target
+ * installation filesystem. Sources remain caller-owned. File coordinates
  * identify the exact provider-scoped payload; relations name catalog
  * coordinates at any level, matched by {@link Coordinate#includes(Coordinate)}.
  */
@@ -120,26 +117,23 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
 
   /**
    * Places the source as one file, named after it, in the directory of the
-   * collapsing plate's tree that accepts this artifact's type, then captures
-   * it into that plate's stash. Families whose source is an archive to
-   * unpack, such as modpacks, install otherwise. Nothing is read until the
-   * result is collapsed, and a placement the tree does not allow fails with
-   * its violation, such as {@link Violation.Unplaced} when no directory
-   * accepts the type.
+   * context's plate that accepts this artifact's type, then captures it into
+   * that plate's stash. Families whose source is an archive to unpack, such
+   * as modpacks, install otherwise.
    *
-   * @param context selected target
-   * @return unevaluated capture producing validated immutable images
-   * @throws IOException              when the content cannot be described
+   * @param context selected target and the plate it is installed on
+   * @return validated immutable images
+   * @throws IOException              when the content cannot be captured
+   * @throws Violation                when the tree does not allow the file,
+   *                                  such as {@link Violation.Unplaced} when
+   *                                  no directory accepts the type
    * @throws IllegalArgumentException when the target is not explicitly
    *                                  supported
    */
   @Override
-  default Intermediate<Set<Image<?>>> install(@NonNull Context context) throws IOException {
+  default Set<Image<?>> install(@NonNull Context context) throws IOException {
     require(context);
-    Address file = Address.of(source().fileName());
-    return Intermediate.of(plate -> plate.root().find(getClass()).unique().require(file))
-        .flatMap(directory -> new Stash.Capture(source())
-            .map(captured -> Set.<Image<?>>of(Image.create(directory, file, captured))));
+    return beneath(context).file(source());
   }
 
   /**
@@ -217,20 +211,19 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
      * Requires explicit target support, then delegates to the caller-supplied
      * installer and validates its images.
      *
-     * @param context selected target
-     * @return unevaluated capture producing validated immutable images
-     * @throws IOException              when the installer fails to describe
+     * @param context selected target and the plate it is installed on
+     * @return validated immutable images
+     * @throws IOException              when the installer fails to capture
      *                                  the content
      * @throws IllegalArgumentException when the target is not explicitly
      *                                  supported
      */
     @Override
-    default Intermediate<Set<Image<?>>> install(@NonNull Context context) throws IOException {
+    default Set<Image<?>> install(@NonNull Context context) throws IOException {
       require(context);
-      return installer().install(context).map(images -> {
-        Image.validate(images);
-        return Set.copyOf(images);
-      });
+      Set<Image<?>> images = installer().install(context);
+      Image.validate(images);
+      return Set.copyOf(images);
     }
   }
 
@@ -284,30 +277,20 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
   }
 
   /**
-   * Selected target and the limits for unpacking archives, independent of
-   * physical paths. Where content goes is not the context's to say: an
-   * artifact finds the directory accepting its type in the tree of the plate
-   * that collapses its installation.
+   * Selected target and the plate an artifact is installed on. Where content
+   * goes is not the context's to say: an artifact finds the directory
+   * accepting its type in the plate's tree.
    */
   interface Context extends Installer.Context {
 
     /**
-     * Returns the limits applied when unpacking archives.
-     *
-     * @return archive limits, {@link Archive#DEFAULT} by default
-     */
-    @NonNull
-    default Archive archive() {
-      return Archive.DEFAULT;
-    }
-
-    /**
-     * Immutable context of a selected target.
+     * Context of a selected target on a plate.
      *
      * @param label    selected target
      * @param platform target platform
+     * @param plate    caller-owned plate the artifact is installed on
      */
-    record Default(@NonNull Label label, @NonNull Platform platform) implements Context {
+    record Default(@NonNull Label label, @NonNull Platform platform, @NonNull Plate plate) implements Context {
     }
   }
 }

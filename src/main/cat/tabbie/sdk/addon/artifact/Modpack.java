@@ -1,14 +1,13 @@
 package cat.tabbie.sdk.addon.artifact;
 
+import java.io.IOException;
 import java.util.Set;
 
 import cat.tabbie.sdk.album.revision.Image;
-import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
-import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Describe;
 import lombok.NonNull;
 
@@ -55,21 +54,20 @@ public sealed interface Modpack extends Artifact {
     }
 
     /**
-     * Unpacks the modpack over the directory of the collapsing plate's tree
-     * that accepts modpacks: the root of a Cat on a mod loader. Other
-     * distributions accept no modpack, so installing one there fails with
+     * Unpacks the modpack over the directory of the context's plate that
+     * accepts modpacks: the root of a Cat on a mod loader. Other
+     * distributions accept no modpack, so installing one there throws
      * {@link cat.tabbie.sdk.platform.layout.Violation.Unplaced Unplaced}.
      *
      * @param context selected target
-     * @return unevaluated capture producing validated immutable images
+     * @return validated immutable images
      * @throws IllegalArgumentException when the target is not explicitly
      *                                  supported
      */
     @Override
-    public Intermediate<Set<Image<?>>> install(@NonNull Artifact.Context context) {
+    public Set<Image<?>> install(@NonNull Artifact.Context context) throws IOException {
       require(context);
-      return Intermediate.of(plate -> plate.root().find(getClass()).unique())
-          .flatMap(directory -> context.archive().unpack(source(), directory, Address.root()));
+      return beneath(context).unpack(source());
     }
   }
 

@@ -1,7 +1,6 @@
 package cat.tabbie.sdk.album.repository;
 
 import java.io.IOException;
-import java.util.OptionalLong;
 
 import cat.tabbie.sdk.album.model.Plate;
 import cat.tabbie.sdk.album.revision.Intermediate;
@@ -123,25 +122,7 @@ public interface Stash {
 
     @Override
     public Scrutiny<Reference.Captured> collapse(@NonNull Plate plate) throws IOException {
-      Observer<Reference.Captured, Reference.Transfer> reports = new Observer<>() {
-
-        @Override
-        public void transfer(Reference.Transfer transfer) {
-          plate.observer().transfer(transfer);
-        }
-
-        @Override
-        public void verified(Reference.Captured captured) {
-          plate.observer().verified(new Reference.Transfer(source.path().canonical(), captured.size(),
-              OptionalLong.of(captured.size())));
-        }
-
-        @Override
-        public void failed(Exception failure) {
-          plate.observer().failed(failure);
-        }
-      };
-      return new Scrutiny.Pass<>(plate.capture(source, reports));
+      return new Scrutiny.Pass<>(plate.capture(source));
     }
   }
 }

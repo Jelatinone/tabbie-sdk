@@ -3,7 +3,6 @@ package cat.tabbie.sdk.addon.artifact;
 import java.util.Set;
 
 import cat.tabbie.sdk.album.revision.Image;
-import cat.tabbie.sdk.album.revision.Intermediate;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.minecraft.Label;
@@ -59,7 +58,7 @@ public sealed interface Behaviourpack extends Artifact {
      *                                       exists
      */
     @Override
-    public Intermediate<Set<Image<?>>> install(@NonNull Artifact.Context context) {
+    public Set<Image<?>> install(@NonNull Artifact.Context context) {
       // TODO: Installing a behaviour pack needs the World class. A behaviour
       // pack unpacks into <world>/behavior_packs/<id>/, but a layout cannot name
       // a Cat's Worlds, so no directory accepts behaviour packs, and finding one
