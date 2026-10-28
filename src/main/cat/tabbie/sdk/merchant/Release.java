@@ -13,7 +13,7 @@ import lombok.NonNull;
  * An immutable, provider-published release of one catalog project. The same
  * contract describes distribution releases (a game version, a loader build, a
  * server build) and addon releases (a mod, plugin, or resource pack version).
- * Target compatibility, installation layout, and dependency resolution belong
+ * Target compatibility, where content goes, and dependency resolution belong
  * to the content type or the implementing release, not to this contract.
  *
  * <p>

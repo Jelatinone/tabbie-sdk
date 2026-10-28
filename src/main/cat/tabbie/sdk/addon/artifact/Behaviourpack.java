@@ -52,7 +52,7 @@ public sealed interface Behaviourpack extends Artifact {
      * Refuses to install until a World can be found, since behaviour packs
      * belong to a World.
      *
-     * @param context selected target
+     * @param context selected target and the plate it is installed on
      * @return never
      * @throws UnsupportedOperationException always, until the World class
      *                                       exists

@@ -22,11 +22,12 @@ import lombok.NonNull;
 
 /**
  * One file of an exact distribution release, such as a server jar or a loader
- * profile. {@link #install} describes the images it places; an
- * {@link Executable} byproduct also describes how an executor starts and stops
- * it, while a {@link Nonexecutable} one is only placed. Describing a byproduct
- * never downloads runtimes, runs installers, or starts processes; carrying out
- * these descriptions belongs to Core.
+ * profile. {@link #install} captures its source and describes the images that
+ * place it; an {@link Executable} byproduct also describes how an executor
+ * starts and stops it, while a {@link Nonexecutable} one is only placed.
+ * Installing a byproduct captures only its own content: it never downloads
+ * runtimes, runs other installers, or starts processes; carrying out its
+ * descriptions belongs to Core.
  *
  * <p>
  * Implementations are records whose compact constructors copy their

@@ -130,8 +130,10 @@ public sealed interface Resourcepack extends Artifact {
        * identity, beneath the directory of the context's plate that
        * accepts Bedrock resource packs, so two packs never collide.
        *
-       * @param context selected target
+       * @param context selected target and the plate it is installed on
        * @return validated immutable images
+       * @throws IOException              when the pack cannot be captured or
+       *                                  is refused
        * @throws IllegalArgumentException when the target is not explicitly
        *                                  supported
        */

@@ -59,8 +59,10 @@ public sealed interface Modpack extends Artifact {
      * distributions accept no modpack, so installing one there throws
      * {@link cat.tabbie.sdk.platform.layout.Violation.Unplaced Unplaced}.
      *
-     * @param context selected target
+     * @param context selected target and the plate it is installed on
      * @return validated immutable images
+     * @throws IOException              when the modpack cannot be captured or
+     *                                  is refused
      * @throws IllegalArgumentException when the target is not explicitly
      *                                  supported
      */

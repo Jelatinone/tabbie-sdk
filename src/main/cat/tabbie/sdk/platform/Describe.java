@@ -20,11 +20,11 @@ import lombok.NonNull;
  * The source role: a reusable, inspectable description of how to obtain
  * bytes, and what they are called. Providers describe artifact content this
  * way; a {@link cat.tabbie.sdk.album.repository.Stash Stash} describes
- * retained content this way too, and captures it with a
- * {@link cat.tabbie.sdk.album.repository.Stash.Capture Capture}. Describing
- * performs no I/O; {@link #open} is repeatable and independent of any prior
- * inspection, so a description can be reopened later without retaining an
- * open handle to whatever it was derived from.
+ * retained content this way too, and captures what is described this way
+ * with {@link cat.tabbie.sdk.album.repository.Stash#capture(Describe)
+ * capture}. Describing performs no I/O; {@link #open} is repeatable and
+ * independent of any prior inspection, so a description can be reopened
+ * later without retaining an open handle to whatever it was derived from.
  *
  * <p>
  * The name belongs to the description, not to the bytes: the

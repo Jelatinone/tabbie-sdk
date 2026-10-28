@@ -35,9 +35,11 @@ import lombok.NonNull;
 
 /**
  * Bounds ZIP processing. Default limits permit 100,000 entries, 1 GiB
- * compressed and 4 GiB expanded. Description performs no I/O; scratch files
- * exist only while an inspection or unpacking effect executes and are never
- * installation files.
+ * compressed and 4 GiB expanded. Inspecting and unpacking with a plate run at
+ * once; without one, they describe steps that run when collapsed. Scratch
+ * files exist only while an archive is inspected or unpacked and are never a
+ * Cat's files. An archive refused for its content throws a {@link Rejection},
+ * which retrying does not help.
  *
  * @param entries       maximum directory and file entries
  * @param archiveBytes  maximum compressed bytes

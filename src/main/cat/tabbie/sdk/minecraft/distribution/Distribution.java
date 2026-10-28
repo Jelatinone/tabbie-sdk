@@ -11,9 +11,10 @@ import cat.tabbie.sdk.minecraft.Version;
 import lombok.NonNull;
 
 /**
- * A stateless runtime family describing edition, environments, capabilities,
- * and common content placement. Version resolution, installation conflicts,
- * filesystem observations, and deployment belong to Core.
+ * A stateless runtime family describing edition, environments, and
+ * capabilities. Where content goes is declared by each release's layout, not
+ * by the distribution. Version resolution, installation conflicts, filesystem
+ * observations, and deployment belong to Core.
  *
  * <p>
  * The public values are the enum constants nested in {@link Java} and

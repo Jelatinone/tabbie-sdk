@@ -19,7 +19,8 @@ import lombok.NonNull;
  * The context work runs in: the files beneath its root, such as Home, a Cat or
  * a World; the stash; scratch space; and the runtimes commands name. Every
  * effect of an
- * {@link cat.tabbie.sdk.album.revision.Intermediate Intermediate} or
+ * {@link cat.tabbie.sdk.album.revision.Intermediate Intermediate}, an
+ * {@link cat.tabbie.sdk.merchant.Installer install} or an
  * {@link cat.tabbie.sdk.album.revision.Image Image} goes through a plate, so the
  * same work rehearses or acts depending only on the plate it is given.
  *

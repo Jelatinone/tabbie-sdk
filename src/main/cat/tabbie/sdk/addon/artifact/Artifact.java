@@ -21,8 +21,8 @@ import lombok.NonNull;
 /**
  * Provider-described content and its logical placement. Installers capture
  * bytes from the artifact's source into the stash of the plate it is
- * installed on and describe changes without writing to the target
- * installation filesystem. Sources remain caller-owned. File coordinates
+ * installed on and describe changes without writing to the Cat's files.
+ * Sources remain caller-owned. File coordinates
  * identify the exact provider-scoped payload; relations name catalog
  * coordinates at any level, matched by {@link Coordinate#includes(Coordinate)}.
  */
