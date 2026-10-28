@@ -61,14 +61,10 @@ public sealed interface Modpack extends Artifact {
      *
      * @param context selected target and the plate it is installed on
      * @return validated immutable images
-     * @throws IOException              when the modpack cannot be captured or
-     *                                  is refused
-     * @throws IllegalArgumentException when the target is not explicitly
-     *                                  supported
+     * @throws IOException when the modpack cannot be captured or is refused
      */
     @Override
     public Set<Image<?>> install(@NonNull Artifact.Context context) throws IOException {
-      require(context);
       return beneath(context).unpack(source());
     }
   }

@@ -10,7 +10,6 @@ import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.merchant.Release;
-import cat.tabbie.sdk.minecraft.Compatibility;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
 import cat.tabbie.sdk.platform.Describe;
@@ -121,18 +120,20 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
    * that plate's stash. Families whose source is an archive to unpack, such
    * as modpacks, install otherwise.
    *
+   * <p>
+   * Installing does not ask whether the target supports this artifact:
+   * whoever installs decides that while resolving, and may install it anyway.
+   * Only the plate's tree decides where it can go.
+   *
    * @param context selected target and the plate it is installed on
    * @return validated immutable images
-   * @throws IOException              when the content cannot be captured
-   * @throws Violation                when the tree does not allow the file,
-   *                                  such as {@link Violation.Unplaced} when
-   *                                  no directory accepts the type
-   * @throws IllegalArgumentException when the target is not explicitly
-   *                                  supported
+   * @throws IOException when the content cannot be captured
+   * @throws Violation   when the tree does not allow the file, such as
+   *                     {@link Violation.Unplaced} when no directory accepts
+   *                     the type
    */
   @Override
   default Set<Image<?>> install(@NonNull Context context) throws IOException {
-    require(context);
     return beneath(context).file(source());
   }
 
@@ -178,22 +179,8 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
   }
 
   /**
-   * Requires an explicitly supported target before invoking an installer.
-   *
-   * @param context selected target
-   * @throws IllegalArgumentException when the target is not explicitly
-   *                                  supported
-   */
-  default void require(@NonNull Context context) {
-    if (context.label().compatibility(this) != Compatibility.SUPPORTED) {
-      throw new IllegalArgumentException("Image generation requires explicit target support.");
-    }
-  }
-
-  /**
    * An artifact whose images are described by a caller-supplied installer,
-   * which runs only for an explicitly supported target and must not describe
-   * two images that collide.
+   * which must not describe two images that collide.
    */
   sealed interface Custom extends Artifact
       permits Mod.Custom, Plugin.Custom, Datapack.Custom, Behaviourpack.Custom, Modpack.Custom,
@@ -208,19 +195,14 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
     Installer<Context> installer();
 
     /**
-     * Requires explicit target support, then delegates to the caller-supplied
-     * installer and validates its images.
+     * Delegates to the caller-supplied installer and validates its images.
      *
      * @param context selected target and the plate it is installed on
      * @return validated immutable images
-     * @throws IOException              when the installer fails to capture
-     *                                  the content
-     * @throws IllegalArgumentException when the target is not explicitly
-     *                                  supported
+     * @throws IOException when the installer fails to capture the content
      */
     @Override
     default Set<Image<?>> install(@NonNull Context context) throws IOException {
-      require(context);
       Set<Image<?>> images = installer().install(context);
       Image.validate(images);
       return Set.copyOf(images);

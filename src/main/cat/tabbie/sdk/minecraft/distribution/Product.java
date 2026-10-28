@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 
+import cat.tabbie.sdk.addon.artifact.Behaviourpack;
+import cat.tabbie.sdk.addon.artifact.Datapack;
 import cat.tabbie.sdk.merchant.Provider;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.merchant.Release;
@@ -145,14 +147,19 @@ public interface Product {
      * invariants, that every byproduct is a distinct file of this release,
      * that the labels are of its distribution, that the byproducts serve
      * exactly the labels, and so only its distribution, and that the layout
-     * is declared from the root.
+     * is declared from the root. The layout must also accept each family the
+     * distribution supports in exactly one directory, so nothing a Cat is
+     * offered fails to place; it may accept more, for content installed
+     * anyway.
      *
      * @throws IllegalArgumentException when publication invariants are violated,
      *                                  no label is given, a label is of
      *                                  another distribution, a byproduct
      *                                  serves a target that is not a label, a
-     *                                  label is served by no byproduct, or the
-     *                                  layout is not declared from the root
+     *                                  label is served by no byproduct, the
+     *                                  layout is not declared from the root,
+     *                                  or a supported family has no accepting
+     *                                  directory or several
      */
     public Build {
       content = Set.copyOf(content);
@@ -179,6 +186,14 @@ public interface Product {
       }
       if (!layout.address().isRoot()) {
         throw new IllegalArgumentException("A layout is declared from the root.");
+      }
+      // TODO: Datapacks and behaviour packs go in a World, which a layout
+      // cannot name until the World class exists, so they are not checked.
+      if (distribution.capabilities().stream()
+          .filter(family -> family != Datapack.class && family != Behaviourpack.class)
+          .anyMatch(family -> layout.find(family).directories().size() != 1)) {
+        throw new IllegalArgumentException(
+            "Every family a release's distribution supports needs exactly one accepting directory.");
       }
     }
   }

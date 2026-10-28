@@ -95,20 +95,17 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
   /**
    * Places the source as one file, named after it, in the directory of the
    * context's plate that accepts this byproduct's type, where
-   * {@link #location} finds it in the Cat's layout.
+   * {@link #location} finds it in the Cat's layout. Whoever installs chooses
+   * the byproduct that {@link #supports} the target while resolving;
+   * installing does not ask again.
    *
    * @param context selected target and the plate it is installed on
    * @return validated immutable images
-   * @throws IOException              when the content cannot be captured
-   * @throws Violation                when the tree does not allow the file
-   * @throws IllegalArgumentException when the byproduct does not support the
-   *                                  target on its platform
+   * @throws IOException when the content cannot be captured
+   * @throws Violation   when the tree does not allow the file
    */
   @Override
   default Set<Image<?>> install(@NonNull Installer.Context context) throws IOException {
-    if (!supports(context.label(), context.platform())) {
-      throw new IllegalArgumentException("A byproduct installs only for a target it supports.");
-    }
     return beneath(context).file(source());
   }
 
