@@ -82,8 +82,8 @@ public abstract sealed class Violation extends IllegalArgumentException {
   }
 
   /**
-   * The tree holds nothing at an address: nothing is declared there, and
-   * nothing exists there.
+   * The tree or layout holds nothing at an address: nothing exists there, or,
+   * in a layout, nothing is declared there.
    */
   @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
   public static final class Missing extends Violation {
@@ -99,7 +99,7 @@ public abstract sealed class Violation extends IllegalArgumentException {
      * @param address the first address on the way that the tree does not hold
      */
     public Missing(@NonNull Address address) {
-      super("Nothing is declared or present at %s.".formatted(shown(address)));
+      super("Nothing is at %s.".formatted(shown(address)));
       this.address = address;
     }
 
@@ -114,10 +114,10 @@ public abstract sealed class Violation extends IllegalArgumentException {
   }
 
   /**
-   * The tree already holds a node where a file is to be created through a
-   * directory: a file or a directory that exists, or one a layout declares. A
-   * file the tree holds is written through its own node instead, which creates
-   * a declared file not on disk yet.
+   * Something already holds the place where a file is to be created through a
+   * directory: a file or a directory that exists there, or a directory the
+   * layout declares there. A file that exists is written through its own node
+   * instead.
    */
   @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
   public static final class Occupied extends Violation {

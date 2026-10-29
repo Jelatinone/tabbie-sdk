@@ -12,8 +12,10 @@ import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
+import cat.tabbie.sdk.minecraft.World;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Platform;
+import cat.tabbie.sdk.platform.layout.Layout;
 import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
 
@@ -116,14 +118,14 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
 
   /**
    * Places the source as one file, named after it, in the directory of the
-   * context's plate that accepts this artifact's type, then captures it into
-   * that plate's stash. Families whose source is an archive to unpack, such
+   * context's model that accepts this artifact's type, then captures it into
+   * the plate's stash. Families whose source is an archive to unpack, such
    * as modpacks, install otherwise.
    *
    * <p>
    * Installing does not ask whether the target supports this artifact:
    * whoever installs decides that while resolving, and may install it anyway.
-   * Only the plate's tree decides where it can go.
+   * Only the model decides where it can go.
    *
    * @param context selected target and the plate it is installed on
    * @return validated immutable images
@@ -259,20 +261,63 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
   }
 
   /**
-   * Selected target and the plate an artifact is installed on. Where content
-   * goes is not the context's to say: an artifact finds the directory
-   * accepting its type in the plate's tree.
+   * Selected target, the model an artifact is placed against, the plate whose
+   * stash keeps what it captures, and the Worlds its content applies to.
+   * Where content goes is not the context's to say: an artifact finds the
+   * directory of the model accepting its type, or, when its content belongs to
+   * a World, the directory of each of the Worlds accepting it.
    */
   interface Context extends Installer.Context {
 
     /**
-     * Context of a selected target on a plate.
+     * Returns the Worlds that content belonging to a World is installed into,
+     * such as those whose Collar uses it, each held by the model. A
+     * client's selected saves and a server's Worlds are alike a set of Worlds.
+     *
+     * @return immutable Worlds, empty when none applies
+     */
+    @NonNull
+    Set<World> worlds();
+
+    /**
+     * Context of a selected target, placed against a model.
      *
      * @param label    selected target
      * @param platform target platform
-     * @param plate    caller-owned plate the artifact is installed on
+     * @param model    model the artifact is placed against
+     * @param plate    caller-owned plate whose stash keeps what it captures
+     * @param worlds   Worlds of the model that content belonging to a World
+     *                 applies to
      */
-    record Default(@NonNull Label label, @NonNull Platform platform, @NonNull Plate plate) implements Context {
+    record Default(
+        @NonNull Label label,
+        @NonNull Platform platform,
+        @NonNull Layout.Directory model,
+        @NonNull Plate plate,
+        @NonNull Set<World> worlds) implements Context {
+
+      /**
+       * Copies the Worlds.
+       */
+      public Default {
+        worlds = Set.copyOf(worlds);
+      }
+
+      /**
+       * Creates a context that applies to no World.
+       *
+       * @param label    selected target
+       * @param platform target platform
+       * @param model    model the artifact is placed against
+       * @param plate    caller-owned plate whose stash keeps what it captures
+       */
+      public Default(
+          @NonNull Label label,
+          @NonNull Platform platform,
+          @NonNull Layout.Directory model,
+          @NonNull Plate plate) {
+        this(label, platform, model, plate, Set.of());
+      }
     }
   }
 }

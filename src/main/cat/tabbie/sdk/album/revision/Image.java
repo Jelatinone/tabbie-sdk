@@ -18,7 +18,6 @@ import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.platform.layout.Lease;
 import cat.tabbie.sdk.platform.layout.Node;
 import cat.tabbie.sdk.platform.layout.Refusal;
-import cat.tabbie.sdk.platform.layout.Rule;
 import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
 
@@ -29,6 +28,13 @@ import lombok.NonNull;
  * exchanges before and after states. Exposing an image carries its change out
  * on a {@link Plate}, after checking that its file is in the before state; a
  * replacement does not authorize overwriting content it did not expect.
+ *
+ * <p>
+ * New files are described against a model, with
+ * {@link cat.tabbie.sdk.platform.layout.Layout.Directory#create
+ * Layout.Directory#create}, and changes to files that exist against their
+ * nodes, with {@link Node.File#replace Node.File#replace}, {@code delete}
+ * and {@code configure}.
  *
  * <p>
  * An image is always well formed: it changes something, and its file lies
@@ -93,140 +99,6 @@ public sealed interface Image<State extends Image.Alteration> {
    */
   @NonNull
   Image<State> preimage();
-
-  /**
-   * Describes creation of a file from retained content, including zero bytes,
-   * at a tail beneath a directory of a plate's tree where the tree holds
-   * nothing. Directories missing above the file are created with it.
-   *
-   * @param directory directory of the plate's tree to create beneath
-   * @param tail      address of the file relative to the directory
-   * @param after     retained content
-   * @return resulting image, recording the file's address beneath the root
-   * @throws Violation                when the tree does not allow the file
-   *                                  there, as
-   *                                  {@link Node.Directory#require(Address)}
-   *                                  refuses
-   * @throws IllegalArgumentException when the tail names the directory itself
-   */
-  static Image<File> create(@NonNull Node.Directory directory, @NonNull Address tail,
-      @NonNull Reference.Captured after) {
-    directory.require(tail);
-    return new Installation(new File.Absent(), new File.Present(after), directory.address().resolve(tail));
-  }
-
-  /**
-   * Describes creation of a declared file from retained content, including
-   * zero bytes, where a layout names the file but nothing is on disk yet,
-   * such as a {@code server.properties} the game would otherwise write on
-   * first boot. A present file exists already, so only a declared one can be
-   * created; a declared file found on disk when the image is exposed fails
-   * like any file not in its before state.
-   *
-   * @param file  declared file of a plate's tree
-   * @param after retained content
-   * @return resulting image
-   * @throws Violation.Forbidden when the file is not
-   *                             {@link Rule.Permission#CREATABLE creatable}
-   */
-  static Image<File> create(@NonNull Node.Declared.File file, @NonNull Reference.Captured after) {
-    file.require(Rule.Permission.CREATABLE);
-    return new Installation(new File.Absent(), new File.Present(after), file.address());
-  }
-
-  /**
-   * Describes replacement of a file of a plate's tree, deleted and succeeded
-   * by another file created.
-   *
-   * @param file   file of the plate's tree
-   * @param before retained content before
-   * @param after  retained content after
-   * @return resulting image
-   * @throws Violation.Forbidden    when the file is not editable
-   * @throws Malformation.Unchanged when both contents are the same
-   */
-  static Image<File> replace(@NonNull Node.File file, @NonNull Reference.Captured before,
-      @NonNull Reference.Captured after) {
-    file.require(Rule.Permission.EDITABLE);
-    return new Installation(new File.Present(before), new File.Present(after), file.address());
-  }
-
-  /**
-   * Describes deletion of a file of a plate's tree whose complete content
-   * matches the reference.
-   *
-   * @param file   file of the plate's tree
-   * @param before retained content before
-   * @return resulting image
-   * @throws Violation.Forbidden when the file is not deletable
-   */
-  static Image<File> delete(@NonNull Node.File file, @NonNull Reference.Captured before) {
-    file.require(Rule.Permission.DELETABLE);
-    return new Installation(new File.Present(before), new File.Absent(), file.address());
-  }
-
-  /**
-   * Describes changes to a file of a plate's tree between explicit fragment
-   * states. The fragment lists pair up into chunks.
-   *
-   * @param file   file of the plate's tree
-   * @param before text before
-   * @param after  text after
-   * @return resulting image
-   * @throws Violation.Forbidden    when the file is not readable and editable
-   * @throws Malformation.Unchanged when no fragment changes
-   */
-  static Image<Text> configure(@NonNull Node.File file, @NonNull Text before, @NonNull Text after) {
-    file.require(Rule.Permission.READABLE).require(Rule.Permission.EDITABLE);
-    return new Configuration(before, after, file.address());
-  }
-
-  /**
-   * Describes changes to a file of a plate's tree. Each chunk contributes a
-   * fragment on each side; the chunks' insertion/deletion ordering is not
-   * retained.
-   *
-   * @param file   file of the plate's tree
-   * @param chunks changed chunks
-   * @return resulting image
-   * @throws Violation.Forbidden    when the file is not readable and editable
-   * @throws Malformation.Unchanged when no chunk edits its text
-   */
-  static Image<Text> configure(@NonNull Node.File file, @NonNull List<Chunk> chunks) {
-    file.require(Rule.Permission.READABLE).require(Rule.Permission.EDITABLE);
-    return new Configuration(chunks, file.address());
-  }
-
-  /**
-   * Describes text differences with three surrounding context lines.
-   *
-   * @param file   file of the plate's tree
-   * @param before text before
-   * @param after  text after
-   * @return resulting image
-   * @throws Violation.Forbidden    when the file is not readable and editable
-   * @throws Malformation.Unchanged when the texts are equal
-   */
-  static Image<Text> configure(@NonNull Node.File file, @NonNull String before, @NonNull String after) {
-    return configure(file, Chunk.diff(before, after));
-  }
-
-  /**
-   * Describes text differences, retaining only the differing regions and their
-   * context rather than complete content expectations.
-   *
-   * @param file         file of the plate's tree
-   * @param before       text before
-   * @param after        text after
-   * @param contextLines number of context lines to keep
-   * @return resulting image
-   * @throws Violation.Forbidden    when the file is not readable and editable
-   * @throws Malformation.Unchanged when the texts are equal
-   */
-  static Image<Text> configure(@NonNull Node.File file, @NonNull String before, @NonNull String after,
-      int contextLines) {
-    return configure(file, Chunk.diff(before, after, contextLines));
-  }
 
   /**
    * Checks that images can be exposed in any order, and so in parallel: every
@@ -519,8 +391,7 @@ public sealed interface Image<State extends Image.Alteration> {
     }
 
     /**
-     * Brings a file the tree holds from its before state to its after state;
-     * a declared file not on disk yet is in the absent state.
+     * Brings a file that exists from its before state to its after state.
      */
     private Scrutiny<File> changed(Node.File node, Plate plate) throws IOException {
       try (Lease.Mutual file = node.mutual()) {

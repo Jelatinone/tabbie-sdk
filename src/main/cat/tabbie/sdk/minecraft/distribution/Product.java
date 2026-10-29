@@ -4,14 +4,13 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 
-import cat.tabbie.sdk.addon.artifact.Behaviourpack;
-import cat.tabbie.sdk.addon.artifact.Datapack;
 import cat.tabbie.sdk.merchant.Provider;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.merchant.Release;
 import cat.tabbie.sdk.minecraft.Label;
+import cat.tabbie.sdk.minecraft.World;
 import cat.tabbie.sdk.platform.Package;
-import cat.tabbie.sdk.platform.layout.Node;
+import cat.tabbie.sdk.platform.layout.Layout;
 import lombok.NonNull;
 
 /**
@@ -118,6 +117,12 @@ public interface Product {
    * all. Where content goes can change between releases, so a Cat moving to
    * another release mounts that release's layout instead.
    *
+   * <p>
+   * A layout cannot name a Cat's Worlds, since they are named by the Cat and
+   * there may be many. It declares the directory that accepts
+   * {@link World Worlds} instead. Each World declares its own layout, saying
+   * where {@link World.Content content belonging to it} goes.
+   *
    * @param coordinates   exact release coordinates
    * @param releaseName   non-blank display name
    * @param releaseDate   publication instant
@@ -140,17 +145,19 @@ public interface Product {
       @NonNull Set<Package> packages,
       @NonNull Distribution distribution,
       @NonNull Set<Label> labels,
-      @NonNull Node.Declared.Directory layout) implements Release<Byproduct> {
+      @NonNull Layout.Directory layout) implements Release<Byproduct> {
 
     /**
      * Copies the byproducts, packages and labels, then checks shared release
      * invariants, that every byproduct is a distinct file of this release,
      * that the labels are of its distribution, that the byproducts serve
      * exactly the labels, and so only its distribution, and that the layout
-     * is declared from the root. The layout must also accept each family the
-     * distribution supports in exactly one directory, so nothing a Cat is
-     * offered fails to place; it may accept more, for content installed
-     * anyway.
+     * is declared from the root. Each family the distribution supports must
+     * be accepted in exactly one directory, so nothing a Cat is offered fails
+     * to place: content that belongs to a World installs into Worlds, so the
+     * layout must then accept Worlds in exactly one directory; any other
+     * content, the layout must accept itself. The layout may accept more, for
+     * content installed anyway.
      *
      * @throws IllegalArgumentException when publication invariants are violated,
      *                                  no label is given, a label is of
@@ -158,8 +165,8 @@ public interface Product {
      *                                  serves a target that is not a label, a
      *                                  label is served by no byproduct, the
      *                                  layout is not declared from the root,
-     *                                  or a supported family has no accepting
-     *                                  directory or several
+     *                                  or a supported family, or Worlds, have
+     *                                  no accepting directory or several
      */
     public Build {
       content = Set.copyOf(content);
@@ -187,13 +194,17 @@ public interface Product {
       if (!layout.address().isRoot()) {
         throw new IllegalArgumentException("A layout is declared from the root.");
       }
-      // TODO: Datapacks and behaviour packs go in a World, which a layout
-      // cannot name until the World class exists, so they are not checked.
+      // Content that belongs to a World installs into Worlds, through their own layouts
       if (distribution.capabilities().stream()
-          .filter(family -> family != Datapack.class && family != Behaviourpack.class)
+          .filter(family -> !World.Content.class.isAssignableFrom(family))
           .anyMatch(family -> layout.find(family).directories().size() != 1)) {
         throw new IllegalArgumentException(
             "Every family a release's distribution supports needs exactly one accepting directory.");
+      }
+      if (distribution.capabilities().stream().anyMatch(World.Content.class::isAssignableFrom)
+          && layout.find(World.class).directories().size() != 1) {
+        throw new IllegalArgumentException(
+            "A release with content for Worlds needs exactly one directory accepting them.");
       }
     }
   }

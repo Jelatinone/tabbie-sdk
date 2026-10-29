@@ -54,12 +54,13 @@ public sealed interface Lease extends AutoCloseable {
      * Returns the file's content as it stands under this lease.
      *
      * @return content, readable until this lease closes
-     * @throws Violation.Forbidden   when the file is not
+     * @throws Violation.Forbidden   when the plate's model does not make
+     *                               the file
      *                               {@link Rule.Permission#READABLE readable}
      * @throws Refusal               with {@link Refusal.Missing} when nothing
-     *                               is at the path, as for a declared file not
-     *                               on disk yet, or {@link Refusal.Occupied}
-     *                               when something other than a file is there
+     *                               is at the path any more, or
+     *                               {@link Refusal.Occupied} when something
+     *                               other than a file is there
      * @throws IOException           when the path cannot be inspected
      * @throws IllegalStateException when this lease is closed
      */
@@ -75,16 +76,14 @@ public sealed interface Lease extends AutoCloseable {
 
     /**
      * Replaces the whole file with content verified against the evidence it
-     * declares, or creates it when a declared file is not on disk yet. The
-     * path never holds partial content. Replacing needs the file to be
-     * editable; creating it needs the file to be creatable, as creating any
-     * file does.
+     * declares. The path never holds partial content. A file that does not
+     * exist yet has no node to lease, and is created through its directory
+     * instead.
      *
      * @param content bytes to write
-     * @throws Violation.Forbidden   when the file is on disk and not
-     *                               {@link Rule.Permission#EDITABLE editable},
-     *                               or not on disk and not
-     *                               {@link Rule.Permission#CREATABLE creatable}
+     * @throws Violation.Forbidden   when the plate's model does not make
+     *                               the file
+     *                               {@link Rule.Permission#EDITABLE editable}
      * @throws Refusal               with {@link Refusal.Occupied} when
      *                               something other than a file is at the path
      *                               or a file lies above it, or
@@ -101,7 +100,8 @@ public sealed interface Lease extends AutoCloseable {
      * readable until the new content is in place.
      *
      * @param edit derives the new content from the current content
-     * @throws Violation.Forbidden   when the file is not
+     * @throws Violation.Forbidden   when the plate's model does not make
+     *                               the file
      *                               {@link Rule.Permission#EDITABLE editable}
      * @throws Refusal               with {@link Refusal.Missing} when nothing
      *                               is at the path, {@link Refusal.Occupied}
@@ -116,10 +116,11 @@ public sealed interface Lease extends AutoCloseable {
     void update(@NonNull Edit edit) throws IOException;
 
     /**
-     * Deletes the file. Directories it leaves empty stay. A present file then
-     * leaves the tree; a declared one stays in it.
+     * Deletes the file. Directories it leaves empty stay. The file then leaves
+     * the tree, though the layout may still declare its place.
      *
-     * @throws Violation.Forbidden   when the file is not
+     * @throws Violation.Forbidden   when the plate's model does not make
+     *                               the file
      *                               {@link Rule.Permission#DELETABLE deletable}
      * @throws Refusal               as {@link #update(Edit)} refuses
      * @throws IOException           when deleting fails
@@ -145,9 +146,9 @@ public sealed interface Lease extends AutoCloseable {
     /**
      * Creates the file and any directories above it that do not exist,
      * writing content verified against the evidence it declares. The path
-     * never holds partial content. The tree then holds the file, and each
-     * directory made above it, as present nodes; declared directories stay
-     * declared.
+     * never holds partial content. The tree then holds the file and each
+     * directory made above it, each reporting the layout's declaration of its
+     * place, if any.
      *
      * @param content bytes to write
      * @return the created file

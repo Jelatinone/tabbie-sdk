@@ -1,13 +1,17 @@
 package cat.tabbie.sdk.addon.artifact;
 
+import java.io.IOException;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
+import cat.tabbie.sdk.minecraft.World;
 import cat.tabbie.sdk.platform.Describe;
+import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
 
 /**
@@ -17,10 +21,10 @@ import lombok.NonNull;
  * UUID and version, which this SDK does not yet describe, so Bedrock packs are
  * not yet installable end to end.
  */
-public sealed interface Behaviourpack extends Artifact {
+public sealed interface Behaviourpack extends Artifact, World.Content {
 
   /**
-   * An artifact that cannot be installed until the World class exists.
+   * An artifact unpacked into each World of its context.
    *
    * @param coordinates  exact provider file coordinates
    * @param artifactName non-blank display name
@@ -49,25 +53,28 @@ public sealed interface Behaviourpack extends Artifact {
     }
 
     /**
-     * Refuses to install until a World can be found, since behaviour packs
-     * belong to a World.
+     * Unpacks the pack into each World of the context, into a directory of its
+     * own, named by its artifact identity, beneath the World's directory
+     * accepting behaviour packs, so two packs never collide.
      *
-     * @param context selected target and the plate it is installed on
-     * @return never
-     * @throws UnsupportedOperationException always, until the World class
-     *                                       exists
+     * @param context selected target, the plate it is installed on, and the
+     *                Worlds it applies to
+     * @return validated immutable images
+     * @throws IOException        when the pack cannot be captured or is
+     *                            refused
+     * @throws Violation.Unplaced when the context names no World, or a World
+     *                            has no directory accepting behaviour packs
      */
     @Override
-    public Set<Image<?>> install(@NonNull Artifact.Context context) {
-      // TODO: Installing a behaviour pack needs the World class. A behaviour
-      // pack unpacks into <world>/behavior_packs/<id>/, but a layout cannot name
-      // a Cat's Worlds, so no directory accepts behaviour packs, and finding one
-      // by where they are allowed is not the way. Before,
-      // Installer.Context#world() named the selected World's directory,
-      // Distribution.layout resolved behavior_packs/<id>/ beneath it, and
-      // Artifact.Context#layout required the result to lie inside that World.
-      throw new UnsupportedOperationException(
-          "Installing a behaviour pack needs the World class, which is not built yet.");
+    public Set<Image<?>> install(@NonNull Artifact.Context context) throws IOException {
+      // TODO: A World loads a behaviour pack only once world_behavior_packs.json
+      // lists it, so installing one should also describe that edit as a
+      // Configuration of the World's file.
+      return beneath(context)
+          .spread(context.worlds().stream()
+              .map(World::main)
+              .collect(Collectors.toUnmodifiableSet()))
+          .unpack(source(), artifactId().id().toString());
     }
   }
 

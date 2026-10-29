@@ -127,7 +127,7 @@ public sealed interface Resourcepack extends Artifact {
 
       /**
        * Unpacks the pack into a directory of its own, named by its artifact
-       * identity, beneath the directory of the context's plate that
+       * identity, beneath the directory of the context's model that
        * accepts Bedrock resource packs, so two packs never collide.
        *
        * @param context selected target and the plate it is installed on

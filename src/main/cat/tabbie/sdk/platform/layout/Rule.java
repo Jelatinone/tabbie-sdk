@@ -5,18 +5,19 @@ import java.util.Set;
 import lombok.NonNull;
 
 /**
- * What a tree of {@link Node nodes} allows at one of them. Rules compose: a
- * node holds any set of them, and an operation on a node is allowed only when
- * every rule it needs holds there. Only a {@link Node.Declared declared} node
- * holds rules of its own. A node with no permissions of its own, such as a mod
- * present in {@code mods}, follows the permissions of the directory above it
- * when they are checked, but never takes what that directory accepts.
+ * What a {@link Layout} allows at a place it declares. Rules compose: a
+ * declaration holds any set of them, and an operation is allowed only when
+ * every rule it needs holds there. Only layouts hold rules: a {@link Node}
+ * holds none, and a plate checks its model's rules when it carries a change
+ * out. A place declared without permissions, or not declared at all, such as
+ * a mod in {@code mods}, follows the permissions of the directory above it,
+ * but never takes what that directory accepts.
  */
 public sealed interface Rule permits Rule.Permission, Rule.Accepts {
 
   /**
-   * An operation a node permits on itself, or on undeclared content beneath a
-   * directory.
+   * An operation permitted at a declared place, and beneath it wherever
+   * nothing declares other permissions.
    */
   enum Permission implements Rule {
 

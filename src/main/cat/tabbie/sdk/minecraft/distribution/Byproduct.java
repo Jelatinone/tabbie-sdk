@@ -16,7 +16,7 @@ import cat.tabbie.sdk.platform.Command;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Platform;
 import cat.tabbie.sdk.platform.Toolchain;
-import cat.tabbie.sdk.platform.layout.Node;
+import cat.tabbie.sdk.platform.layout.Layout;
 import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
 
@@ -94,8 +94,8 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
 
   /**
    * Places the source as one file, named after it, in the directory of the
-   * context's plate that accepts this byproduct's type, where
-   * {@link #location} finds it in the Cat's layout. Whoever installs chooses
+   * context's model that accepts this byproduct's type, where
+   * {@link #location} finds it in the Cat's model. Whoever installs chooses
    * the byproduct that {@link #supports} the target while resolving;
    * installing does not ask again.
    *
@@ -110,19 +110,19 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
   }
 
   /**
-   * Locates this byproduct's file in a tree, such as the layout of the Cat it
-   * runs in: beneath the declared directory that accepts its type, named after
-   * its source, as its default install places it. Only declared directories
-   * accept content, so the layout alone decides it, whatever is on disk.
+   * Locates this byproduct's file in the model of the Cat it runs in:
+   * beneath the declared directory that accepts its type, named after its
+   * source, as its default install places it. Only declarations accept
+   * content, so the model alone decides it, whatever is on disk.
    *
-   * @param tree directory standing for a Cat's root
-   * @return address of the file beneath the root
+   * @param model model of a Cat, declared from its root
+   * @return address of the file beneath the Cat's root
    * @throws Violation.Unplaced  when no directory accepts the type
    * @throws Violation.Ambiguous when several directories accept the type
    */
   @NonNull
-  default Address location(@NonNull Node.Directory tree) {
-    return tree.find(getClass()).unique().address().resolve(source().fileName());
+  default Address location(@NonNull Layout.Directory model) {
+    return model.find(getClass()).unique().address().resolve(source().fileName());
   }
 
   /**
@@ -165,7 +165,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
      * Addresses in the arrangement are bound to physical paths by the
      * executor.
      *
-     * @param context selected target, the Cat's layout and runtime settings
+     * @param context selected target, the Cat's model and runtime settings
      * @return start arrangement
      */
     @NonNull
@@ -176,7 +176,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
      * The arrangement must suit the one {@link #allocate} returns for the same
      * context; see {@link Deallocate} for valid pairings.
      *
-     * @param context selected target, the Cat's layout and runtime settings
+     * @param context selected target, the Cat's model and runtime settings
      * @return stop arrangement
      */
     @NonNull
@@ -285,7 +285,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
   }
 
   /**
-   * The target an executable byproduct is started for, the layout of the Cat
+   * The target an executable byproduct is started for, the model of the Cat
    * it runs in, and the runtime settings it is started with. Describing a
    * start reads no file, so the context is a value and holds no plate: the
    * executor binds the arrangement's addresses to paths.
@@ -310,14 +310,14 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
     Platform platform();
 
     /**
-     * Returns the layout of the Cat the byproduct runs in, as its release
+     * Returns the model of the Cat the byproduct runs in, as its release
      * declares it, so a start arrangement can {@link Byproduct#location
      * locate} what the release's installs placed without reading the Cat.
      *
-     * @return layout declared from the root
+     * @return model declared from the root
      */
     @NonNull
-    Node.Declared.Directory layout();
+    Layout.Directory model();
 
     /**
      * Returns the memory bound the started process is given, interpreted by
@@ -343,7 +343,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
      *
      * @param label          selected target
      * @param platform       target platform
-     * @param layout         layout of the Cat the byproduct runs in, declared
+     * @param model          model of the Cat the byproduct runs in, declared
      *                       from the root
      * @param maximumMemory  positive memory bound in bytes, or empty
      * @param runtimeOptions runtime options
@@ -351,22 +351,22 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
     record Default(
         @NonNull Label label,
         @NonNull Platform platform,
-        @NonNull Node.Declared.Directory layout,
+        @NonNull Layout.Directory model,
         @NonNull Optional<Long> maximumMemory,
         @NonNull Map<String, String> runtimeOptions) implements Context {
 
       /**
-       * Copies the runtime options, then checks the layout and the memory
+       * Copies the runtime options, then checks the model and the memory
        * bound.
        *
-       * @throws IllegalArgumentException when the layout is not declared from
+       * @throws IllegalArgumentException when the model is not declared from
        *                                  the root, or the memory bound is not
        *                                  positive
        */
       public Default {
         runtimeOptions = Map.copyOf(runtimeOptions);
-        if (!layout.address().isRoot()) {
-          throw new IllegalArgumentException("A layout is declared from the root.");
+        if (!model.address().isRoot()) {
+          throw new IllegalArgumentException("A model is declared from the root.");
         }
         if (maximumMemory.filter(bytes -> bytes < 1L).isPresent()) {
           throw new IllegalArgumentException("A memory bound must be positive.");
@@ -378,11 +378,11 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
        *
        * @param label    selected target
        * @param platform target platform
-       * @param layout   layout of the Cat the byproduct runs in, declared from
+       * @param model    model of the Cat the byproduct runs in, declared from
        *                 the root
        */
-      public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Node.Declared.Directory layout) {
-        this(label, platform, layout, Optional.empty(), Map.of());
+      public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Layout.Directory model) {
+        this(label, platform, model, Optional.empty(), Map.of());
       }
     }
   }

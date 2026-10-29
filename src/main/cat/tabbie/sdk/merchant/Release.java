@@ -6,7 +6,6 @@ import java.util.Set;
 
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.platform.Package;
-import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
 
 /**
@@ -122,16 +121,15 @@ public interface Release<Content> {
     Provider.Coordinate.File coordinates();
 
     /**
-     * Starts installing this payload beneath the directory of the context's
-     * plate that accepts its type.
+     * Starts installing this payload, beneath the directory of the context's
+     * model that accepts its type, or, once
+     * {@linkplain Install#spread(Set) spread}, across several directories.
      *
      * @param context context the install runs in
-     * @return install beneath the accepting directory
-     * @throws Violation.Unplaced  when no directory accepts the type
-     * @throws Violation.Ambiguous when several directories accept the type
+     * @return install of this payload's type
      */
     default Install beneath(@NonNull Contextual context) {
-      return new Install(context, context.plate().root().find(getClass()).unique());
+      return new Install(context, getClass());
     }
 
     /**

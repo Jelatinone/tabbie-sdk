@@ -28,6 +28,7 @@ import cat.tabbie.sdk.api.Observer;
 import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Reference;
+import cat.tabbie.sdk.platform.layout.Layout;
 import cat.tabbie.sdk.platform.layout.Lease;
 import cat.tabbie.sdk.platform.layout.Node;
 import cat.tabbie.sdk.platform.layout.Violation;
@@ -74,42 +75,78 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * The archive is read twice, once to inspect it and once to capture its file
    * entries, so it is first captured into the plate's stash: both reopen it
    * from there, and its entries are captured into the same stash. Every file
-   * is created beneath a destination in a directory of that plate's tree,
-   * which must allow creating it there. Streams opened while unpacking are
-   * closed.
+   * is created beneath a destination in a directory of a model, which must
+   * allow creating it there; whatever already exists there is found when the
+   * images are exposed. Streams opened while unpacking are closed.
    *
    * @param archive     archive to unpack, named by its source
-   * @param directory   directory of the plate's tree to unpack beneath
+   * @param directory   directory of a model to unpack beneath
    * @param destination address of the extraction directory relative to it,
    *                    the root address for the directory itself
    * @param plate       plate whose stash keeps the archive and its entries
    * @return immutable images creating the archive's files
    * @throws IOException when the archive cannot be captured or is refused
-   * @throws Violation   when the tree does not allow a file where the archive
-   *                     puts it
+   * @throws Violation   when the model does not allow a file where the
+   *                     archive puts it
    */
-  public Set<Image<?>> unpack(@NonNull Describe archive, @NonNull Node.Directory directory,
+  public Set<Image<?>> unpack(@NonNull Describe archive, @NonNull Layout.Directory directory,
       @NonNull Address destination, @NonNull Plate plate) throws IOException {
     return new Unpack(directory, destination, inspect(archive, plate), this).unpack(plate);
   }
 
   /**
+   * Unpacks an archive into several destinations at once, as
+   * {@link #unpack(Describe, Layout.Directory, Address, Plate)} does into one.
+   * The archive is inspected once and each entry captured once, however many
+   * destinations receive it.
+   *
+   * @param archive      archive to unpack, named by its source
+   * @param directory    directory of a model to unpack beneath
+   * @param destinations addresses of the extraction directories relative to
+   *                     it, each receiving every file
+   * @param plate        plate whose stash keeps the archive and its entries
+   * @return immutable images creating the archive's files in every
+   *         destination
+   * @throws IOException when the archive cannot be captured or is refused
+   * @throws Violation   when the model does not allow a file where the
+   *                     archive puts it
+   */
+  public Set<Image<?>> unpack(@NonNull Describe archive, @NonNull Layout.Directory directory,
+      @NonNull Set<Address> destinations, @NonNull Plate plate) throws IOException {
+    return new Unpack(directory, destinations, inspect(archive, plate), this).unpack(plate);
+  }
+
+  /**
    * Describes unpacking an archive for work that runs later: collapsing it
-   * unpacks as {@link #unpack(Describe, Node.Directory, Address, Plate)} does
-   * on the collapsing plate, whose tree the directory must belong to, and a
-   * file the tree does not allow fails with its violation rather than
-   * throwing it.
+   * unpacks as {@link #unpack(Describe, Layout.Directory, Address, Plate)} does
+   * on the collapsing plate, and a file the model does not allow fails with
+   * its violation rather than throwing it.
    *
    * @param archive     archive to unpack, named by its source
-   * @param directory   directory of the collapsing plate's tree to unpack
-   *                    beneath
+   * @param directory   directory of a model to unpack beneath
    * @param destination address of the extraction directory relative to it,
    *                    the root address for the directory itself
    * @return unevaluated unpacking producing an immutable set
    */
-  public Intermediate<Set<Image<?>>> unpack(@NonNull Describe archive, @NonNull Node.Directory directory,
+  public Intermediate<Set<Image<?>>> unpack(@NonNull Describe archive, @NonNull Layout.Directory directory,
       @NonNull Address destination) {
     return inspect(archive).flatMap(found -> new Unpack(directory, destination, found, this));
+  }
+
+  /**
+   * Describes unpacking an archive into several destinations for work that
+   * runs later, as {@link #unpack(Describe, Layout.Directory, Address)} does
+   * into one.
+   *
+   * @param archive      archive to unpack, named by its source
+   * @param directory    directory of a model to unpack beneath
+   * @param destinations addresses of the extraction directories relative to
+   *                     it, each receiving every file
+   * @return unevaluated unpacking producing an immutable set
+   */
+  public Intermediate<Set<Image<?>>> unpack(@NonNull Describe archive, @NonNull Layout.Directory directory,
+      @NonNull Set<Address> destinations) {
+    return inspect(archive).flatMap(found -> new Unpack(directory, destinations, found, this));
   }
 
   /**
@@ -259,21 +296,39 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * {@link Reference.Transfer} as the archive is copied into scratch space, and
    * as each entry's capture reads it, when the stash reports them; an
    * {@link Observe} for each file once its capture completes; then the files
-   * unpacked, the tree's violation when it does not allow a file where the
+   * unpacked, the model's violation when it does not allow a file where the
    * archive puts it, or the failure that ended it.
    *
-   * @param directory   directory of the plate's tree to unpack beneath
-   * @param destination address of the extraction directory relative to it
-   * @param entries     inspected file entries of one archive, at least one
-   * @param limits      processing bounds
+   * @param directory    directory of a model to unpack beneath
+   * @param destinations addresses of the extraction directories relative to
+   *                     it, each receiving every file
+   * @param entries      inspected file entries of one archive, at least one
+   * @param limits       processing bounds
    */
-  record Unpack(Node.Directory directory, Address destination, List<Entry> entries, Archive limits)
+  record Unpack(Layout.Directory directory, Set<Address> destinations, List<Entry> entries, Archive limits)
       implements Intermediate.Step<Set<Image<?>>> {
+
+    /**
+     * Copies the destinations.
+     */
+    Unpack {
+      destinations = Set.copyOf(destinations);
+    }
+
+    /**
+     * Describes extraction into one destination.
+     */
+    Unpack(Layout.Directory directory, Address destination, List<Entry> entries, Archive limits) {
+      this(directory, Set.of(destination), entries, limits);
+    }
 
     @Override
     public String name() {
       return String.format("Unpack %s from %s into %s", Observer.Operand.FILE.render(entries.size()),
-          entries.getFirst().archive().fileName(), directory.address().resolve(destination).canonical());
+          entries.getFirst().archive().fileName(), String.join(", ", destinations.stream()
+              .map(destination -> directory.address().resolve(destination).canonical())
+              .sorted()
+              .toList()));
     }
 
     @Override
@@ -291,7 +346,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
         Node.File copied = limits.copy(entries.getFirst().archive(), plate);
         try (ZipFile zip = new ZipFile(copied.path().toFile())) {
           Set<Image<?>> unpacked = validated(extract(zip, plate));
-          plate.observer().verified(files(unpacked.size()));
+          plate.observer().verified(files(entries.size()));
           return unpacked;
         } catch (ZipException failure) {
           throw new Rejection.Malformed("Invalid ZIP content.", failure);
@@ -315,7 +370,8 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
       if (zip.size() != entries.getFirst().catalog().size()) {
         throw new Rejection.Malformed("ZIP entries differ from the inspected catalog.", null);
       }
-      List<Image<?>> images = new ArrayList<>(entries.size());
+      List<Image<?>> images = new ArrayList<>(entries.size() * destinations.size());
+      int extracted = 0;
       for (Entry entry : entries) {
         ZipEntry found = zip.getEntry(entry.path().canonical());
         if (found == null || found.isDirectory() || found.getSize() != entry.size()
@@ -345,8 +401,11 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
             plate.observer().transfer(transfer);
           }
         };
-        images.add(Image.create(directory, destination.resolve(entry.path()), plate.capture(retained, read)));
-        plate.observer().transfer(files(images.size()));
+        Reference.Captured captured = plate.capture(retained, read);
+        for (Address destination : destinations) {
+          images.add(directory.create(destination.resolve(entry.path()), captured));
+        }
+        plate.observer().transfer(files(++extracted));
       }
       return images;
     }

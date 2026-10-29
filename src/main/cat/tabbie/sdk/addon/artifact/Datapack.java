@@ -1,24 +1,28 @@
 package cat.tabbie.sdk.addon.artifact;
 
+import java.io.IOException;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
+import cat.tabbie.sdk.minecraft.World;
 import cat.tabbie.sdk.platform.Describe;
+import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
 
 /**
- * Java world data content, which belongs to a World and so cannot be
- * installed until the World class exists. Constructors do not inspect pack
- * metadata or discover world directories.
+ * Java world data content, which belongs to a World and installs into the
+ * Worlds its context names. Constructors do not inspect pack metadata or
+ * discover world directories.
  */
-public sealed interface Datapack extends Artifact {
+public sealed interface Datapack extends Artifact, World.Content {
 
   /**
-   * An artifact that cannot be installed until the World class exists.
+   * An artifact unpacked into each World of its context.
    *
    * @param coordinates  exact provider file coordinates
    * @param artifactName non-blank display name
@@ -47,24 +51,25 @@ public sealed interface Datapack extends Artifact {
     }
 
     /**
-     * Refuses to install until a World can be found, since datapacks belong
-     * to a World.
+     * Unpacks the datapack into each World of the context, into a directory
+     * of its own, named by its artifact identity, beneath the World's
+     * directory accepting datapacks, so two datapacks never collide.
      *
-     * @param context selected target and the plate it is installed on
-     * @return never
-     * @throws UnsupportedOperationException always, until the World class
-     *                                       exists
+     * @param context selected target, the plate it is installed on, and the
+     *                Worlds it applies to
+     * @return validated immutable images
+     * @throws IOException        when the datapack cannot be captured or is
+     *                            refused
+     * @throws Violation.Unplaced when the context names no World, or a World
+     *                            has no directory accepting datapacks
      */
     @Override
-    public Set<Image<?>> install(@NonNull Artifact.Context context) {
-      // TODO: Installing a datapack needs the World class. A datapack unpacks
-      // into <world>/datapacks/<id>/, but a layout cannot name a Cat's Worlds,
-      // so no directory accepts datapacks, and finding one by where they are
-      // allowed is not the way. Before, Installer.Context#world() named the
-      // selected World's directory, Distribution.layout resolved
-      // datapacks/<id>/ beneath it, and Artifact.Context#layout required the
-      // result to lie inside that World.
-      throw new UnsupportedOperationException("Installing a datapack needs the World class, which is not built yet.");
+    public Set<Image<?>> install(@NonNull Artifact.Context context) throws IOException {
+      return beneath(context)
+          .spread(context.worlds().stream()
+              .map(World::main)
+              .collect(Collectors.toUnmodifiableSet()))
+          .unpack(source(), artifactId().id().toString());
     }
   }
 

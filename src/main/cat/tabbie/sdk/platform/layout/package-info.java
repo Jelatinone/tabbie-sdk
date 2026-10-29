@@ -1,22 +1,24 @@
 /**
- * The tree of a root, such as a Cat: {@link Node nodes} beneath the
- * {@link Node.Directory directory} standing for the root, each a file or a
- * directory, and each {@link Node.Declared declared} by a layout or
- * {@link Node.Present present} without one. Declared nodes hold
- * {@link Rule rules} saying what may happen there: which types of content a
- * directory {@link Rule.Accepts accepts}, and which
- * {@link Rule.Permission permissions} hold. Every other node follows the
- * permissions of the directory above it.
+ * The {@link Shape} of a root, such as a Cat, in two systems: what it is meant
+ * to hold, and what it does hold. A {@link Layout} is an immutable model:
+ * directories and files at addresses relative to its root, with
+ * {@link Rule rules} saying which types of content a directory
+ * {@link Rule.Accepts accepts} and which {@link Rule.Permission permissions}
+ * hold. It is made up rather than backed, so new content is placed against
+ * it without reading any file. {@link Node Nodes} are what exists on a plate,
+ * holding no rules, and changes to existing content are described from them.
+ * Both describe their changes as images.
  *
  * <p>
- * Each distribution release declares a layout, and a plate mounts it, with
- * core's own layer on top, as the tree of its root. The plate implements every
- * node as a view of its own files, so the tree shows what exists on that plate
- * as work changes it. Every node has its own
- * {@link cat.tabbie.sdk.platform.Address Address}: locating an address from a
- * node goes to exactly that node, and a type finds the declared directories
- * {@link Node.Accepting accepting} it. Asking for something the tree does not
- * hold or allow is a {@link Violation}.
+ * Each distribution release declares a layout, and core builds an install's
+ * model from it, with its own layer and the Worlds the install applies to
+ * mounted in it. The plate implements every node as a view of its own files,
+ * so its tree shows what exists on that plate as work changes it, and it
+ * checks its model's rules when it carries a change out. Every place has its
+ * own {@link cat.tabbie.sdk.platform.Address Address}: locating an address
+ * goes to exactly that place, and a type finds the declared directories
+ * {@link Layout.Accepting accepting} it. Asking for something a model or a
+ * tree does not hold or allow is a {@link Violation}.
  *
  * <p>
  * A {@link Lease} holds one file for reading, writing, or both, or one place

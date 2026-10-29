@@ -3,7 +3,7 @@
  * family per kind of content: {@link Mod}, {@link Plugin}, {@link Datapack},
  * {@link Resourcepack} (Java and Bedrock), {@link Behaviourpack}, and
  * {@link Modpack}. Each family has a {@code Default} variant, placed beneath
- * the directory of the plate's tree that accepts its family, and a
+ * the directory of the model that accepts its family, and a
  * {@code Custom} variant that supplies its own installer.
  *
  * <p>

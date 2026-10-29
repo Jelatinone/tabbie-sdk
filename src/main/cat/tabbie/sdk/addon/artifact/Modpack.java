@@ -54,7 +54,7 @@ public sealed interface Modpack extends Artifact {
     }
 
     /**
-     * Unpacks the modpack over the directory of the context's plate that
+     * Unpacks the modpack over the directory of the context's model that
      * accepts modpacks: the root of a Cat on a mod loader. Other
      * distributions accept no modpack, so installing one there throws
      * {@link cat.tabbie.sdk.platform.layout.Violation.Unplaced Unplaced}.

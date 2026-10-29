@@ -27,13 +27,15 @@ import lombok.NonNull;
  * <p>
  * Work reaches files only through the {@link Node nodes} of the plate's
  * {@link #root() root} and {@link #scratch() scratch} trees and the
- * {@link Lease leases} they grant. The plate mounts its root's layout, with
- * core's own layer on top, and implements every node as a view of its own
- * files, so its trees show each change as it is carried out. How a plate
- * excludes other work while a lease is open is its own choice. Content reaches
- * the stash through the plate as well, since a plate is a {@link Stash}:
- * captures land alike while rehearsing and acting, because retaining content
- * changes no file beneath the root.
+ * {@link Lease leases} they grant. The plate implements every node as a view
+ * of its own files, so its trees show each change as it is carried out.
+ * Nodes hold no rules: the plate is given the model work was placed against,
+ * with core's own layer on top, and checks its rules when it carries a
+ * change out; scratch space allows everything. How a plate excludes other
+ * work while a lease is open is its own choice. Content reaches the stash
+ * through the plate as well, since a plate is a {@link Stash}: captures land
+ * alike while rehearsing and acting, because retaining content changes no
+ * file beneath the root.
  *
  * <p>
  * A plate for acting reaches the real files beneath its root. A plate for
@@ -49,8 +51,8 @@ import lombok.NonNull;
 public interface Plate extends Command.Resolver, Stash {
 
   /**
-   * Supplies the tree of the files beneath this plate's root: the layout
-   * mounted on it, with what exists there.
+   * Supplies the tree of what exists beneath this plate's root, through
+   * which images are exposed and changes to existing files described.
    *
    * @return directory standing for the root
    */
