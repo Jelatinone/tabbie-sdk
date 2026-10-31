@@ -1,29 +1,29 @@
 package cat.tabbie.sdk.minecraft;
 
-import java.util.Set;
-
 import cat.tabbie.sdk.platform.layout.Layout;
 import lombok.NonNull;
 
 /**
  * A World as an install's model holds it: the name a Cat selects it by, and
- * the directories holding its data. Its main directory is the one named after
- * it; a server that keeps the Nether and the End apart, as the Bukkit family
- * does, holds them in further directories beside it.
+ * the namespace holding everything that belongs to it. The distribution
+ * decides where a namespace is. Most keep each World in a directory of its
+ * own, such as a client's {@code saves/<folder>/} or a Bedrock server's
+ * {@code worlds/<level-name>/}; the Bukkit family keeps a World's dimensions
+ * in several directories at the Cat's root, so its namespace is the root.
  *
  * <p>
- * A release's layout never names a Cat's Worlds: it declares the directory
- * that accepts Worlds. Core mounts each World's own layout into an install's
- * model, at the World's main directory, and names the Worlds the install
- * applies to in its context; {@link Content content that belongs to a World}
- * is placed in each through the directory there accepting its type. How a
+ * A release's layout never names a Cat's Worlds. Core mounts each World into
+ * an install's model and names the Worlds the install applies to in its
+ * context; {@link Content content that belongs to a World} is placed in each
+ * through the directory of its namespace accepting its type, and the
+ * context's label says which distribution laid the namespace out. How a
  * World's data is stored is not the SDK's concern.
  */
 public interface World {
 
   /**
    * Returns the name a Cat selects this World by, such as a server's
-   * {@code level-name}, which names its main directory.
+   * {@code level-name}.
    *
    * @return non-blank name
    */
@@ -31,13 +31,12 @@ public interface World {
   String name();
 
   /**
-   * Defines the layout directory containing all information of this singular
-   * world
-   * 
-   * TODO: Needs Documentations
-   * 
-   * @return
+   * Returns the directory of the model holding everything that belongs to
+   * this World, which may be the Cat's root.
+   *
+   * @return namespace directory
    */
+  @NonNull
   Layout.Directory namespace();
 
   /**
@@ -51,28 +50,19 @@ public interface World {
   /**
    * Immutable World.
    *
-   * @param name        non-blank name, naming the main directory
-   * @param directories directories of the model holding the World's data
+   * @param name      non-blank name
+   * @param namespace directory of the model holding the World
    */
-  record Default(@NonNull String name, @NonNull Set<Layout.Directory> directories) implements World {
+  record Default(@NonNull String name, @NonNull Layout.Directory namespace) implements World {
 
     /**
-     * Copies the directories, then checks the name and the directories.
+     * Checks the name.
      *
-     * @throws IllegalArgumentException when the name is blank, two directories
-     *                                  share an address, or none is named
-     *                                  after the World
+     * @throws IllegalArgumentException when the name is blank
      */
     public Default {
-      directories = Set.copyOf(directories);
       if (name.isBlank()) {
         throw new IllegalArgumentException("A World needs a non-blank name.");
-      }
-      if (directories.stream().map(Layout::address).distinct().count() != directories.size()) {
-        throw new IllegalArgumentException("A World's directories must have distinct addresses.");
-      }
-      if (directories.stream().noneMatch(directory -> directory.name().equals(name))) {
-        throw new IllegalArgumentException("A World's main directory is named after it.");
       }
     }
   }

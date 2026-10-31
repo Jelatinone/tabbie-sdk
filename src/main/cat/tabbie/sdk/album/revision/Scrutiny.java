@@ -54,11 +54,13 @@ public sealed interface Scrutiny<T> {
    * lies beneath a file or the tree does not permit the change; and with the
    * plate's {@link cat.tabbie.sdk.platform.layout.Refusal Refusal} when its
    * path is blocked, because it is a directory, or cannot be written.</li>
-   * <li>An {@link Image.Configuration} fails with the file's current text when
-   * its lines no longer match its chunks' before fragments; with the tree's
-   * violation when the tree holds no file there or does not permit the
-   * change; and with the plate's refusal when the file is gone or cannot be
-   * written.</li>
+   * <li>An {@link Image.Configuration} fails with its view's current text when
+   * the lines its chunks select no longer match their before fragments; with
+   * the tree's violation when the tree holds no file there or does not permit
+   * the change; with
+   * {@link cat.tabbie.sdk.platform.layout.Lease.Form.Unreadable} when the file
+   * cannot be read in its view; and with the plate's refusal when the file is
+   * gone or cannot be written.</li>
    * </ul>
    *
    * @param <T>     result type

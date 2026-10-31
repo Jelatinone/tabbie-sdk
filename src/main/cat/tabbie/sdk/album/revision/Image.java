@@ -192,11 +192,11 @@ public sealed interface Image<State extends Image.Alteration> {
    * @param stash   stash holding the files' content, read only when an
    *                installation and a configuration of one file fold
    * @return immutable valid net change
-   * @throws Malformation       when a set is invalid, its changes are
-   *                            discontinuous, or the net change is order
-   *                            dependent, such as a file replaced by a
-   *                            directory of the same name
-   * @throws IOException        when folded content cannot be read or captured
+   * @throws Malformation when a set is invalid, its changes are
+   *                      discontinuous, or the net change is order
+   *                      dependent, such as a file replaced by a
+   *                      directory of the same name
+   * @throws IOException  when folded content cannot be read or captured
    */
   static Set<Image<?>> reduce(@NonNull List<? extends Collection<? extends Image<?>>> changes,
       @NonNull Stash stash) throws IOException {
@@ -310,9 +310,9 @@ public sealed interface Image<State extends Image.Alteration> {
    * after state. A path no file can occupy, or one that may not be written,
    * fails with the plate's refusal.
    *
-   * @param before   complete content or absence expected before the change
-   * @param after    complete content or absence described after the change
-   * @param address  changed file, beneath the plate's root
+   * @param before  complete content or absence expected before the change
+   * @param after   complete content or absence described after the change
+   * @param address changed file, beneath the plate's root
    */
   record Installation(
       @NonNull File before, @NonNull File after, @NonNull Address address)
@@ -359,7 +359,7 @@ public sealed interface Image<State extends Image.Alteration> {
         // A path no file can occupy, or one that may not be written, has no
         // file state to report
         return switch (refusal.reason()) {
-          case Refusal.Mismatch _, Refusal.Denied _ -> new Scrutiny.Fail<>(null, refusal);
+          case Refusal.Mismatch _,Refusal.Denied _ -> new Scrutiny.Fail<>(null, refusal);
           case Refusal.Held _ -> throw refusal;
         };
       }
@@ -412,9 +412,9 @@ public sealed interface Image<State extends Image.Alteration> {
     /**
      * Describes the change between two states of a file, unless there is none.
      *
-     * @param before   state before
-     * @param after    state after
-     * @param address  changed file, beneath the plate's root
+     * @param before  state before
+     * @param after   state after
+     * @param address changed file, beneath the plate's root
      * @return the installation, or empty when the states are the same
      */
     static Optional<Image<?>> between(@NonNull File before, @NonNull File after, @NonNull Address address) {
@@ -447,6 +447,7 @@ public sealed interface Image<State extends Image.Alteration> {
      * @return folded installation, or empty when it changes nothing
      * @throws Malformation.Discontinuous when this installation leaves no file,
      *                                    or the chunks do not match its text
+     *                                    in the configuration's view
      * @throws IOException                when the content cannot be read or
      *                                    captured
      */
@@ -454,38 +455,47 @@ public sealed interface Image<State extends Image.Alteration> {
       if (!(after instanceof File.Present(Reference.Captured installed))) {
         throw new Malformation.Discontinuous(address);
       }
-      String configured = later.apply(stash.text(installed));
-      Reference.Captured content = stash.capture(Describe.of(address.fileName().orElseThrow(), configured));
+      Describe current = stash.retained(installed);
+      Reference.Captured content = stash.capture(later.view().encode(current, later.revised(current)));
       return between(before, new File.Present(content), address);
     }
   }
 
   /**
-   * Changes selected ranges of an existing text file, stored as corresponding
-   * chunks, at least one of which edits the text. A configuration never
-   * creates or deletes a file; an installation does.
+   * Changes selected ranges of an existing file's text, stored as
+   * corresponding chunks, at least one of which edits the text. The text is
+   * the file as the configuration's view reads it: its own text, or a view a
+   * lease keeps well formed, such as {@link Lease.Form.Json one element
+   * of a JSON array per line}. Chunks are anchored at lines, or, to change a
+   * file other content shares without reading it, at the end of the text or
+   * by their own lines, as {@link Chunk.Anchor} describes. A configuration
+   * never creates or deletes a file; an installation does, such as the
+   * {@link #sure(Stash) sure} of a file it applies to empty.
    *
    * <p>
-   * Exposing it takes a mutual lease on the file and reads it as UTF-8 text.
-   * When each chunk's before fragment matches the file's lines at its range,
-   * exact endings included, it writes the file with the chunks applied and
-   * passes with the file's complete new text; lines outside every chunk are not
-   * compared. A failure carries the file's complete current text, or the
-   * plate's refusal when the file is gone or cannot be written.
+   * Exposing it takes a mutual lease on the file and reads it in its view.
+   * When each chunk's before fragment matches the view where the chunk is
+   * anchored, exact endings included, it writes the file with the chunks
+   * applied, back through the view, and passes with the view's complete new
+   * text; lines outside every chunk are not compared. A failure carries the
+   * view's complete current text, or what refused the change: the plate's
+   * refusal when the file is gone or cannot be written, the tree's violation,
+   * or the file not being readable in the view.
    *
-   * @param chunks   text changes
-   * @param address  changed file, beneath the plate's root
+   * @param chunks  text changes, in the view
+   * @param address changed file, beneath the plate's root
+   * @param view    form the file is read and written in for these chunks
    */
   record Configuration(
-      @NonNull List<Chunk> chunks, @NonNull Address address)
+      @NonNull List<Chunk> chunks, @NonNull Address address, @NonNull Lease.Form view)
       implements Image<Image.Text> {
 
     /**
      * Copies and validates the chunks, and rejects the root itself as a file
      * and chunks that change nothing.
      *
-     * @throws IllegalArgumentException when the chunks are out of order or
-     *                                  overlap
+     * @throws IllegalArgumentException when the chunks are out of order,
+     *                                  overlap, or mix anchors
      * @throws Malformation.Root        when the address is the root itself
      * @throws Malformation.Unchanged   when no chunk edits its text
      */
@@ -501,11 +511,25 @@ public sealed interface Image<State extends Image.Alteration> {
     }
 
     /**
-     * Describes the change between two fragment states of an existing file.
+     * Describes changes to a file's own text.
      *
-     * @param before   text before
-     * @param after    text after
-     * @param address  changed file, beneath the plate's root
+     * @param chunks  text changes
+     * @param address changed file, beneath the plate's root
+     * @throws IllegalArgumentException when the chunks are out of order,
+     *                                  overlap, or mix anchors
+     * @throws Malformation.Root        when the address is the root itself
+     * @throws Malformation.Unchanged   when no chunk edits its text
+     */
+    public Configuration(@NonNull List<Chunk> chunks, @NonNull Address address) {
+      this(chunks, address, new Lease.Form.Text());
+    }
+
+    /**
+     * Describes the change between two fragment states of a file's own text.
+     *
+     * @param before  text before
+     * @param after   text after
+     * @param address changed file, beneath the plate's root
      * @throws Malformation.Root      when the address is the root itself
      * @throws Malformation.Unchanged when no fragment changes
      */
@@ -537,7 +561,8 @@ public sealed interface Image<State extends Image.Alteration> {
           chunks.stream()
               .map(Chunk::invert)
               .toList(),
-          address);
+          address,
+          view);
     }
 
     @Override
@@ -548,6 +573,9 @@ public sealed interface Image<State extends Image.Alteration> {
           case Node.Directory _ -> new Scrutiny.Fail<>(null,
               new Refusal(new Refusal.Occupied(address, Refusal.Kind.FILE, Refusal.Kind.DIRECTORY)));
         };
+      } catch (Lease.Form.Unreadable unreadable) {
+        // The file cannot be read in this configuration's view
+        return new Scrutiny.Fail<>(null, unreadable);
       } catch (Violation violation) {
         // The tree holds nothing here, the path lies beneath a file, or the
         // tree does not permit the change
@@ -555,51 +583,85 @@ public sealed interface Image<State extends Image.Alteration> {
       } catch (Refusal refusal) {
         // The file is gone, is not a file, or may not be written
         return switch (refusal.reason()) {
-          case Refusal.Mismatch _, Refusal.Denied _ -> new Scrutiny.Fail<>(null, refusal);
+          case Refusal.Mismatch _,Refusal.Denied _ -> new Scrutiny.Fail<>(null, refusal);
           case Refusal.Held _ -> throw refusal;
         };
       }
     }
 
     /**
-     * Applies the chunks to a file the tree holds, when its lines still match
-     * their before fragments.
+     * Applies the chunks to a file the tree holds, when its view still
+     * matches their before fragments.
      */
     private Scrutiny<Text> configured(Node.File node) throws IOException {
       try (Lease.Mutual file = node.mutual()) {
-        Describe current = file.read();
-        String text = current.text();
+        String text = file.read(view);
         if (!Chunk.matches(chunks, text)) {
           return new Scrutiny.Fail<>(new Text(Chunk.fragmentsOf(text)));
         }
         String changed = Chunk.apply(chunks, text);
-        file.update(_ -> Describe.of(node.name(), changed));
+        file.update(view, _ -> changed);
         return new Scrutiny.Pass<>(new Text(Chunk.fragmentsOf(changed)));
       }
     }
 
     /**
-     * Describes chunks of a file as a change, unless none of them edits.
+     * Describes creating this configuration's file from its view's empty
+     * document, when the chunks apply to that document, as chunks that only
+     * append do. An operation adds it when the file is absent, so a change
+     * described without reading the file still has a file to apply to. The
+     * operation owns the file's existence; content that configures the file
+     * owns only its change, so removing that content later leaves the file in
+     * place, however empty.
      *
-     * @param chunks   text changes
-     * @param address  changed file, beneath the plate's root
+     * @param stash stash to capture the empty document into
+     * @return installation creating the file, or empty when the view has no
+     *         empty document or the chunks do not apply to it
+     * @throws IOException when the document cannot be captured
+     */
+    public Optional<Installation> sure(@NonNull Stash stash) throws IOException {
+      Optional<Describe> empty = view.empty(address.fileName().orElseThrow());
+      if (empty.isEmpty() || !Chunk.matches(chunks, view.decode(empty.get()))) {
+        return Optional.empty();
+      }
+      Reference.Captured content = stash.capture(empty.get());
+      return Optional.of(new Installation(new File.Absent(), new File.Present(content), address));
+    }
+
+    /**
+     * Describes chunks of a file's view as a change, unless none of them
+     * edits.
+     *
+     * @param chunks  text changes
+     * @param address changed file, beneath the plate's root
+     * @param view    form the file is read and written in
      * @return the configuration, or empty when no chunk edits its text
      */
-    static Optional<Image<?>> between(@NonNull List<Chunk> chunks, @NonNull Address address) {
+    static Optional<Image<?>> between(@NonNull List<Chunk> chunks, @NonNull Address address,
+        @NonNull Lease.Form view) {
       return chunks.stream().anyMatch(Chunk::edits)
-          ? Optional.of(new Configuration(chunks, address))
+          ? Optional.of(new Configuration(chunks, address, view))
           : Optional.empty();
     }
 
     /**
-     * Applies this configuration's chunks to its file's complete text, as
-     * folding a later change of the file does.
+     * Applies this configuration's chunks to a file's complete content, read
+     * in its view, as folding a later change of the file does.
      *
-     * @param text complete text the chunks must match
-     * @return complete resulting text
-     * @throws Malformation.Discontinuous when the chunks do not match the text
+     * @param content complete content the chunks must match in the view
+     * @return complete resulting text of the view
+     * @throws Malformation.Discontinuous when the content cannot be read in
+     *                                    the view, or the chunks do not match
+     *                                    it
+     * @throws IOException                when the content cannot be read
      */
-    String apply(@NonNull String text) {
+    String revised(@NonNull Describe content) throws IOException {
+      String text;
+      try {
+        text = view.decode(content);
+      } catch (Lease.Form.Unreadable unreadable) {
+        throw new Malformation.Discontinuous(address, unreadable);
+      }
       if (!Chunk.matches(chunks, text)) {
         throw new Malformation.Discontinuous(address);
       }
@@ -611,17 +673,22 @@ public sealed interface Image<State extends Image.Alteration> {
      *
      * @param later later configuration
      * @return combined configuration, or empty when the pair has no net effect
-     * @throws Malformation.Discontinuous when overlapping regions disagree about
-     *                                    the text between them
+     * @throws Malformation.Discontinuous when the two read the file in
+     *                                    different views, or overlapping
+     *                                    regions disagree about the text
+     *                                    between them
      */
     Optional<Image<?>> compose(@NonNull Configuration later) {
+      if (!view.equals(later.view())) {
+        throw new Malformation.Discontinuous(address);
+      }
       List<Chunk> composed;
       try {
         composed = Chunk.compose(chunks, later.chunks());
       } catch (IllegalArgumentException exception) {
         throw new Malformation.Discontinuous(address, exception);
       }
-      return between(composed, address);
+      return between(composed, address, view);
     }
 
     /**
@@ -634,7 +701,7 @@ public sealed interface Image<State extends Image.Alteration> {
      * @return folded installation, or empty when it changes nothing
      * @throws Malformation.Discontinuous when the later installation expects no
      *                                    file, or the chunks do not match its
-     *                                    before text
+     *                                    before content in the view
      * @throws IOException                when the content cannot be read or
      *                                    captured
      */
@@ -642,8 +709,8 @@ public sealed interface Image<State extends Image.Alteration> {
       if (!(later.before() instanceof File.Present(Reference.Captured configured))) {
         throw new Malformation.Discontinuous(address);
       }
-      String original = preimage().apply(stash.text(configured));
-      Reference.Captured content = stash.capture(Describe.of(address.fileName().orElseThrow(), original));
+      Describe current = stash.retained(configured);
+      Reference.Captured content = stash.capture(view.encode(current, preimage().revised(current)));
       return Installation.between(new File.Present(content), later.after(), address);
     }
   }

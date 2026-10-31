@@ -7,10 +7,13 @@
  *
  * <p>
  * Every package is exported. Lombok is a compile-time dependency only;
- * consumers need no Lombok at compile time or at run time.
+ * consumers need no Lombok at compile time or at run time. Jackson is part of
+ * the SDK's API: the JSON form reads documents into Jackson's tree and binds
+ * them to values, so consumers compile and run against it.
  */
 module cat.tabbie.sdk {
   requires static lombok;
+  requires transitive tools.jackson.databind;
 
   exports cat.tabbie.sdk;
   exports cat.tabbie.sdk.addon;

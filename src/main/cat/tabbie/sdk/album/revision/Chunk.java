@@ -2,7 +2,10 @@ package cat.tabbie.sdk.album.revision;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -32,9 +35,18 @@ import lombok.NonNull;
  * An unterminated line can only end its described file side. Collections are
  * immutable defensive copies.
  *
+ * <p>
+ * A chunk is {@link Anchor anchored} where it applies. A diff anchors its
+ * chunks at lines, so each applies only where its ranges say. Content that
+ * shares a file with other content can describe its change without reading
+ * the file, and undo it whatever others did since, by anchoring at the end,
+ * to append lines, or by content, to change lines wherever they are. Chunks
+ * anchored elsewhere than at lines have no positions until a text locates
+ * them, and never mix with chunks anchored at lines.
+ *
  * @param changes     ordered context and edits
  * @param beforeRange original line range
- * @param afterRange  resulting line range
+ * @param afterRange  resulting line range, anchored as the original is
  */
 public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @NonNull Range afterRange) {
 
@@ -42,14 +54,55 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
   private static final Integer CONTEXT_LINES = 3;
 
   /**
-   * Copies changes and checks consumed counts and terminal lines on both sides.
+   * Copies changes and checks consumed counts and terminal lines on both
+   * sides, and that both sides share an anchor the changes suit.
    *
-   * @throws IllegalArgumentException when changes disagree with either range
+   * @throws IllegalArgumentException when changes disagree with either range,
+   *                                  the sides are anchored differently, a
+   *                                  chunk anchored at the end does more than
+   *                                  insert, or one anchored by content has no
+   *                                  lines to find
    */
   public Chunk {
     changes = List.copyOf(changes);
     validateFragment(beforeRange, changes, Revision.INSERTION);
     validateFragment(afterRange, changes, Revision.DELETION);
+    if (beforeRange.anchor() != afterRange.anchor()) {
+      throw new IllegalArgumentException("Both sides of a chunk are anchored alike.");
+    }
+    beforeRange.anchor().validate(changes, beforeRange);
+  }
+
+  /**
+   * Returns where this chunk applies.
+   *
+   * @return the anchor both its sides share
+   */
+  public Anchor anchor() {
+    return beforeRange.anchor();
+  }
+
+  /**
+   * Describes appending lines at the end of a text that holds none of them,
+   * without reading the text. Its inverse removes the same lines wherever
+   * they are, so content can append a line to a file other content shares and
+   * later take it back, whatever the others appended or removed meanwhile.
+   *
+   * @param lines exact lines to append, at least one, each terminated
+   * @return chunk anchored at the end
+   * @throws IllegalArgumentException when there are no lines, or one is
+   *                                  unterminated
+   */
+  public static Chunk append(@NonNull List<Line> lines) {
+    if (lines.isEmpty() || lines.stream().anyMatch(line -> line.ending() == Change.Sequence.NONE)) {
+      throw new IllegalArgumentException("A chunk appends at least one line, each terminated.");
+    }
+    return new Chunk(
+        lines.stream()
+            .map(line -> new Change(line, Revision.INSERTION))
+            .toList(),
+        new Range(0, 0, Anchor.END),
+        new Range(0, lines.size(), Anchor.END));
   }
 
   /**
@@ -71,17 +124,20 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
   }
 
   /**
-   * Swaps the ranges and edit roles, retaining change order and exact lines
+   * Swaps the ranges and edit roles, retaining change order and exact lines.
+   * Lines appended at the end are removed wherever they are found, and lines
+   * removed wherever they were found are appended at the end again.
    *
    * @return reversed chunk
    */
   public Chunk invert() {
+    Anchor anchor = anchor().inverse(afterRange);
     return new Chunk(
         changes.stream()
             .map(change -> new Change(change.line(), change.revision().invert()))
             .toList(),
-        afterRange,
-        beforeRange);
+        new Range(afterRange.start(), afterRange.count(), anchor),
+        new Range(beforeRange.start(), beforeRange.count(), anchor));
   }
 
   /**
@@ -119,8 +175,11 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
 
   /**
    * Checks whether chunks apply to complete text: each chunk's before fragment
-   * matches the text's lines at its range, exact endings included. Lines
-   * outside every chunk are not compared.
+   * matches the text's lines where it is anchored, exact endings included.
+   * Lines outside every chunk are not compared. A chunk anchored by content
+   * matches only when its before lines occur exactly once, and one anchored
+   * at the end only when the text holds none of its lines once the others
+   * apply, and does not end in an unterminated line.
    *
    * @param chunks chunks in file order
    * @param text   complete text
@@ -128,15 +187,18 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
    */
   public static boolean matches(@NonNull List<Chunk> chunks, @NonNull String text) {
     List<Line> lines = linesOf(text);
-    return chunks.stream()
-        .map(Chunk::before)
-        .allMatch(fragment -> fragment.range().end() <= lines.size()
-            && lines.subList(fragment.range().start(), fragment.range().end()).equals(fragment.lines()));
+    return located(chunks, lines)
+        .map(placed -> placed.stream()
+            .map(Chunk::before)
+            .allMatch(fragment -> fragment.range().end() <= lines.size()
+                && lines.subList(fragment.range().start(), fragment.range().end()).equals(fragment.lines())))
+        .orElse(false);
   }
 
   /**
    * Applies chunks to complete text: each chunk's before fragment is replaced
-   * by its after fragment, and lines outside every chunk are unchanged.
+   * by its after fragment where it is anchored, and lines outside every chunk
+   * are unchanged.
    *
    * @param chunks chunks in file order
    * @param text   complete text the chunks {@link #matches(List, String) match}
@@ -149,9 +211,73 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
     if (!matches(chunks, text)) {
       throw new IllegalArgumentException("Every chunk's before lines must match the text it applies to.");
     }
-    return project(linesOf(text).toArray(Line[]::new), 0, chunks, Chunk::before, Chunk::after).stream()
+    List<Line> lines = linesOf(text);
+    return project(lines.toArray(Line[]::new), 0, located(chunks, lines).orElseThrow(), Chunk::before,
+        Chunk::after).stream()
         .map(line -> line.text() + line.ending().getValue())
         .collect(Collectors.joining());
+  }
+
+  /**
+   * Places chunks anchored at the end or by content where they apply in some
+   * lines, as chunks anchored at lines in file order; chunks anchored at lines
+   * are already placed. Empty when a chunk cannot be placed: lines to find are
+   * missing or occur more than once, found regions overlap, or lines to append
+   * are already there or would follow an unterminated line.
+   */
+  private static Optional<List<Chunk>> located(List<Chunk> chunks, List<Line> lines) {
+    if (chunks.stream().allMatch(chunk -> chunk.anchor() == Anchor.FIXED)) {
+      return Optional.of(chunks);
+    }
+    if (chunks.stream().anyMatch(chunk -> chunk.anchor() == Anchor.FIXED)) {
+      return Optional.empty();
+    }
+    List<Chunk> found = new ArrayList<>();
+    for (Chunk chunk : chunks) {
+      if (chunk.anchor() == Anchor.CONTENT) {
+        List<Line> sought = chunk.before().lines();
+        int start = Collections.indexOfSubList(lines, sought);
+        if (start < 0 || Collections.lastIndexOfSubList(lines, sought) != start) {
+          return Optional.empty();
+        }
+        found.add(new Chunk(chunk.changes(), new Range(start, sought.size()),
+            new Range(start, chunk.afterRange().count())));
+      }
+    }
+    found.sort(Comparator.comparingInt(chunk -> chunk.beforeRange().start()));
+    // The lines the text holds once the found chunks apply, before anything is appended
+    List<Line> remaining = new ArrayList<>();
+    int cursor = 0;
+    for (Chunk chunk : found) {
+      if (chunk.beforeRange().start() < cursor) {
+        return Optional.empty();
+      }
+      remaining.addAll(lines.subList(cursor, chunk.beforeRange().start()));
+      remaining.addAll(chunk.after().lines());
+      cursor = chunk.beforeRange().end();
+    }
+    remaining.addAll(lines.subList(cursor, lines.size()));
+    List<Chunk> appending = chunks.stream()
+        .filter(chunk -> chunk.anchor() == Anchor.END)
+        .toList();
+    List<Line> appended = appending.stream()
+        .flatMap(chunk -> chunk.after().lines().stream())
+        .toList();
+    if (!appended.isEmpty() && ((!remaining.isEmpty() && remaining.getLast().ending() == Change.Sequence.NONE)
+        || appended.stream().anyMatch(remaining::contains)
+        || new HashSet<>(appended).size() != appended.size())) {
+      return Optional.empty();
+    }
+    appending.forEach(chunk -> found.add(new Chunk(chunk.changes(), new Range(lines.size(), 0),
+        new Range(lines.size(), chunk.afterRange().count()))));
+    List<Chunk> placed = new ArrayList<>();
+    int offset = 0;
+    for (Chunk chunk : found) {
+      placed.add(new Chunk(chunk.changes(), chunk.beforeRange(),
+          new Range(chunk.beforeRange().start() + offset, chunk.afterRange().count())));
+      offset += chunk.afterRange().count() - chunk.beforeRange().count();
+    }
+    return Optional.of(List.copyOf(placed));
   }
 
   /**
@@ -176,17 +302,29 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
    * that cancel only through lines outside every chunk, such as a block moved
    * away and back again, are kept, because those lines are not described.
    *
+   * <p>
+   * Chunks anchored at the end or by content have no positions to compare, so
+   * they compose by their lines instead: lines a later chunk removes or
+   * replaces within lines an earlier chunk appended are taken out of that
+   * append, appends join into one, and every other chunk is kept, to be
+   * located when the result applies.
+   *
    * @param first  earlier chunks in file order
    * @param second later chunks in file order
    * @return immutable composed chunks in file order, empty when nothing changes
-   * @throws IllegalArgumentException when either sequence is invalid or the two
-   *                                  disagree about the intermediate text
+   * @throws IllegalArgumentException when either sequence is invalid, the two
+   *                                  disagree about the intermediate text, or
+   *                                  one is anchored at lines and the other
+   *                                  elsewhere
    */
   public static List<Chunk> compose(
       @NonNull List<Chunk> first,
       @NonNull List<Chunk> second) {
     validateChunks(first);
     validateChunks(second);
+    if (Stream.concat(first.stream(), second.stream()).anyMatch(chunk -> chunk.anchor() != Anchor.FIXED)) {
+      return anchored(first, second);
+    }
     List<Chunk> result = new ArrayList<>();
     int earlier = 0;
     int later = 0;
@@ -251,6 +389,50 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
     }
     validateChunks(result);
     return List.copyOf(result);
+  }
+
+  /**
+   * Composes chunks anchored at the end or by content, as
+   * {@link #compose(List, List)} describes.
+   */
+  private static List<Chunk> anchored(List<Chunk> first, List<Chunk> second) {
+    if (Stream.concat(first.stream(), second.stream()).anyMatch(chunk -> chunk.anchor() == Anchor.FIXED)) {
+      throw new IllegalArgumentException("Chunks anchored at lines compose only with chunks anchored at lines.");
+    }
+    List<Line> appended = new ArrayList<>(first.stream()
+        .filter(chunk -> chunk.anchor() == Anchor.END)
+        .flatMap(chunk -> chunk.after().lines().stream())
+        .toList());
+    List<Chunk> found = new ArrayList<>(first.stream()
+        .filter(chunk -> chunk.anchor() == Anchor.CONTENT)
+        .toList());
+    for (Chunk chunk : second) {
+      if (chunk.anchor() == Anchor.END) {
+        appended.addAll(chunk.after().lines());
+        continue;
+      }
+      List<Line> sought = chunk.before().lines();
+      int start = Collections.indexOfSubList(appended, sought);
+      if (start >= 0) {
+        List<Line> spliced = new ArrayList<>(appended.subList(0, start));
+        spliced.addAll(chunk.after().lines());
+        spliced.addAll(appended.subList(start + sought.size(), appended.size()));
+        appended = spliced;
+        continue;
+      }
+      if (found.stream().anyMatch(earlier -> earlier.before().lines().equals(sought)
+          && Collections.indexOfSubList(earlier.after().lines(), sought) < 0)) {
+        throw new IllegalArgumentException("Composed changes disagree about the intermediate text.");
+      }
+      found.add(chunk);
+    }
+    if (new HashSet<>(appended).size() != appended.size()) {
+      throw new IllegalArgumentException("Composed changes disagree about the intermediate text.");
+    }
+    if (!appended.isEmpty()) {
+      found.add(append(appended));
+    }
+    return List.copyOf(found);
   }
 
   /**
@@ -411,7 +593,8 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
    * Checks one file side for ordered, non-overlapping ranges and valid
    * termination.
    * Empty boundaries at an unterminated end are allowed; later text or gaps are
-   * not.
+   * not. Fragments anchored elsewhere than at lines have no positions to
+   * check.
    *
    * @param fragments fragments in file order
    * @throws IllegalArgumentException when ranges overlap, regress, or follow an
@@ -421,6 +604,9 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
     int end = 0;
     boolean unterminated = false;
     for (Chunk.Fragment fragment : fragments) {
+      if (fragment.range().anchor() != Anchor.FIXED) {
+        continue;
+      }
       if (fragment.range().start() < end) {
         throw new IllegalArgumentException("Text fragments must be ordered and non-overlapping.");
       }
@@ -456,6 +642,9 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
     for (int index = 0; index < before.size(); index++) {
       Range beforeRange = before.get(index).range();
       Range afterRange = after.get(index).range();
+      if (beforeRange.anchor() != Anchor.FIXED) {
+        continue;
+      }
       int beforeGap = beforeRange.start() - beforeEnd;
       int afterGap = afterRange.start() - afterEnd;
       if (afterGap < 0 || beforeGap != afterGap) {
@@ -467,12 +656,20 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
   }
 
   /**
-   * Validates both projected sides of an authored chunk sequence.
+   * Validates both projected sides of an authored chunk sequence. A sequence
+   * anchors all its chunks at lines, or none of them; chunks anchored
+   * elsewhere have no positions to validate until a text locates them.
    *
    * @param chunks chunks in file order
-   * @throws IllegalArgumentException when ranges overlap or unchanged gaps differ
+   * @throws IllegalArgumentException when ranges overlap, unchanged gaps
+   *                                  differ, or chunks anchored at lines mix
+   *                                  with chunks anchored elsewhere
    */
   public static void validateChunks(@NonNull List<Chunk> chunks) {
+    if (chunks.stream().anyMatch(chunk -> chunk.anchor() == Anchor.FIXED)
+        && chunks.stream().anyMatch(chunk -> chunk.anchor() != Anchor.FIXED)) {
+      throw new IllegalArgumentException("Chunks anchored at lines do not mix with chunks anchored elsewhere.");
+    }
     validateFragments(
         chunks.stream()
             .map(Chunk::before)
@@ -631,21 +828,120 @@ public record Chunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @
   }
 
   /**
-   * A zero-based line range with an exclusive end. A zero count describes
-   * an insertion/deletion boundary. The end must fit in a nonnegative integer.
-   *
-   * @param start zero-based first line or boundary
-   * @param count consumed line count
+   * Where a chunk applies in the text it changes, which decides what the chunk
+   * may change and where its inverse applies.
    */
-  public record Range(int start, int count) {
+  public enum Anchor {
 
     /**
-     * Checks nonnegative start/count and a representable end position.
+     * At its ranges' start lines, as a diff describes it. Only a chunk anchored
+     * here has positions of its own, which its sequence validates.
+     */
+    FIXED {
+
+      @Override
+      public void validate(@NonNull List<Change> changes, @NonNull Range before) {
+      }
+
+      @Override
+      public Anchor inverse(@NonNull Range after) {
+        return FIXED;
+      }
+    },
+
+    /**
+     * At the end of the text: the chunk only inserts lines, none of which the
+     * text may hold already, and its inverse removes them wherever they are.
+     */
+    END {
+
+      @Override
+      public void validate(@NonNull List<Change> changes, @NonNull Range before) {
+        if (changes.stream().anyMatch(change -> change.revision() != Revision.INSERTION)) {
+          throw new IllegalArgumentException("A chunk anchored at the end only inserts lines.");
+        }
+      }
+
+      @Override
+      public Anchor inverse(@NonNull Range after) {
+        return CONTENT;
+      }
+    },
+
+    /**
+     * Wherever the chunk's original lines occur, which must be exactly once.
+     * The inverse of a chunk that removes its lines appends them at the end
+     * again; any other chunk's inverse is found by its own lines.
+     */
+    CONTENT {
+
+      @Override
+      public void validate(@NonNull List<Change> changes, @NonNull Range before) {
+        if (before.count() == 0) {
+          throw new IllegalArgumentException("A chunk anchored by content has lines to find.");
+        }
+      }
+
+      @Override
+      public Anchor inverse(@NonNull Range after) {
+        return after.count() == 0 ? END : CONTENT;
+      }
+    };
+
+    /**
+     * Checks that a chunk's changes suit this anchor.
+     *
+     * @param changes the chunk's ordered changes
+     * @param before  the chunk's original range
+     * @throws IllegalArgumentException when they do not
+     */
+    public abstract void validate(@NonNull List<Change> changes, @NonNull Range before);
+
+    /**
+     * Returns where the inverse of a chunk anchored here applies.
+     *
+     * @param after the chunk's resulting range, which its inverse starts from
+     * @return the inverse's anchor
+     */
+    public abstract Anchor inverse(@NonNull Range after);
+  }
+
+  /**
+   * A zero-based line range with an exclusive end, and where it lies: at its
+   * start line, at the end of the text, or wherever its lines occur, as its
+   * {@link Anchor} says. A zero count describes an insertion/deletion
+   * boundary. Only a range anchored at a line has a position of its own; the
+   * others start at zero until a text locates them. The end must fit in a
+   * nonnegative integer.
+   *
+   * @param start  zero-based first line or boundary, zero unless anchored at a
+   *               line
+   * @param count  consumed line count
+   * @param anchor where the range lies
+   */
+  public record Range(int start, int count, @NonNull Anchor anchor) {
+
+    /**
+     * Checks nonnegative start/count, a representable end position, and that
+     * a range anchored elsewhere than at a line starts at zero.
      */
     public Range {
       if (start < 0 || count < 0 || (long) start + count > Integer.MAX_VALUE) {
         throw new IllegalArgumentException("Line range must have a valid non-negative end.");
       }
+      if (anchor != Anchor.FIXED && start != 0) {
+        throw new IllegalArgumentException("A range anchored elsewhere than at a line starts at zero.");
+      }
+    }
+
+    /**
+     * Describes a range anchored at its start line.
+     *
+     * @param start zero-based first line or boundary
+     * @param count consumed line count
+     */
+    public Range(int start, int count) {
+      this(start, count, Anchor.FIXED);
     }
 
     /**
