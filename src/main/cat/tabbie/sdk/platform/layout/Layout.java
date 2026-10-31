@@ -6,9 +6,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.platform.Address;
-import cat.tabbie.sdk.platform.Reference;
 import lombok.NonNull;
 
 /**
@@ -253,6 +251,7 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
      * @throws Violation.Forbidden      when the place is not creatable
      * @throws IllegalArgumentException when the tail names this directory
      */
+    @Override
     @NonNull
     public Layout.Directory require(@NonNull Address tail) {
       if (tail.isRoot()) {
@@ -275,25 +274,6 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
         throw new Violation.Forbidden(address.resolve(tail), Rule.Permission.CREATABLE);
       }
       return this;
-    }
-
-    /**
-     * Describes creating a file from retained content at a tail beneath this
-     * directory, as the model allows it, together with any directories missing
-     * above it.
-     *
-     * @param tail  address of the file relative to this directory
-     * @param after retained content
-     * @return image creating the file
-     * @throws Violation                when the model does not allow the file
-     *                                  there, as {@link #require(Address)}
-     *                                  refuses
-     * @throws IllegalArgumentException when the tail names this directory
-     */
-    @NonNull
-    public Image<Image.File> create(@NonNull Address tail, @NonNull Reference.Captured after) {
-      require(tail);
-      return new Image.Installation(new Image.File.Absent(), new Image.File.Present(after), address.resolve(tail));
     }
 
     /**

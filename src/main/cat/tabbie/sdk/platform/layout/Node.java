@@ -238,6 +238,7 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * @throws Violation.Terminal       when a file lies on the way
      * @throws IllegalArgumentException when the tail names this directory
      */
+    @Override
     @NonNull
     default Node.Directory require(@NonNull Address tail) {
       if (tail.isRoot()) {
@@ -253,10 +254,10 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
 
     /**
      * Leases the place at a tail beneath this directory for creating a file
-     * there, once nothing exists there, as {@link #require(Address)} checks.
+     * there. The plate refuses while anything exists there, as
+     * {@link #require(Address)} would, and checks under the lease, so no
+     * other work can create something there first.
      *
-     * @apiNote The default checks the tree, then leases the place through
-     *          {@link #claim(Address)}.
      * @param tail address of the file relative to this directory
      * @return open lease, owned by the caller
      * @throws Violation                when something exists at the tail or a
@@ -265,24 +266,6 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      *                                  does not wait and the place is leased
      * @throws IOException              when the lease cannot be taken
      * @throws IllegalArgumentException when the tail names this directory
-     */
-    @NonNull
-    default Lease.Create create(@NonNull Address tail) throws IOException {
-      require(tail);
-      return claim(tail);
-    }
-
-    /**
-     * Leases the place at a tail beneath this directory for creating a file
-     * there, without checking the tree. Work creates files through
-     * {@link #create(Address)}, which checks the tree first.
-     *
-     * @param tail address of the file relative to this directory, where
-     *             nothing exists
-     * @return open lease, owned by the caller
-     * @throws Refusal     with {@link Refusal.Held} when the plate does not
-     *                     wait and the place is leased
-     * @throws IOException when the lease cannot be taken
      */
     @NonNull
     Lease.Create claim(@NonNull Address tail) throws IOException;

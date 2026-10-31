@@ -30,11 +30,13 @@ import lombok.NonNull;
  * replacement does not authorize overwriting content it did not expect.
  *
  * <p>
- * New files are described against a model, with
- * {@link cat.tabbie.sdk.platform.layout.Layout.Directory#create
- * Layout.Directory#create}, and changes to files that exist against their
- * nodes, with {@link Node.File#replace Node.File#replace}, {@code delete}
- * and {@code configure}.
+ * New files are described with
+ * {@link cat.tabbie.sdk.platform.layout.Shape.Directory#create
+ * Shape.Directory#create}: against a model where content is placed by its
+ * rules, or against what exists where work deliberately sets the model
+ * aside. Changes to files that exist are described against their nodes,
+ * with {@link Node.File#replace Node.File#replace}, {@code delete} and
+ * {@code configure}.
  *
  * <p>
  * An image is always well formed: it changes something, and its file lies
@@ -384,7 +386,7 @@ public sealed interface Image<State extends Image.Alteration> {
       if (!before.same(found) || !(after instanceof File.Present(Reference.Captured content))) {
         return new Scrutiny.Fail<>(found);
       }
-      try (Lease.Create file = plate.root().create(address)) {
+      try (Lease.Create file = plate.root().claim(address)) {
         file.create(plate.retained(content));
       }
       return new Scrutiny.Pass<>(after);

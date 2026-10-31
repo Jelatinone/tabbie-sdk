@@ -31,26 +31,14 @@ public interface World {
   String name();
 
   /**
-   * Returns the directories of the model holding this World's data.
-   *
-   * @return immutable, nonempty directories with distinct addresses, one of
-   *         them named after this World
+   * Defines the layout directory containing all information of this singular
+   * world
+   * 
+   * TODO: Needs Documentations
+   * 
+   * @return
    */
-  @NonNull
-  Set<Layout.Directory> directories();
-
-  /**
-   * Returns this World's main directory, the one named after it.
-   *
-   * @return main directory
-   */
-  @NonNull
-  default Layout.Directory main() {
-    return directories().stream()
-        .filter(directory -> directory.name().equals(name()))
-        .findFirst()
-        .orElseThrow(() -> new IllegalStateException("A World's main directory is named after it."));
-  }
+  Layout.Directory namespace();
 
   /**
    * Content that belongs to a World rather than to a Cat, such as a datapack.

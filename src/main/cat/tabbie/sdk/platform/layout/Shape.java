@@ -3,7 +3,9 @@ package cat.tabbie.sdk.platform.layout;
 import java.util.List;
 import java.util.Optional;
 
+import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.platform.Address;
+import cat.tabbie.sdk.platform.Reference;
 import lombok.NonNull;
 
 /**
@@ -115,6 +117,37 @@ public sealed interface Shape permits Shape.File, Shape.Directory, Layout, Node 
       return children().stream()
           .filter(child -> child.name().equals(name))
           .findFirst();
+    }
+
+    /**
+     * Requires that a file may be created at a tail beneath this directory,
+     * as this directory's own system says: a model checks its rules, and
+     * what exists checks only that nothing is there yet.
+     *
+     * @param tail address of the file relative to this directory
+     * @return this directory
+     * @throws Violation                when the file may not be created there
+     * @throws IllegalArgumentException when the tail names this directory
+     */
+    @NonNull
+    Shape.Directory require(@NonNull Address tail);
+
+    /**
+     * Describes creating a file from retained content at a tail beneath this
+     * directory, together with any directories missing above it, once
+     * {@link #require(Address)} allows it.
+     *
+     * @param tail  address of the file relative to this directory
+     * @param after retained content
+     * @return image creating the file
+     * @throws Violation                when the file may not be created there,
+     *                                  as {@link #require(Address)} refuses
+     * @throws IllegalArgumentException when the tail names this directory
+     */
+    @NonNull
+    default Image<Image.File> create(@NonNull Address tail, @NonNull Reference.Captured after) {
+      require(tail);
+      return new Image.Installation(new Image.File.Absent(), new Image.File.Present(after), address().resolve(tail));
     }
   }
 }

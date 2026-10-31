@@ -138,7 +138,7 @@ public sealed interface Lease extends AutoCloseable {
 
   /**
    * A lease that creates a file at a place the tree holds nothing, as
-   * {@link Node.Directory#create(Address)} grants once it has checked the
+   * {@link Node.Directory#claim(Address)} grants once it has checked the
    * tree. Plates grant no other lease on the path until it closes.
    */
   non-sealed interface Create extends Lease {
@@ -147,8 +147,7 @@ public sealed interface Lease extends AutoCloseable {
      * Creates the file and any directories above it that do not exist,
      * writing content verified against the evidence it declares. The path
      * never holds partial content. The tree then holds the file and each
-     * directory made above it, each reporting the layout's declaration of its
-     * place, if any.
+     * directory made above it.
      *
      * @param content bytes to write
      * @return the created file

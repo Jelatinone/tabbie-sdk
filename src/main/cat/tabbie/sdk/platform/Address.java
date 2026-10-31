@@ -140,6 +140,20 @@ public record Address(@NonNull List<String> components) {
   }
 
   /**
+   * Returns this address relative to a directory it lies in, undoing
+   * {@link #resolve(Address) resolve} from that directory.
+   *
+   * @param directory directory this address lies in
+   * @return address beneath the directory, the root address for the
+   *         directory itself
+   * @throws Outside when this address lies elsewhere
+   */
+  public Address relativeTo(@NonNull Address directory) {
+    require(directory);
+    return new Address(components.subList(directory.components().size(), components.size()));
+  }
+
+  /**
    * Returns the last component, the name of what this address names.
    *
    * @return file or directory name, or empty for the base itself

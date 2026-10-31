@@ -23,6 +23,8 @@ import lombok.NonNull;
  */
 public sealed interface Behaviourpack extends Artifact, World.Content {
 
+  String CONFIGURATION_JSON_FILE_NAME = "world_behavior_packs.json";
+
   /**
    * An artifact unpacked into each World of its context.
    *
@@ -67,12 +69,12 @@ public sealed interface Behaviourpack extends Artifact, World.Content {
      */
     @Override
     public Set<Image<?>> install(@NonNull Artifact.Context context) throws IOException {
-      // TODO: A World loads a behaviour pack only once world_behavior_packs.json
-      // lists it, so installing one should also describe that edit as a
-      // Configuration of the World's file.
+      // TODO: The problem here being that we don't have access to real leases to
+      // build an image from
+
       return beneath(context)
           .spread(context.worlds().stream()
-              .map(World::main)
+              .map(World::namespace)
               .collect(Collectors.toUnmodifiableSet()))
           .unpack(source(), artifactId().id().toString());
     }

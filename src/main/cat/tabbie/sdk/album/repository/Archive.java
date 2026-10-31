@@ -117,6 +117,42 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
   }
 
   /**
+   * Unpacks the inspected entries of an archive that lie beneath a folder of
+   * it, each at its path relative to that folder, into several destinations,
+   * as {@link #unpack(Describe, Layout.Directory, Set, Plate)} does with every
+   * entry. Entries elsewhere in the archive are left out, so content wrapped
+   * in a folder of its own unpacks as if it were not. Work that reads an
+   * archive's entries before unpacking it unpacks them this way, without
+   * capturing the archive again.
+   *
+   * @param entries      file entries of one archive, as
+   *                     {@link #inspect(Describe, Plate)} found them
+   * @param from         folder of the archive to unpack from, the root address
+   *                     for the whole archive
+   * @param directory    directory of a model to unpack beneath
+   * @param destinations addresses of the extraction directories relative to
+   *                     it, each receiving every file unpacked
+   * @param plate        plate whose stash keeps the archive and its entries
+   * @return immutable images creating the files in every destination
+   * @throws IOException              when the archive cannot be reopened or is
+   *                                  refused
+   * @throws Violation                when the model does not allow a file
+   *                                  where it is unpacked
+   * @throws IllegalArgumentException when no entry lies beneath the folder
+   */
+  public Set<Image<?>> unpack(@NonNull List<Entry> entries, @NonNull Address from,
+      @NonNull Layout.Directory directory, @NonNull Set<Address> destinations, @NonNull Plate plate)
+      throws IOException {
+    List<Entry> beneath = entries.stream()
+        .filter(entry -> entry.path().within(from))
+        .toList();
+    if (beneath.isEmpty()) {
+      throw new IllegalArgumentException("Unpacking needs a file beneath the folder it unpacks from.");
+    }
+    return new Unpack(directory, from, destinations, beneath, this).unpack(plate);
+  }
+
+  /**
    * Describes unpacking an archive for work that runs later: collapsing it
    * unpacks as {@link #unpack(Describe, Layout.Directory, Address, Plate)} does
    * on the collapsing plate, and a file the model does not allow fails with
@@ -300,13 +336,15 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    * archive puts it, or the failure that ended it.
    *
    * @param directory    directory of a model to unpack beneath
+   * @param from         folder of the archive every entry lies beneath, each
+   *                     unpacked at its path relative to it
    * @param destinations addresses of the extraction directories relative to
    *                     it, each receiving every file
    * @param entries      inspected file entries of one archive, at least one
    * @param limits       processing bounds
    */
-  record Unpack(Layout.Directory directory, Set<Address> destinations, List<Entry> entries, Archive limits)
-      implements Intermediate.Step<Set<Image<?>>> {
+  record Unpack(Layout.Directory directory, Address from, Set<Address> destinations, List<Entry> entries,
+      Archive limits) implements Intermediate.Step<Set<Image<?>>> {
 
     /**
      * Copies the destinations.
@@ -316,7 +354,14 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
     }
 
     /**
-     * Describes extraction into one destination.
+     * Describes extracting the whole archive into several destinations.
+     */
+    Unpack(Layout.Directory directory, Set<Address> destinations, List<Entry> entries, Archive limits) {
+      this(directory, Address.root(), destinations, entries, limits);
+    }
+
+    /**
+     * Describes extracting the whole archive into one destination.
      */
     Unpack(Layout.Directory directory, Address destination, List<Entry> entries, Archive limits) {
       this(directory, Set.of(destination), entries, limits);
@@ -403,7 +448,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
         };
         Reference.Captured captured = plate.capture(retained, read);
         for (Address destination : destinations) {
-          images.add(directory.create(destination.resolve(entry.path()), captured));
+          images.add(directory.create(destination.resolve(entry.path().relativeTo(from)), captured));
         }
         plate.observer().transfer(files(++extracted));
       }
@@ -545,7 +590,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    */
   private Node.File copy(Describe archive, Plate plate) throws IOException {
     Address name = Address.of("tabbie-archive-%s.zip".formatted(UUID.randomUUID()));
-    try (Lease.Create scratch = plate.scratch().create(name)) {
+    try (Lease.Create scratch = plate.scratch().claim(name)) {
       return scratch.create(bounded(archive, plate));
     }
   }
