@@ -268,6 +268,6 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * @throws IllegalArgumentException when the tail names this directory
      */
     @NonNull
-    Lease.Create claim(@NonNull Address tail) throws IOException;
+    Lease.Claim claim(@NonNull Address tail) throws IOException;
   }
 }

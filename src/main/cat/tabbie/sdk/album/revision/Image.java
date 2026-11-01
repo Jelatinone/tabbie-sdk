@@ -386,7 +386,7 @@ public sealed interface Image<State extends Image.Alteration> {
       if (!before.same(found) || !(after instanceof File.Present(Reference.Captured content))) {
         return new Scrutiny.Fail<>(found);
       }
-      try (Lease.Create file = plate.root().claim(address)) {
+      try (Lease.Claim file = plate.root().claim(address)) {
         file.create(plate.retained(content));
       }
       return new Scrutiny.Pass<>(after);

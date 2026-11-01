@@ -32,11 +32,11 @@ import tools.jackson.databind.node.ObjectNode;
  * A caller-owned hold on one place in the tree of a
  * {@link cat.tabbie.sdk.album.model.Plate Plate}: a file a
  * {@link Node.File file node} holds, leased to read or change it, or a vacant
- * place beneath a {@link Node.Directory directory}, leased to
- * {@link Create create} a file there. Whatever exclusion the plate applies
- * lasts until the lease closes, so work can read a file, decide, and write it
- * without the file changing in between. {@link Mutual} is the lease that both
- * reads and changes its file.
+ * place beneath a {@link Node.Directory directory}, {@link Claim claimed} to
+ * create a file there. Whatever exclusion the plate applies lasts until the
+ * lease closes, so work can read a file, decide, and write it without the
+ * file changing in between. {@link Mutual} is the lease that both reads and
+ * changes its file.
  *
  * <p>
  * Every operation first checks that the permission it needs holds at its node,
@@ -189,11 +189,11 @@ public sealed interface Lease extends AutoCloseable {
   }
 
   /**
-   * A lease that creates a file at a place the tree holds nothing, as
-   * {@link Node.Directory#claim(Address)} grants once it has checked the
+   * A lease on a place the tree holds nothing, claimed to create a file there,
+   * as {@link Node.Directory#claim(Address)} grants once it has checked the
    * tree. Plates grant no other lease on the path until it closes.
    */
-  non-sealed interface Create extends Lease {
+  non-sealed interface Claim extends Lease {
 
     /**
      * Creates the file and any directories above it that do not exist,

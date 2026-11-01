@@ -6,6 +6,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import cat.tabbie.sdk.album.revision.Chunk;
+import cat.tabbie.sdk.album.revision.Image;
+import cat.tabbie.sdk.album.revision.Malformation;
 import cat.tabbie.sdk.platform.Address;
 import lombok.NonNull;
 
@@ -274,6 +277,52 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
         throw new Violation.Forbidden(address.resolve(tail), Rule.Permission.CREATABLE);
       }
       return this;
+    }
+
+    /**
+     * Describes configuring a file at a tail beneath this directory that need
+     * not exist yet, such as appending an entry to a list several contents
+     * share. Nothing here reads the file, so the chunks are anchored at the
+     * end or by content, never at lines. The model must allow creating the
+     * file there, as {@link #require(Address)} checks, and editing it, as the
+     * deepest declaration on the way grants. Whether the file exists, and what
+     * it holds, is found when the image is exposed; a missing file is first
+     * created from the view's empty document, as
+     * {@link Image.Configuration#sure(cat.tabbie.sdk.album.repository.Stash)}
+     * describes.
+     *
+     * @param tail   address of the file relative to this directory
+     * @param view   form the file is read and written in
+     * @param chunks changes to the file's content in that form
+     * @return image configuring the file
+     * @throws Violation                when the model does not allow creating
+     *                                  the file there
+     * @throws Violation.Forbidden      when the place is not editable
+     * @throws Malformation.Unchanged   when no chunk edits the content
+     * @throws IllegalArgumentException when the tail names this directory, or a
+     *                                  chunk is anchored at lines
+     */
+    @NonNull
+    public Image<Image.Text> configure(@NonNull Address tail, @NonNull Lease.Form view,
+        @NonNull List<Chunk> chunks) {
+      if (chunks.stream().anyMatch(chunk -> chunk.anchor() == Chunk.Anchor.FIXED)) {
+        throw new IllegalArgumentException("A model configures a file by its content, never at lines it cannot see.");
+      }
+      require(tail);
+      Layout place = this;
+      for (String name : tail.components()) {
+        Optional<Layout> next = place instanceof Layout.Directory directory
+            ? directory.child(name)
+            : Optional.empty();
+        if (next.isEmpty()) {
+          break;
+        }
+        place = next.get();
+      }
+      if (!place.permits(Rule.Permission.EDITABLE)) {
+        throw new Violation.Forbidden(address.resolve(tail), Rule.Permission.EDITABLE);
+      }
+      return new Image.Configuration(chunks, address.resolve(tail), view);
     }
 
     /**

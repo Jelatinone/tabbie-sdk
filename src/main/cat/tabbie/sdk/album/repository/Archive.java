@@ -590,7 +590,7 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    */
   private Node.File copy(Describe archive, Plate plate) throws IOException {
     Address name = Address.of("tabbie-archive-%s.zip".formatted(UUID.randomUUID()));
-    try (Lease.Create scratch = plate.scratch().claim(name)) {
+    try (Lease.Claim scratch = plate.scratch().claim(name)) {
       return scratch.create(bounded(archive, plate));
     }
   }

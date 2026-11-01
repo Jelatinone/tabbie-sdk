@@ -1,6 +1,7 @@
 package cat.tabbie.sdk.merchant;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -23,6 +24,18 @@ import lombok.NonNull;
  * Nothing beneath the Cat's root changes until the images are exposed, and
  * installers never launch processes. Whoever installs, such as the
  * interpreter or the command line, only supplies a context.
+ *
+ * <p>
+ * A file other content also edits, such as the list a World keeps of the
+ * packs it loads, is changed by a {@link Image.Configuration configuration}
+ * anchored at the end or by content, so an install describes the change
+ * without reading the file, and its preimage undoes it whatever other content
+ * did to the file since. Uninstalling content exposes the preimages of what
+ * its install described, and nothing else. When such a configuration's file
+ * is absent, the operation adds the installation that makes
+ * {@link Image.Configuration#sure sure} it exists: the operation owns the
+ * file's existence, and the content only its change, so uninstalling the
+ * content leaves the file in place.
  *
  * @apiNote An install may run on a rehearsal plate: captures land in its stash
  *          as they would on an acting plate, and the images it returns name
@@ -149,6 +162,29 @@ public interface Installer<Contextual extends Installer.Context> {
     }
 
     /**
+     * Unpacks the inspected entries of an archive that lie beneath a folder of
+     * it at the place, each at its path relative to that folder, so content
+     * wrapped in a folder of its own unpacks as if it were not.
+     *
+     * @param entries file entries of one archive, as its inspection found them
+     * @param from    folder of the archive to unpack from, the root address for
+     *                the whole archive
+     * @param into    names of the directories beneath the place the files are
+     *                unpacked into, none for the place itself
+     * @return images creating the files
+     * @throws IOException              when the archive cannot be reopened or
+     *                                  is refused
+     * @throws Violation                when no directory accepts the type,
+     *                                  several do, or the model does not allow
+     *                                  a file where it is unpacked
+     * @throws IllegalArgumentException when no entry lies beneath the folder
+     */
+    public Set<Image<?>> unpack(@NonNull List<Archive.Entry> entries, @NonNull Address from,
+        @NonNull String... into) throws IOException {
+      return context.archive().unpack(entries, from, place(), Set.of(Address.of(into)), context.plate());
+    }
+
+    /**
      * Spreads this install across directories of the context's model, placing
      * the content in each at the directory beneath it that accepts the type,
      * such as each World an addon applies to.
@@ -236,6 +272,30 @@ public interface Installer<Contextual extends Installer.Context> {
      */
     public Set<Image<?>> unpack(@NonNull Describe archive, @NonNull String... into) throws IOException {
       return context.archive().unpack(archive, context.model(), places.stream()
+          .map(place -> place.address().resolve(into))
+          .collect(Collectors.toUnmodifiableSet()), context.plate());
+    }
+
+    /**
+     * Unpacks the inspected entries of an archive that lie beneath a folder of
+     * it at every place, each at its path relative to that folder, capturing
+     * each file once.
+     *
+     * @param entries file entries of one archive, as its inspection found them
+     * @param from    folder of the archive to unpack from, the root address for
+     *                the whole archive
+     * @param into    names of the directories beneath each place the files are
+     *                unpacked into, none for the place itself
+     * @return images creating the files at every place
+     * @throws IOException              when the archive cannot be reopened or
+     *                                  is refused
+     * @throws Violation                when the model does not allow a file
+     *                                  where it is unpacked
+     * @throws IllegalArgumentException when no entry lies beneath the folder
+     */
+    public Set<Image<?>> unpack(@NonNull List<Archive.Entry> entries, @NonNull Address from,
+        @NonNull String... into) throws IOException {
+      return context.archive().unpack(entries, from, context.model(), places.stream()
           .map(place -> place.address().resolve(into))
           .collect(Collectors.toUnmodifiableSet()), context.plate());
     }
