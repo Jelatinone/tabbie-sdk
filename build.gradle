@@ -9,10 +9,23 @@ plugins {
 sourceSets {
   main {
     java.srcDirs = ['src/main']
+    resources.srcDirs = ['src/resources']
   }
   test {
     java.srcDirs = ['src/test']
   }
+
+  processor {
+    java {
+      srcDirs = ['src/main']
+      exclude 'module-info.java'
+    }
+    resources.srcDirs = ['src/resources']
+  }
+}
+
+configurations {
+  processorImplementation.extendsFrom(implementation)
 }
 
 repositories {
@@ -31,6 +44,10 @@ tasks.withType(JavaCompile).configureEach {
   options.encoding = 'UTF-8'
 }
 
+tasks.named('compileProcessorJava') {
+  modularity.inferModulePath = false
+}
+
 tasks.withType(Javadoc).configureEach {
   options.encoding = 'UTF-8'
   options.tags('apiNote:a:API Note:', 'implSpec:a:Implementation Requirements:', 'implNote:a:Implementation Note:')
@@ -44,6 +61,8 @@ lombok {
 
 dependencies {
   api('tools.jackson.core:jackson-databind:3.2.3')
+
+  annotationProcessor(sourceSets.processor.output)
 
   testImplementation(platform('org.junit:junit-bom:5.10.2'))
   testImplementation('org.junit.jupiter:junit-jupiter')

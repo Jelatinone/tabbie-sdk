@@ -6,6 +6,7 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 import cat.tabbie.sdk.addon.artifact.Artifact;
+import cat.tabbie.sdk.meta.attribute.Distributions;
 import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Version;
 import lombok.NonNull;
@@ -60,7 +61,7 @@ public sealed interface Distribution permits Java, Bedrock {
    *                                  hyphen-separated words
    */
   static void validate(@NonNull String id) {
-    if (!id.matches("(bedrock|java):[a-z0-9]+(-[a-z0-9]+)*")) {
+    if (!Distributions.Meta.IDENTIFIER.matcher(id).matches()) {
       throw new IllegalArgumentException(
           String.format("%s is not a distribution identifier.", id));
     }

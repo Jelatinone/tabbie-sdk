@@ -1,6 +1,7 @@
 package cat.tabbie.sdk.minecraft;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -32,6 +33,28 @@ public sealed interface Version
    */
   Pattern VERSION_PATTERN = Pattern.compile(
       "(?i)^(?:minecraft(?:\\s*:\\s*|\\s+))?(?:(java|bedrock)(?:\\s+edition)?(?:\\s*:\\s*|\\s+))?(.+)$");
+
+  /**
+   * Orders versions of one edition by {@link #number() release number}, then
+   * {@link #releaseDate() release date}, as
+   * {@link cat.tabbie.sdk.merchant.Release#PUBLICATION_ORDER} orders
+   * releases. A version without a number, such as a week snapshot, orders
+   * before every numbered version, and one without a known date before every
+   * dated version of the same number, so a pre-release orders before its
+   * release only when both dates are known.
+   *
+   * @apiNote Comparing versions of different editions throws
+   *          {@link IllegalArgumentException}.
+   */
+  Comparator<Version> RELEASE_ORDER = (first, second) -> {
+    if (first.getClass() != second.getClass()) {
+      throw new IllegalArgumentException("Versions of different editions are not ordered.");
+    }
+    return Comparator.<Version, Number>comparing(version -> version.number().orElse(null),
+        Comparator.nullsFirst(Comparator.naturalOrder()))
+        .thenComparing(version -> version.releaseDate().orElse(null), Comparator.nullsFirst(Comparator.naturalOrder()))
+        .compare(first, second);
+  };
 
   /**
    * The canonical identifier for this version. Examples include {@code 1.20.1},
@@ -114,6 +137,101 @@ public sealed interface Version
    */
   default boolean match(@NonNull Version other) {
     return getClass() == other.getClass() && id().equals(other.id());
+  }
+
+  /**
+   * Returns this version's release number, read from the numbers its
+   * identifier begins with: {@code [1, 21, 4]} for {@code 1.21.4}, or
+   * {@code [26, 3]} with no patch for {@code 26.3}. A fourth number, as some
+   * Bedrock identifiers carry, is not part of it. A pre-release shares the
+   * number of the release it leads to, such as {@code 1.21} for
+   * {@code 1.21-pre1}, and is told apart by its release date.
+   *
+   * @return release number, or empty when the identifier does not begin with
+   *         one, such as the week snapshot {@code 24w14a}
+   */
+  @NonNull
+  default Optional<Number> number() {
+    return Number.of(id());
+  }
+
+  /**
+   * A version's release number: its major, minor and patch numbers. A
+   * version such as {@code 26.3} has no patch, which orders before every
+   * patch, so {@code 26.3} orders before {@code 26.3.1}.
+   *
+   * @param major major number
+   * @param minor minor number
+   * @param patch patch number, or {@link #ABSENT} when the version has none
+   */
+  record Number(int major, int minor, int patch) implements Comparable<Number> {
+
+    /**
+     * The patch of a number written with two parts.
+     */
+    public static final int ABSENT = -1;
+
+    /**
+     * Leading numbers of an identifier: a major and a minor number, then an
+     * optional patch, each separated by a dot.
+     */
+    private static final Pattern LEADING = Pattern.compile("^(\\d+)\\.(\\d+)(?:\\.(\\d+))?");
+
+    /**
+     * Checks the numbers are not negative, other than an absent patch.
+     *
+     * @throws IllegalArgumentException when a number is negative
+     */
+    public Number {
+      if (major < 0 || minor < 0 || patch < ABSENT) {
+        throw new IllegalArgumentException("A release number's parts are not negative.");
+      }
+    }
+
+    /**
+     * A number written with two parts, such as {@code 26.3}.
+     *
+     * @param major major number
+     * @param minor minor number
+     */
+    public Number(int major, int minor) {
+      this(major, minor, ABSENT);
+    }
+
+    /**
+     * Reads the release number an identifier begins with.
+     *
+     * @param id version identifier, such as {@code 1.21.4} or {@code 26.3}
+     * @return release number, or empty when the identifier does not begin
+     *         with one
+     */
+    public static Optional<Number> of(@NonNull String id) {
+      var matcher = LEADING.matcher(id);
+      if (!matcher.find()) {
+        return Optional.empty();
+      }
+      return Optional.of(new Number(Integer.parseInt(matcher.group(1)), Integer.parseInt(matcher.group(2)),
+          matcher.group(3) == null ? ABSENT : Integer.parseInt(matcher.group(3))));
+    }
+
+    @Override
+    public int compareTo(@NonNull Number other) {
+      return Comparator.comparingInt(Number::major)
+          .thenComparingInt(Number::minor)
+          .thenComparingInt(Number::patch)
+          .compare(this, other);
+    }
+
+    /**
+     * Writes the number as its identifier does, with two parts when it has no
+     * patch.
+     *
+     * @return such as {@code 1.21.4} or {@code 26.3}
+     */
+    @Override
+    public String toString() {
+      return patch == ABSENT ? major + "." + minor : major + "." + minor + "." + patch;
+    }
   }
 
   /**
