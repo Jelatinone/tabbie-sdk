@@ -1,5 +1,8 @@
 package cat.tabbie.sdk.addon.artifact;
 
+import static cat.tabbie.sdk.minecraft.distribution.Bedrock.Manager.Of.ENDSTONE;
+import static cat.tabbie.sdk.minecraft.distribution.Bedrock.Of.NATIVE;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
@@ -18,9 +21,6 @@ import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.layout.Lease;
 import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
-
-import static cat.tabbie.sdk.minecraft.distribution.Bedrock.Manager.Of.ENDSTONE;
-import static cat.tabbie.sdk.minecraft.distribution.Bedrock.Of.NATIVE;
 
 /**
  * Resource content, which changes how a game looks and sounds. Each edition

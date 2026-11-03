@@ -22,7 +22,7 @@ import tools.jackson.databind.node.ObjectNode;
  * without unpacking anything, and knows where the content it describes lies
  * in that archive.
  */
-public sealed interface Descriptor permits Descriptor.Manifest, Descriptor.PackMeta {
+public sealed interface Descriptor permits Descriptor.Manifest, Descriptor.Packmeta {
 
   /**
    * Returns the folder the descriptor's file lies in, which is where the
@@ -151,7 +151,7 @@ public sealed interface Descriptor permits Descriptor.Manifest, Descriptor.PackM
    * @param description the pack's description as the file writes it, a text
    *                    component, or a missing node when it declares none
    */
-  record PackMeta(
+  record Packmeta(
       @NonNull Address root,
       @NonNull Format oldest,
       @NonNull Format newest,
@@ -168,7 +168,7 @@ public sealed interface Descriptor permits Descriptor.Manifest, Descriptor.PackM
      * @throws IllegalArgumentException when the newest format is older than
      *                                  the oldest
      */
-    public PackMeta {
+    public Packmeta {
       description = description.deepCopy();
       if (newest.compareTo(oldest) < 0) {
         throw new IllegalArgumentException("A pack's newest supported format is no older than its oldest.");
@@ -185,7 +185,7 @@ public sealed interface Descriptor permits Descriptor.Manifest, Descriptor.PackM
      *                                     declares no formats it supports
      * @throws IOException                 when the file cannot be read
      */
-    public static PackMeta of(@NonNull Describe meta) throws IOException {
+    public static Packmeta of(@NonNull Describe meta) throws IOException {
       JsonNode pack;
       try {
         pack = new Lease.Form.Json().readTree(meta).path("pack");
@@ -195,20 +195,20 @@ public sealed interface Descriptor permits Descriptor.Manifest, Descriptor.PackM
       try {
         Address root = meta.path().parent().orElse(Address.root());
         if (pack.has("min_format") && pack.has("max_format")) {
-          return new PackMeta(root, Format.of(pack.get("min_format")), Format.of(pack.get("max_format")),
+          return new Packmeta(root, Format.of(pack.get("min_format")), Format.of(pack.get("max_format")),
               pack.path("description"));
         }
         JsonNode supported = pack.path("supported_formats");
         if (supported.isObject()) {
-          return new PackMeta(root, Format.of(supported.path("min_inclusive")),
+          return new Packmeta(root, Format.of(supported.path("min_inclusive")),
               Format.of(supported.path("max_inclusive")), pack.path("description"));
         }
         if (supported.isArray()) {
-          return new PackMeta(root, Format.of(supported.path(0)), Format.of(supported.path(1)),
+          return new Packmeta(root, Format.of(supported.path(0)), Format.of(supported.path(1)),
               pack.path("description"));
         }
         Format only = Format.of(supported.isMissingNode() ? pack.path("pack_format") : supported);
-        return new PackMeta(root, only, only, pack.path("description"));
+        return new Packmeta(root, only, only, pack.path("description"));
       } catch (IllegalArgumentException exception) {
         throw new Archive.Rejection.Malformed("A pack's pack.mcmeta declares the formats it supports.", exception);
       }
@@ -227,7 +227,7 @@ public sealed interface Descriptor permits Descriptor.Manifest, Descriptor.PackM
      *                                     the file is malformed
      * @throws IOException                 when the file cannot be read
      */
-    public static PackMeta in(@NonNull List<Archive.Entry> entries) throws IOException {
+    public static Packmeta in(@NonNull List<Archive.Entry> entries) throws IOException {
       List<Archive.Entry> metas = entries.stream()
           .filter(entry -> entry.path().fileName().equals(Optional.of(FILE)))
           .toList();
