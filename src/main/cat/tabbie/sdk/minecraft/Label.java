@@ -3,6 +3,7 @@ package cat.tabbie.sdk.minecraft;
 import java.util.Arrays;
 import java.util.Locale;
 
+import cat.tabbie.sdk.Registry;
 import cat.tabbie.sdk.addon.artifact.Artifact;
 import cat.tabbie.sdk.minecraft.distribution.Distribution;
 import lombok.NonNull;
@@ -46,17 +47,18 @@ public record Label(@NonNull Version version, @NonNull Distribution distribution
    * of the canonical text, so the version has an unknown release type and date.
    *
    * @param canonical canonical label text
+   * @param registry  registry finding the distribution the text names
    * @return label
-   * @throws IllegalArgumentException when the text is not canonical, names an
-   *                                  unknown distribution, or describes an
-   *                                  unsupported target
+   * @throws IllegalArgumentException when the text is not canonical, names a
+   *                                  distribution the registry does not
+   *                                  know, or describes an unsupported target
    */
-  public static Label parse(@NonNull String canonical) {
+  public static Label parse(@NonNull String canonical, @NonNull Registry registry) {
     String[] parts = canonical.split("/", -1);
     if (parts.length != 3) {
       throw new IllegalArgumentException("Not canonical label text: " + canonical);
     }
-    Distribution distribution = Distribution.of(parts[0])
+    Distribution distribution = registry.distribution(parts[0])
         .orElseThrow(() -> new IllegalArgumentException("Unknown distribution: " + parts[0]));
     String edition = parts[0].substring(0, parts[0].indexOf(':'));
     Environment environment = Arrays.stream(Environment.values())

@@ -27,8 +27,7 @@ import lombok.NonNull;
  * identify the exact provider-scoped payload; relations name catalog
  * coordinates at any level, matched by {@link Coordinate#includes(Coordinate)}.
  */
-public sealed interface Artifact extends Release.Payload<Artifact.Context>
-    permits Mod, Plugin, Datapack, Behaviourpack, Modpack, Resourcepack, Artifact.Custom {
+public interface Artifact extends Release.Payload<Artifact.Context> {
 
   /**
    * Stable artifact identity derived from the file coordinates, so equal
@@ -177,37 +176,6 @@ public sealed interface Artifact extends Release.Payload<Artifact.Context>
             .filter(other -> !(other instanceof Relation.Incompatible))
             .anyMatch(other -> conflict.coordinate().includes(other.coordinate())))) {
       throw new IllegalArgumentException("An incompatibility must not include another relation.");
-    }
-  }
-
-  /**
-   * An artifact whose images are described by a caller-supplied installer,
-   * which must not describe two images that collide.
-   */
-  sealed interface Custom extends Artifact
-      permits Mod.Custom, Plugin.Custom, Datapack.Custom, Behaviourpack.Custom, Modpack.Custom,
-      Resourcepack.Java.Custom, Resourcepack.Bedrock.Custom {
-
-    /**
-     * Returns the caller-supplied installer.
-     *
-     * @return typed content description strategy
-     */
-    @NonNull
-    Installer<Context> installer();
-
-    /**
-     * Delegates to the caller-supplied installer and validates its images.
-     *
-     * @param context selected target and the plate it is installed on
-     * @return validated immutable images
-     * @throws IOException when the installer fails to capture the content
-     */
-    @Override
-    default Set<Image<?>> install(@NonNull Context context) throws IOException {
-      Set<Image<?>> images = installer().install(context);
-      Image.validate(images);
-      return Set.copyOf(images);
     }
   }
 

@@ -1,11 +1,9 @@
 package cat.tabbie.sdk.minecraft.distribution;
 
-import java.util.Arrays;
-import java.util.List;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import cat.tabbie.sdk.addon.artifact.*;
+import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Version;
 import lombok.AccessLevel;
@@ -16,19 +14,7 @@ import lombok.experimental.FieldDefaults;
  * Java runtime families. Game versions and concrete runtime releases are
  * described and resolved separately from these stateless family values.
  */
-public sealed interface Java extends Distribution permits Java.Launcher, Java.Manager, Java.Of {
-
-  /**
-   * Enumerates every Java distribution value. A new family must be added here
-   * as well as to the {@code permits} clause.
-   *
-   * @return immutable distributions, in family then declaration order
-   */
-  static List<Java> values() {
-    return Stream.<Java[]>of(Of.values(), Launcher.Of.values(), Manager.Of.values())
-        .flatMap(Arrays::stream)
-        .toList();
-  }
+public interface Java extends Distribution {
 
   @Override
   default Set<Environment> environments() {
@@ -48,13 +34,14 @@ public sealed interface Java extends Distribution permits Java.Launcher, Java.Ma
   /**
    * Unmodified Java Edition runtimes.
    */
+  @Registered
   @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
   enum Of implements Java {
 
     /**
-     * Native
+     * Vanilla
      */
-    NATIVE("java:native");
+    VANILLA("java:vanilla");
 
     String id;
 
@@ -77,11 +64,12 @@ public sealed interface Java extends Distribution permits Java.Launcher, Java.Ma
   /**
    * Java loaders supporting mods on clients and dedicated servers.
    */
-  sealed interface Launcher extends Java permits Launcher.Of {
+  interface Launcher extends Java {
 
     /**
      * Canonical mod-loader values.
      */
+    @Registered
     @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
     enum Of implements Launcher {
 
@@ -133,11 +121,12 @@ public sealed interface Java extends Distribution permits Java.Launcher, Java.Ma
   /**
    * Server-only Java runtimes that load plugins.
    */
-  sealed interface Manager extends Java permits Manager.Of {
+  interface Manager extends Java {
 
     /**
      * Canonical plugin-server values.
      */
+    @Registered
     @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
     enum Of implements Manager {
 

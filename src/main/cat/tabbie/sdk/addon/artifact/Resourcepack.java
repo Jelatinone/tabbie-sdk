@@ -1,7 +1,7 @@
 package cat.tabbie.sdk.addon.artifact;
 
 import static cat.tabbie.sdk.minecraft.distribution.Bedrock.Manager.Of.ENDSTONE;
-import static cat.tabbie.sdk.minecraft.distribution.Bedrock.Of.NATIVE;
+import static cat.tabbie.sdk.minecraft.distribution.Bedrock.Of.VANILLA;
 
 import java.io.IOException;
 import java.util.List;
@@ -12,8 +12,8 @@ import java.util.stream.Stream;
 import cat.tabbie.sdk.album.repository.Archive;
 import cat.tabbie.sdk.album.revision.Chunk;
 import cat.tabbie.sdk.album.revision.Image;
-import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
+import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
 import cat.tabbie.sdk.platform.Address;
@@ -35,6 +35,7 @@ public sealed interface Resourcepack extends Artifact {
    * it. Servers deliver resource packs themselves, so their layouts accept
    * none.
    */
+  @Registered
   sealed interface Java extends Resourcepack {
 
     /**
@@ -66,38 +67,6 @@ public sealed interface Resourcepack extends Artifact {
         Artifact.validate(Java.class, coordinates, artifactName, labels, relations);
       }
     }
-
-    /**
-     * An artifact whose images are described by a caller-supplied installer.
-     *
-     * @param coordinates  exact provider file coordinates
-     * @param artifactName non-blank display name
-     * @param source       provider-owned content description
-     * @param labels       nonempty supported targets
-     * @param parity       multiplayer side parity
-     * @param relations    catalog relationships, one per coordinate
-     * @param installer    typed content description strategy
-     */
-    record Custom(
-        @NonNull Coordinate.File coordinates,
-        @NonNull String artifactName,
-        @NonNull Describe source,
-        @NonNull Set<Label> labels,
-        @NonNull Parity parity,
-        @NonNull Set<Relation> relations,
-        @NonNull Installer<Artifact.Context> installer) implements Java, Artifact.Custom {
-      /**
-       * Copies collections and checks local declarations without reading content.
-       *
-       * @throws IllegalArgumentException when declared support or relations are
-       *                                  invalid
-       */
-      public Custom {
-        labels = Set.copyOf(labels);
-        relations = Set.copyOf(relations);
-        Artifact.validate(Java.class, coordinates, artifactName, labels, relations);
-      }
-    }
   }
 
   /**
@@ -111,6 +80,7 @@ public sealed interface Resourcepack extends Artifact {
    * wherever the entry is, whatever other packs did to the list since; the
    * list itself stays.
    */
+  @Registered
   sealed interface Bedrock extends Resourcepack {
 
     /**
@@ -153,7 +123,7 @@ public sealed interface Resourcepack extends Artifact {
       /**
        * Places the pack beneath the directory of the context's model
        * accepting Bedrock resource packs, as the context's distribution
-       * loads it. Native Bedrock and Endstone load a pack from a folder, and
+       * loads it. Vanilla Bedrock and Endstone load a pack from a folder, and
        * send a World only the packs its
        * {@link #CONFIGURATION_JSON_FILE_NAME list} names: the pack is
        * unpacked into a directory of its own, named by its artifact identity,
@@ -185,8 +155,8 @@ public sealed interface Resourcepack extends Artifact {
         List<Archive.Entry> entries = context.archive().inspect(source(), context.plate());
         Descriptor.Manifest manifest = Descriptor.Manifest.in(entries);
         boolean listing = switch (context.label().distribution()) {
-          // Native Bedrock and Endstone load folders
-          case NATIVE, ENDSTONE -> true;
+          // Vanilla Bedrock and Endstone load folders
+          case VANILLA, ENDSTONE -> true;
           // The Nukkit family loads archives and sends every one
           default -> false;
         };
@@ -202,38 +172,6 @@ public sealed interface Resourcepack extends Artifact {
             .collect(Collectors.toUnmodifiableSet());
         return Stream.concat(files.stream(), listings.stream())
             .collect(Collectors.toUnmodifiableSet());
-      }
-    }
-
-    /**
-     * An artifact whose images are described by a caller-supplied installer.
-     *
-     * @param coordinates  exact provider file coordinates
-     * @param artifactName non-blank display name
-     * @param source       provider-owned content description
-     * @param labels       nonempty supported targets
-     * @param parity       multiplayer side parity
-     * @param relations    catalog relationships, one per coordinate
-     * @param installer    typed content description strategy
-     */
-    record Custom(
-        @NonNull Coordinate.File coordinates,
-        @NonNull String artifactName,
-        @NonNull Describe source,
-        @NonNull Set<Label> labels,
-        @NonNull Parity parity,
-        @NonNull Set<Relation> relations,
-        @NonNull Installer<Artifact.Context> installer) implements Bedrock, Artifact.Custom {
-      /**
-       * Copies collections and checks local declarations without reading content.
-       *
-       * @throws IllegalArgumentException when declared support or relations are
-       *                                  invalid
-       */
-      public Custom {
-        labels = Set.copyOf(labels);
-        relations = Set.copyOf(relations);
-        Artifact.validate(Bedrock.class, coordinates, artifactName, labels, relations);
       }
     }
   }

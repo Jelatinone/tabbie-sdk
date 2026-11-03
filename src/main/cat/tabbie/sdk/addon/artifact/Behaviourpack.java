@@ -11,6 +11,7 @@ import cat.tabbie.sdk.album.revision.Chunk;
 import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
+import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
 import cat.tabbie.sdk.minecraft.World;
@@ -22,7 +23,7 @@ import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
 
 /**
- * Native Bedrock behaviour content. Alternative Bedrock plugin servers do not
+ * Vanilla Bedrock behaviour content. Alternative Bedrock plugin servers do not
  * support this artifact family. A World loads a behaviour pack only once its
  * {@link #CONFIGURATION_JSON_FILE_NAME list} names the pack by the identity
  * its {@link Descriptor.Manifest manifest} declares, so installing one also
@@ -31,6 +32,7 @@ import lombok.NonNull;
  * entry is, whatever other packs did to the list since; the list itself
  * stays.
  */
+@Registered
 public sealed interface Behaviourpack extends Artifact, World.Content {
 
   /**
@@ -112,38 +114,6 @@ public sealed interface Behaviourpack extends Artifact, World.Content {
           .collect(Collectors.toUnmodifiableSet());
       return Stream.concat(files.stream(), listings.stream())
           .collect(Collectors.toUnmodifiableSet());
-    }
-  }
-
-  /**
-   * An artifact whose images are described by a caller-supplied installer.
-   *
-   * @param coordinates  exact provider file coordinates
-   * @param artifactName non-blank display name
-   * @param source       provider-owned content description
-   * @param labels       nonempty supported targets
-   * @param parity       multiplayer side parity
-   * @param relations    catalog relationships, one per coordinate
-   * @param installer    typed content description strategy
-   */
-  record Custom(
-      @NonNull Coordinate.File coordinates,
-      @NonNull String artifactName,
-      @NonNull Describe source,
-      @NonNull Set<Label> labels,
-      @NonNull Parity parity,
-      @NonNull Set<Relation> relations,
-      @NonNull Installer<Artifact.Context> installer) implements Behaviourpack, Artifact.Custom {
-    /**
-     * Copies collections and checks local declarations without reading content.
-     *
-     * @throws IllegalArgumentException when declared support or relations are
-     *                                  invalid
-     */
-    public Custom {
-      labels = Set.copyOf(labels);
-      relations = Set.copyOf(relations);
-      Artifact.validate(Behaviourpack.class, coordinates, artifactName, labels, relations);
     }
   }
 }

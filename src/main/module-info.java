@@ -33,8 +33,13 @@ module cat.tabbie.sdk {
   exports cat.tabbie.sdk.merchant;
   exports cat.tabbie.sdk.meta.action;
   exports cat.tabbie.sdk.meta.attribute;
+  exports cat.tabbie.sdk.meta.registry;
   exports cat.tabbie.sdk.minecraft;
   exports cat.tabbie.sdk.minecraft.distribution;
   exports cat.tabbie.sdk.platform;
   exports cat.tabbie.sdk.platform.layout;
+
+  uses cat.tabbie.sdk.meta.registry.Registration;
+
+  provides cat.tabbie.sdk.meta.registry.Registration with cat.tabbie.sdk.Registrations;
 }

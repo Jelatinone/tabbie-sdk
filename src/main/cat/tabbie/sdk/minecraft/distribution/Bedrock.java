@@ -1,15 +1,13 @@
 package cat.tabbie.sdk.minecraft.distribution;
 
-import java.util.Arrays;
-import java.util.List;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import cat.tabbie.sdk.addon.artifact.Artifact;
 import cat.tabbie.sdk.addon.artifact.Behaviourpack;
 import cat.tabbie.sdk.addon.artifact.Modpack;
 import cat.tabbie.sdk.addon.artifact.Plugin;
 import cat.tabbie.sdk.addon.artifact.Resourcepack;
+import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Version;
 import lombok.AccessLevel;
@@ -20,19 +18,7 @@ import lombok.experimental.FieldDefaults;
  * Bedrock runtime families. Game versions and concrete runtime releases are
  * described and resolved separately from these stateless family values.
  */
-public sealed interface Bedrock extends Distribution permits Bedrock.Of, Bedrock.Manager {
-
-  /**
-   * Enumerates every Bedrock distribution value. A new family must be added
-   * here as well as to the {@code permits} clause.
-   *
-   * @return immutable distributions, in family then declaration order
-   */
-  static List<Bedrock> values() {
-    return Stream.<Bedrock[]>of(Of.values(), Manager.Of.values())
-        .flatMap(Arrays::stream)
-        .toList();
-  }
+public interface Bedrock extends Distribution {
 
   /**
    * Supports clients and dedicated servers unless a family narrows it.
@@ -69,13 +55,14 @@ public sealed interface Bedrock extends Distribution permits Bedrock.Of, Bedrock
   /**
    * Unmodified Bedrock Edition runtimes.
    */
+  @Registered
   @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
   enum Of implements Bedrock {
 
     /**
-     * Native
+     * Vanilla
      */
-    NATIVE("bedrock:native");
+    VANILLA("bedrock:vanilla");
 
     String id;
 
@@ -92,7 +79,7 @@ public sealed interface Bedrock extends Distribution permits Bedrock.Of, Bedrock
     /**
      * Returns the stable, case-sensitive namespaced identifier.
      *
-     * @return identifier such as {@code bedrock:native}
+     * @return identifier such as {@code bedrock:vanilla}
      */
     @Override
     public String id() {
@@ -103,7 +90,7 @@ public sealed interface Bedrock extends Distribution permits Bedrock.Of, Bedrock
   /**
    * Server-only Bedrock runtimes that load plugins in place of behaviour packs.
    */
-  sealed interface Manager extends Bedrock permits Manager.Of {
+  interface Manager extends Bedrock {
 
     /**
      * Supports dedicated servers only.
@@ -128,6 +115,7 @@ public sealed interface Bedrock extends Distribution permits Bedrock.Of, Bedrock
     /**
      * Canonical plugin-server values.
      */
+    @Registered
     @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
     enum Of implements Manager {
 

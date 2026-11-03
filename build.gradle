@@ -48,9 +48,20 @@ tasks.named('compileProcessorJava') {
   modularity.inferModulePath = false
 }
 
+tasks.withType(ProcessResources).configureEach {
+  filesMatching('META-INF/tabbie/sdk.version') {
+    expand(version: project.version)
+  }
+}
+
 tasks.withType(Javadoc).configureEach {
   options.encoding = 'UTF-8'
   options.tags('apiNote:a:API Note:', 'implSpec:a:Implementation Requirements:', 'implNote:a:Implementation Note:')
+}
+
+tasks.named('javadoc') {
+  source(sourceSets.main.output.generatedSourcesDirs)
+  dependsOn(tasks.named('compileJava'))
 }
 
 check.dependsOn(javadoc)

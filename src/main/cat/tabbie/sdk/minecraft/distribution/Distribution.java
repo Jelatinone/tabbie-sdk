@@ -1,9 +1,6 @@
 package cat.tabbie.sdk.minecraft.distribution;
 
-import java.util.List;
-import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import cat.tabbie.sdk.addon.artifact.Artifact;
 import cat.tabbie.sdk.meta.attribute.Distributions;
@@ -18,36 +15,14 @@ import lombok.NonNull;
  * observations, and deployment belong to Core.
  *
  * <p>
- * The public values are the enum constants nested in {@link Java} and
- * {@link Bedrock}, such as {@link Java.Launcher.Of#FABRIC}, listed by
- * {@link #values()} and found by {@link #of(String)}; equality is identity.
+ * Distributions are enum constants, such as {@link Java.Launcher.Of#FABRIC},
+ * and equality is identity. An enum of them is
+ * {@link cat.tabbie.sdk.meta.registry.Registered registered} by the module
+ * declaring it, the SDK included, so a module can add distributions of its
+ * own; a {@link cat.tabbie.sdk.Registry} lists every registered one, and
+ * finds one by identifier.
  */
-public sealed interface Distribution permits Java, Bedrock {
-
-  /**
-   * Enumerates every canonical distribution value.
-   *
-   * @return immutable distributions, Java before Bedrock, in declaration order
-   */
-  static List<Distribution> values() {
-    return Stream.<Distribution>concat(
-        Java.values().stream(),
-        Bedrock.values().stream())
-        .toList();
-  }
-
-  /**
-   * Looks up a canonical distribution by its exact namespaced identifier, for
-   * example when reading a persisted lock.
-   *
-   * @param id case-sensitive identifier such as {@code java:fabric}
-   * @return matching distribution, or empty when unknown
-   */
-  static Optional<Distribution> of(@NonNull String id) {
-    return values().stream()
-        .filter(distribution -> distribution.id().equals(id))
-        .findFirst();
-  }
+public interface Distribution {
 
   /**
    * Checks that an identifier belongs to the Bedrock or Java namespaces, so a

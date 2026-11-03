@@ -4,8 +4,8 @@ import java.io.IOException;
 import java.util.Set;
 
 import cat.tabbie.sdk.album.revision.Image;
-import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
+import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
 import cat.tabbie.sdk.platform.Describe;
@@ -22,6 +22,7 @@ import lombok.NonNull;
  * Manifest formats that download their contents, such as Modrinth's or
  * CurseForge's, need an importer rather than this artifact.
  */
+@Registered
 public sealed interface Modpack extends Artifact {
 
   /**
@@ -66,38 +67,6 @@ public sealed interface Modpack extends Artifact {
     @Override
     public Set<Image<?>> install(@NonNull Artifact.Context context) throws IOException {
       return beneath(context).unpack(source());
-    }
-  }
-
-  /**
-   * An artifact whose images are described by a caller-supplied installer.
-   *
-   * @param coordinates  exact provider file coordinates
-   * @param artifactName non-blank display name
-   * @param source       provider-owned content description
-   * @param labels       nonempty supported targets
-   * @param parity       multiplayer side parity
-   * @param relations    catalog relationships, one per coordinate
-   * @param installer    typed content description strategy
-   */
-  record Custom(
-      @NonNull Coordinate.File coordinates,
-      @NonNull String artifactName,
-      @NonNull Describe source,
-      @NonNull Set<Label> labels,
-      @NonNull Parity parity,
-      @NonNull Set<Relation> relations,
-      @NonNull Installer<Artifact.Context> installer) implements Modpack, Artifact.Custom {
-    /**
-     * Copies collections and checks local declarations without reading content.
-     *
-     * @throws IllegalArgumentException when declared support or relations are
-     *                                  invalid
-     */
-    public Custom {
-      labels = Set.copyOf(labels);
-      relations = Set.copyOf(relations);
-      Artifact.validate(Modpack.class, coordinates, artifactName, labels, relations);
     }
   }
 }

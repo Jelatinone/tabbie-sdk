@@ -5,8 +5,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.album.revision.Image;
-import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
+import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
 import cat.tabbie.sdk.minecraft.World;
@@ -19,6 +19,7 @@ import lombok.NonNull;
  * Worlds its context names. Constructors do not inspect pack metadata or
  * discover world directories.
  */
+@Registered
 public sealed interface Datapack extends Artifact, World.Content {
 
   /**
@@ -70,38 +71,6 @@ public sealed interface Datapack extends Artifact, World.Content {
               .map(World::namespace)
               .collect(Collectors.toUnmodifiableSet()))
           .file(source());
-    }
-  }
-
-  /**
-   * An artifact whose images are described by a caller-supplied installer.
-   *
-   * @param coordinates  exact provider file coordinates
-   * @param artifactName non-blank display name
-   * @param source       provider-owned content description
-   * @param labels       nonempty supported targets
-   * @param parity       multiplayer side parity
-   * @param relations    catalog relationships, one per coordinate
-   * @param installer    typed content description strategy
-   */
-  record Custom(
-      @NonNull Coordinate.File coordinates,
-      @NonNull String artifactName,
-      @NonNull Describe source,
-      @NonNull Set<Label> labels,
-      @NonNull Parity parity,
-      @NonNull Set<Relation> relations,
-      @NonNull Installer<Artifact.Context> installer) implements Datapack, Artifact.Custom {
-    /**
-     * Copies collections and checks local declarations without reading content.
-     *
-     * @throws IllegalArgumentException when declared support or relations are
-     *                                  invalid
-     */
-    public Custom {
-      labels = Set.copyOf(labels);
-      relations = Set.copyOf(relations);
-      Artifact.validate(Datapack.class, coordinates, artifactName, labels, relations);
     }
   }
 }
