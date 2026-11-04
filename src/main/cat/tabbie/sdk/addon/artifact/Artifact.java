@@ -1,6 +1,7 @@
 package cat.tabbie.sdk.addon.artifact;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -10,9 +11,14 @@ import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.merchant.Release;
+import cat.tabbie.sdk.meta.action.Install;
+import cat.tabbie.sdk.meta.registry.Contributions;
+import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
 import cat.tabbie.sdk.minecraft.World;
+import cat.tabbie.sdk.minecraft.distribution.Distribution;
+import cat.tabbie.sdk.minecraft.distribution.Product;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Platform;
 import cat.tabbie.sdk.platform.layout.Layout;
@@ -285,6 +291,121 @@ public interface Artifact extends Release.Payload<Artifact.Context> {
           @NonNull Layout.Directory model,
           @NonNull Plate plate) {
         this(label, platform, model, plate, Set.of());
+      }
+    }
+  }
+
+  /**
+   * Every content family the loaded modules register, and the installs they
+   * contribute, against the distributions targets are named in. What a
+   * distribution supports is derived from the installs: a family is supported
+   * where one of its installs applies.
+   *
+   * @param distributions the distributions targets are named in
+   * @param families      every registered content family
+   * @param installs      every contributed install, and the precedence
+   *                      between them
+   */
+  record Registry(
+      @NonNull Distribution.Registry distributions,
+      @NonNull Set<Class<? extends Artifact>> families,
+      @NonNull Contributions<Install.Signature> installs) {
+
+    /**
+     * Copies the families.
+     */
+    public Registry {
+      families = Set.copyOf(families);
+    }
+
+    /**
+     * Whether a distribution supports a family in an environment: whether an
+     * install of the family applies to the distribution there, in some
+     * version on some platform. Which install would be chosen does not matter
+     * here, only that one applies.
+     *
+     * @param distribution distribution of a target
+     * @param environment  environment of the target
+     * @param family       family or concrete type of an artifact
+     * @return whether the target can install it
+     */
+    public boolean supports(
+        @NonNull Distribution distribution,
+        @NonNull Environment environment,
+        @NonNull Class<? extends Artifact> family) {
+      Set<String> names = distributions.names(distribution);
+      return installs.contributions().stream()
+          .map(Contributions.Contributed::contribution)
+          .filter(install -> family.isAssignableFrom(install.subject()) || install.subject().isAssignableFrom(family))
+          .anyMatch(install -> install.conditions().distributions().appliesTo(names)
+              && install.conditions().environments().appliesTo(environment));
+    }
+
+    /**
+     * Installs an artifact on a target, through the install that wins by
+     * precedence, acting where its closure says, and checks the images it
+     * describes.
+     *
+     * @param artifact artifact to install
+     * @param context  target, model, plate and Worlds the install draws on
+     * @return validated immutable images
+     * @throws IOException              as the install throws
+     * @throws IllegalArgumentException when no install of the artifact applies
+     *                                  to the target, which core rules out
+     *                                  while resolving
+     * @throws IllegalStateException    when installs
+     *                                  {@link Contributions#clashes() clash}
+     *                                  at the target, which core refuses when
+     *                                  it starts
+     */
+    public Set<Image<?>> install(@NonNull Artifact artifact, @NonNull Context context) throws IOException {
+      Label label = context.label();
+      List<Contributions.Contributed<Install.Signature>> chosen = installs.choose(artifact.getClass(),
+          distributions.target(label, context.platform()));
+      if (chosen.isEmpty()) {
+        throw new IllegalArgumentException(String.format("No install of %s applies to %s.",
+            artifact.getClass().getName(), label.canonical()));
+      }
+      if (chosen.size() > 1) {
+        throw new IllegalStateException(String.format("%s all install %s for %s, and none is narrower than the "
+            + "others nor from a module reading theirs.", chosen.stream()
+                .map(Contributions.Contributed::describe)
+                .toList(), artifact.getClass().getName(), label.canonical()));
+      }
+      var install = chosen.getFirst().contribution();
+      Set<Image<?>> images = install.call().install(artifact, Install.Context.of(artifact, context,
+          install.closure()));
+      Image.validate(images);
+      return Set.copyOf(images);
+    }
+
+    /**
+     * Checks a release's layout places everything its distribution supports
+     * in the release's environment: each such family in exactly one directory,
+     * and Worlds in exactly one when a family belongs to Worlds. The layout
+     * may accept more, for content installed anyway.
+     *
+     * @param build release to check
+     * @throws IllegalArgumentException when a supported family, or Worlds,
+     *                                  have no accepting directory or several
+     */
+    public void check(@NonNull Product.Build build) {
+      List<Class<? extends Artifact>> supported = families.stream()
+          .filter(family -> supports(build.distribution(), build.environment(), family))
+          .toList();
+      // Content that belongs to a World installs into Worlds, through their own layouts
+      supported.stream()
+          .filter(family -> !World.Content.class.isAssignableFrom(family))
+          .filter(family -> build.layout().find(family).directories().size() != 1)
+          .findFirst()
+          .ifPresent(family -> {
+            throw new IllegalArgumentException(String.format("%s supports %s, so its layout accepts it in exactly "
+                + "one directory.", build.coordinates().canonical(), family.getName()));
+          });
+      if (supported.stream().anyMatch(World.Content.class::isAssignableFrom)
+          && build.layout().find(World.class).directories().size() != 1) {
+        throw new IllegalArgumentException(String.format("%s supports content for Worlds, so its layout accepts "
+            + "Worlds in exactly one directory.", build.coordinates().canonical()));
       }
     }
   }

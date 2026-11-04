@@ -7,6 +7,7 @@ import java.util.Set;
 import cat.tabbie.sdk.merchant.Provider;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.merchant.Release;
+import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.World;
 import cat.tabbie.sdk.platform.Package;
@@ -112,7 +113,9 @@ public interface Product {
   /**
    * A published release of one distribution: its byproducts; the system
    * packages they require; every target it serves; and the layout of a Cat
-   * running it, as its provider declares it. The release's content is the
+   * running it, as its provider declares it. A release serves one
+   * environment, so a client build and a server build of a distribution are
+   * separate releases, on channels of their own. The release's content is the
    * same whichever of its targets a Cat selects, so one layout serves them
    * all. Where content goes can change between releases, so a Cat moving to
    * another release mounts that release's layout instead.
@@ -120,8 +123,11 @@ public interface Product {
    * <p>
    * A layout cannot name a Cat's Worlds, since they are named by the Cat and
    * there may be many. It declares the directory that accepts
-   * {@link World Worlds} instead. Each World declares its own layout, saying
-   * where {@link World.Content content belonging to it} goes.
+   * {@link World Worlds} instead, where core mounts each World's namespace.
+   * Whether the layout places everything the distribution supports depends on
+   * the installs core has loaded, so an
+   * {@link cat.tabbie.sdk.addon.artifact.Artifact.Registry}
+   * {@link cat.tabbie.sdk.addon.artifact.Artifact.Registry#check checks} it.
    *
    * @param coordinates   exact release coordinates
    * @param releaseName   non-blank display name
@@ -132,7 +138,7 @@ public interface Product {
    * @param packages      system packages the byproducts require
    * @param distribution  distribution the release is for
    * @param labels        nonempty targets the release serves, such as every
-   *                      game version it runs
+   *                      game version it runs, all of one environment
    * @param layout        layout of a Cat running this release, declared from
    *                      the root
    */
@@ -150,23 +156,20 @@ public interface Product {
     /**
      * Copies the byproducts, packages and labels, then checks shared release
      * invariants, that every byproduct is a distinct file of this release,
-     * that the labels are of its distribution, that the byproducts serve
-     * exactly the labels, and so only its distribution, and that the layout
-     * is declared from the root. Each family the distribution supports must
-     * be accepted in exactly one directory, so nothing a Cat is offered fails
-     * to place: content that belongs to a World installs into Worlds, so the
-     * layout must then accept Worlds in exactly one directory; any other
-     * content, the layout must accept itself. The layout may accept more, for
-     * content installed anyway.
+     * that the labels are of its distribution and of one environment, that
+     * the byproducts serve exactly the labels, and so only its distribution,
+     * that the layout is declared from the root, and that it accepts each
+     * byproduct in exactly one directory, where the byproduct installs and
+     * {@link Byproduct#location} finds it.
      *
      * @throws IllegalArgumentException when publication invariants are violated,
      *                                  no label is given, a label is of
-     *                                  another distribution, a byproduct
-     *                                  serves a target that is not a label, a
-     *                                  label is served by no byproduct, the
-     *                                  layout is not declared from the root,
-     *                                  or a supported family, or Worlds, have
-     *                                  no accepting directory or several
+     *                                  another distribution or environment, a
+     *                                  byproduct serves a target that is not a
+     *                                  label, a label is served by no
+     *                                  byproduct, the layout is not declared
+     *                                  from the root, or a byproduct has no
+     *                                  accepting directory or several
      */
     public Build {
       content = Set.copyOf(content);
@@ -179,6 +182,10 @@ public interface Product {
       }
       if (labels.stream().anyMatch(label -> !label.distribution().equals(distribution))) {
         throw new IllegalArgumentException("Every label of a release must be of its distribution.");
+      }
+      if (labels.stream().map(Label::environment).distinct().count() != 1) {
+        throw new IllegalArgumentException("Every label of a release must be of one environment; a client build and "
+            + "a server build are separate releases.");
       }
       Set<Label> served = labels;
       Set<Byproduct> byproducts = content;
@@ -194,18 +201,19 @@ public interface Product {
       if (!layout.address().isRoot()) {
         throw new IllegalArgumentException("A layout is declared from the root.");
       }
-      // Content that belongs to a World installs into Worlds, through their own layouts
-      if (distribution.capabilities().stream()
-          .filter(family -> !World.Content.class.isAssignableFrom(family))
-          .anyMatch(family -> layout.find(family).directories().size() != 1)) {
-        throw new IllegalArgumentException(
-            "Every family a release's distribution supports needs exactly one accepting directory.");
+      if (byproducts.stream().anyMatch(byproduct -> layout.find(byproduct.getClass()).directories().size() != 1)) {
+        throw new IllegalArgumentException("Every byproduct of a release needs exactly one directory of its layout "
+            + "accepting it.");
       }
-      if (distribution.capabilities().stream().anyMatch(World.Content.class::isAssignableFrom)
-          && layout.find(World.class).directories().size() != 1) {
-        throw new IllegalArgumentException(
-            "A release with content for Worlds needs exactly one directory accepting them.");
-      }
+    }
+
+    /**
+     * Returns the environment the release serves, which every label shares.
+     *
+     * @return environment of the labels
+     */
+    public Environment environment() {
+      return labels.iterator().next().environment();
     }
   }
 }
