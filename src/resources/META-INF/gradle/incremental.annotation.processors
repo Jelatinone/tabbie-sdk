@@ -1,2 +1,2 @@
-cat.tabbie.sdk.meta.action.Action$Processor,aggregating
-cat.tabbie.sdk.meta.registry.Registered$Processor,aggregating
+cat.tabbie.sdk.meta.processor.ActionProcessor,aggregating
+cat.tabbie.sdk.meta.processor.RegistrationProcessor,aggregating

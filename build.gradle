@@ -139,7 +139,7 @@ tasks.register('centralBundle', Zip) {
 spotless {
   java {
     target 'src/**/*.java'
-    targetExclude 'src/**/external/**/*.java'
+    targetExclude 'src/**/external/**/*.java', 'src/resources/**/*.java'
 
     toggleOffOn()
     removeUnusedImports()

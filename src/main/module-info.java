@@ -6,11 +6,12 @@
  * its descriptions belongs to the consumer.
  *
  * <p>
- * Every package is exported. A module declares what it contributes with the
- * {@code meta} actions and attributes, and puts the SDK on its processor path
- * to have those declarations checked while it compiles by
- * {@code Action.Processor}, as the SDK's own are. The compiler the processor
- * runs in is needed only then.
+ * Every package is exported but {@code meta.processor}. A module declares what
+ * it contributes with the {@code meta} actions and attributes, and puts the SDK
+ * on its processor path to have those declarations checked, and its
+ * registration generated, while it compiles, as the SDK's own are. The
+ * compiler the processors run in is needed only then; the registry reads the
+ * same annotations at run time.
  *
  * <p>
  * Lombok is a compile-time dependency only; consumers need no Lombok at
