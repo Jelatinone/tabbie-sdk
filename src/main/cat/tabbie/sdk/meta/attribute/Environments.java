@@ -17,7 +17,7 @@ import lombok.NonNull;
  * The environments an action applies to, such as only dedicated servers.
  */
 @Documented
-@Retention(RetentionPolicy.CLASS)
+@Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD, ElementType.TYPE})
 public @interface Environments {
 
@@ -33,7 +33,7 @@ public @interface Environments {
    *
    * @param environments environments, empty for every environment
    */
-  record Meta(@NonNull Set<Environment> environments) {
+  record Meta(@NonNull Set<Environment> environments) implements Condition {
 
     /**
      * Every environment, as an action without the attribute applies to.
@@ -71,5 +71,51 @@ public @interface Environments {
     public boolean includes(@NonNull Optional<Environment> environment) {
       return environments.isEmpty() || environment.filter(environments::contains).isPresent();
     }
+
+    /**
+     * Whether a target's environment is among these.
+     *
+     * @param target the target a contribution may be chosen for
+     * @return whether this applies to every environment, or names the
+     *         target's
+     */
+    @Override
+    public boolean appliesTo(@NonNull Conditions.Target target) {
+      return appliesTo(target.environment());
+    }
+
+    /**
+     * Whether an environment is among these.
+     *
+     * @param environment an environment
+     * @return whether this applies to every environment, or names it
+     */
+    public boolean appliesTo(@NonNull Environment environment) {
+      return environments.isEmpty() || environments.contains(environment);
+    }
+
+    /**
+     * Whether these environments all lie among others, so these are no wider.
+     *
+     * @param other environments to compare with
+     * @return whether the other applies to every environment, or names every
+     *         one of these
+     */
+    public boolean within(@NonNull Meta other) {
+      return other.environments.isEmpty()
+          || !environments.isEmpty() && other.environments.containsAll(environments);
+    }
+
+    /**
+     * Whether these environments and others share an environment.
+     *
+     * @param other environments to compare with
+     * @return whether both apply to some environment
+     */
+    public boolean overlaps(@NonNull Meta other) {
+      return Arrays.stream(Environment.values()).anyMatch(environment -> appliesTo(environment)
+          && other.appliesTo(environment));
+    }
+
   }
 }
