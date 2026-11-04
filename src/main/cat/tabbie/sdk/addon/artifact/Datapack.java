@@ -1,11 +1,14 @@
 package cat.tabbie.sdk.addon.artifact;
 
+import static cat.tabbie.sdk.meta.action.Closure.NAMESPACES;
+
 import java.io.IOException;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
+import cat.tabbie.sdk.meta.action.Install;
+import cat.tabbie.sdk.meta.attribute.Distributions;
 import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
@@ -20,10 +23,28 @@ import lombok.NonNull;
  * discover world directories.
  */
 @Registered
+@Distributions("java:base")
 public sealed interface Datapack extends Artifact, World.Content {
 
   /**
-   * An artifact placed as one file in each World of its context.
+   * Places the datapack as one file named after its source in each World of
+   * the context, in the World's directory accepting datapacks, on every Java
+   * distribution. The game loads a zipped datapack as it is, and unpacking
+   * one wrapped in a folder of its own would bury its {@code pack.mcmeta} too
+   * deep to load.
+   *
+   * @param context the work, and where datapacks go in every World
+   * @return validated immutable images
+   * @throws IOException when the datapack cannot be captured
+   * @throws Violation   when the model does not allow the file in a World
+   */
+  @Install(NAMESPACES)
+  default Set<Image<?>> installNamespaces(@NonNull Install.Context context) throws IOException {
+    return context.place().file(source());
+  }
+
+  /**
+   * A datapack as its provider describes it.
    *
    * @param coordinates  exact provider file coordinates
    * @param artifactName non-blank display name
@@ -48,29 +69,7 @@ public sealed interface Datapack extends Artifact, World.Content {
     public Default {
       labels = Set.copyOf(labels);
       relations = Set.copyOf(relations);
-      Artifact.validate(Datapack.class, coordinates, artifactName, labels, relations);
-    }
-
-    /**
-     * Places the datapack as one file named after its source in each World of
-     * the context, in the World's directory accepting datapacks. The game
-     * loads a zipped datapack as it is, and unpacking one wrapped in a folder
-     * of its own would bury its {@code pack.mcmeta} too deep to load.
-     *
-     * @param context selected target, the plate it is installed on, and the
-     *                Worlds it applies to
-     * @return validated immutable images
-     * @throws IOException        when the datapack cannot be captured
-     * @throws Violation.Unplaced when the context names no World, or a World
-     *                            has no directory accepting datapacks
-     */
-    @Override
-    public Set<Image<?>> install(@NonNull Artifact.Context context) throws IOException {
-      return beneath(context)
-          .spread(context.worlds().stream()
-              .map(World::namespace)
-              .collect(Collectors.toUnmodifiableSet()))
-          .file(source());
+      Artifact.validate(coordinates, artifactName, labels, relations);
     }
   }
 }

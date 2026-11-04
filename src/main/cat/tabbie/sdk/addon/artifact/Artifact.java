@@ -25,12 +25,15 @@ import cat.tabbie.sdk.platform.layout.Layout;
 import lombok.NonNull;
 
 /**
- * Provider-described content and its logical placement. Installers capture
- * bytes from the artifact's source into the stash of the plate it is
- * installed on and describe changes without writing to the Cat's files.
- * Sources remain caller-owned. File coordinates
- * identify the exact provider-scoped payload; relations name catalog
- * coordinates at any level, matched by {@link Coordinate#includes(Coordinate)}.
+ * Provider-described content. How it is placed is contributed for its family
+ * by {@link cat.tabbie.sdk.meta.action.Install} methods, which capture bytes
+ * from the artifact's source into the stash of the plate it is installed on
+ * and describe changes without writing to the Cat's files; a
+ * {@link Registry} chooses the install that applies to a target, and what a
+ * distribution supports follows from them. Sources remain
+ * caller-owned. File coordinates identify the exact provider-scoped payload;
+ * relations name catalog coordinates at any level, matched by
+ * {@link Coordinate#includes(Coordinate)}.
  */
 public interface Artifact extends Release.Payload {
 

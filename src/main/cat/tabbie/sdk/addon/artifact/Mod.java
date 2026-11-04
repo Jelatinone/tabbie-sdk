@@ -1,12 +1,17 @@
 package cat.tabbie.sdk.addon.artifact;
 
+import java.io.IOException;
 import java.util.Set;
 
+import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
+import cat.tabbie.sdk.meta.action.Install;
+import cat.tabbie.sdk.meta.attribute.Distributions;
 import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
 import cat.tabbie.sdk.platform.Describe;
+import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
 
 /**
@@ -14,10 +19,27 @@ import lombok.NonNull;
  * distribution; support for one loader does not imply support for another.
  */
 @Registered
+@Distributions("java:launcher")
 public sealed interface Mod extends Artifact {
 
   /**
-   * An artifact placed as one file by the shared installer.
+   * Places the mod as one file named after its source, in the directory of
+   * the Cat's model accepting mods, on every Java mod loader.
+   *
+   * @param context the work, and where mods go in the Cat
+   * @return validated immutable images
+   * @throws IOException when the mod cannot be captured
+   * @throws Violation   when the model does not allow the file, such as
+   *                     {@link Violation.Unplaced} when no directory accepts
+   *                     mods
+   */
+  @Install
+  default Set<Image<?>> installRoot(@NonNull Install.Context context) throws IOException {
+    return context.place().file(source());
+  }
+
+  /**
+   * A mod as its provider describes it.
    *
    * @param coordinates  exact provider file coordinates
    * @param artifactName non-blank display name
@@ -42,7 +64,7 @@ public sealed interface Mod extends Artifact {
     public Default {
       labels = Set.copyOf(labels);
       relations = Set.copyOf(relations);
-      Artifact.validate(Mod.class, coordinates, artifactName, labels, relations);
+      Artifact.validate(coordinates, artifactName, labels, relations);
     }
   }
 }
