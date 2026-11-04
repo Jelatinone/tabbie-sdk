@@ -106,11 +106,11 @@ public interface Release<Content> {
   /**
    * Content published as an exact file of a release, such as a mod jar, plugin
    * jar, resource pack archive, or server jar. Content types that correspond to
-   * provider files implement this so releases can check payload ownership.
-   *
-   * @param <Contextual> accepted installation context
+   * provider files implement this so releases can check payload ownership. How
+   * a payload installs is its type's to say: a byproduct installs itself, and
+   * an artifact through the installs contributed for its family.
    */
-  interface Payload<Contextual extends Installer.Context> extends Installer<Contextual> {
+  interface Payload {
 
     /**
      * Returns provider coordinates for this exact file.
@@ -119,18 +119,6 @@ public interface Release<Content> {
      */
     @NonNull
     Provider.Coordinate.File coordinates();
-
-    /**
-     * Starts installing this payload, beneath the directory of the context's
-     * model that accepts its type, or, once
-     * {@linkplain Install#spread(Set) spread}, across several directories.
-     *
-     * @param context context the install runs in
-     * @return install of this payload's type
-     */
-    default Install beneath(@NonNull Contextual context) {
-      return new Install(context, getClass());
-    }
 
     /**
      * Checks that a release's payloads are each a distinct file of that release.
@@ -144,7 +132,7 @@ public interface Release<Content> {
      *                                  share file coordinates
      * @throws NullPointerException     when the set contains null
      */
-    static <P extends Payload<?>> void validate(
+    static <P extends Payload> void validate(
         @NonNull Provider.Coordinate.Build coordinates,
         @NonNull Set<P> payloads) {
       Set<P> copy = Set.copyOf(payloads);

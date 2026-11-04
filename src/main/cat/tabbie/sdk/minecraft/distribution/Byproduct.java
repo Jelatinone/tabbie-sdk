@@ -33,7 +33,7 @@ import lombok.NonNull;
  * Implementations are records whose compact constructors copy their
  * collections and call {@link #validate(String, Set)}.
  */
-public sealed interface Byproduct extends Release.Payload<Installer.Context> {
+public sealed interface Byproduct extends Release.Payload, Installer<Installer.Context> {
 
   /**
    * Stable byproduct identity derived from the file coordinates, so equal
@@ -106,7 +106,7 @@ public sealed interface Byproduct extends Release.Payload<Installer.Context> {
    */
   @Override
   default Set<Image<?>> install(@NonNull Installer.Context context) throws IOException {
-    return beneath(context).file(source());
+    return new Installer.Install(context, getClass()).file(source());
   }
 
   /**

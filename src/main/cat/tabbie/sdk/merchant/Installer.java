@@ -112,135 +112,82 @@ public interface Installer<Contextual extends Installer.Context> {
   }
 
   /**
-   * One install of a type of content: its context, and the type that says
-   * where the content goes. Its place is the directory of the context's model
-   * that accepts the type, found when the content is placed;
-   * {@link #spread(Set)} places the content across several directories
-   * instead. Each call captures content into the plate's stash and describes
-   * the images that place it, at the place or beneath directories named
-   * inside it.
+   * One install of a type of content: its context, the type that says where
+   * the content goes, and the places it goes. Each place is a directory of the
+   * context's model accepting the type, found when the install is made, so
+   * content with nowhere to go is refused before anything is read. Content of
+   * the Cat has one place, the model's accepting directory; content of Worlds
+   * has one beneath each World's namespace. Each call captures content into
+   * the plate's stash once, and describes the images that place it at every
+   * place, or beneath directories named inside each.
    *
    * @param context context the install runs in
    * @param type    type of the content, which says where it goes
+   * @param places  directories of the context's model accepting the type, at
+   *                least one
    */
-  record Install(@NonNull Context context, @NonNull Class<?> type) {
+  record Install(@NonNull Context context, @NonNull Class<?> type, @NonNull Set<Layout.Directory> places) {
 
     /**
-     * Places the source as one file named after it. The model is checked
-     * before the source is read, so content that cannot be placed is never
-     * captured.
+     * Copies the places, and checks there is at least one and each accepts
+     * the type.
      *
-     * @param source content to place
-     * @param into   names of the directories beneath the place the file goes
-     *               in, none for the place itself
-     * @return image creating the file
-     * @throws IOException when the source cannot be captured
-     * @throws Violation   when no directory accepts the type, several do, or
-     *                     the model does not allow the file there
+     * @throws IllegalArgumentException when there is no place, or a place does
+     *                                  not accept the type
      */
-    public Set<Image<?>> file(@NonNull Describe source, @NonNull String... into) throws IOException {
-      Layout.Directory place = place();
-      Address file = Address.of(into).resolve(source.fileName());
-      place.require(file);
-      return Set.of(place.create(file, context.plate().capture(source)));
+    public Install {
+      places = Set.copyOf(places);
+      if (places.isEmpty()) {
+        throw new IllegalArgumentException("An install places content in at least one directory.");
+      }
+      if (places.stream().anyMatch(place -> !place.accepts(type))) {
+        throw new IllegalArgumentException("An install places content only in directories accepting its type.");
+      }
     }
 
     /**
-     * Unpacks an archive at the place within the context's limits.
+     * Creates an install placing content of the Cat, in the directory of the
+     * context's model accepting the type.
      *
-     * @param archive archive to unpack
-     * @param into    names of the directories beneath the place the archive
-     *                is unpacked into, none for the place itself
-     * @return images creating the archive's files
-     * @throws IOException when the archive cannot be captured or is refused
-     * @throws Violation   when no directory accepts the type, several do, or
-     *                     the model does not allow a file where the archive
-     *                     puts it
+     * @param context context the install runs in
+     * @param type    type of the content, which says where it goes
+     * @throws Violation.Unplaced  when no directory accepts the type
+     * @throws Violation.Ambiguous when several directories accept it
      */
-    public Set<Image<?>> unpack(@NonNull Describe archive, @NonNull String... into) throws IOException {
-      return context.archive().unpack(archive, place(), Address.of(into), context.plate());
+    public Install(@NonNull Context context, @NonNull Class<?> type) {
+      this(context, type, Set.of(context.model().find(type).unique()));
     }
 
     /**
-     * Unpacks the inspected entries of an archive that lie beneath a folder of
-     * it at the place, each at its path relative to that folder, so content
-     * wrapped in a folder of its own unpacks as if it were not.
+     * Resolves an install placing content beneath each of several directories
+     * of the context's model, in the directory beneath each accepting the
+     * type, such as the datapacks directory of each World's namespace.
      *
-     * @param entries file entries of one archive, as its inspection found them
-     * @param from    folder of the archive to unpack from, the root address for
-     *                the whole archive
-     * @param into    names of the directories beneath the place the files are
-     *                unpacked into, none for the place itself
-     * @return images creating the files
-     * @throws IOException              when the archive cannot be reopened or
-     *                                  is refused
-     * @throws Violation                when no directory accepts the type,
-     *                                  several do, or the model does not allow
-     *                                  a file where it is unpacked
-     * @throws IllegalArgumentException when no entry lies beneath the folder
-     */
-    public Set<Image<?>> unpack(@NonNull List<Archive.Entry> entries, @NonNull Address from,
-        @NonNull String... into) throws IOException {
-      return context.archive().unpack(entries, from, place(), Set.of(Address.of(into)), context.plate());
-    }
-
-    /**
-     * Spreads this install across directories of the context's model, placing
-     * the content in each at the directory beneath it that accepts the type,
-     * such as each World an addon applies to.
-     *
-     * @param directories directories of the context's model to spread across
-     * @return install across the directories
-     * @throws Violation.Unplaced  when no directory is given, or one accepts
-     *                             the type nowhere
+     * @param context context the install runs in
+     * @param type    type of the content, which says where it goes
+     * @param roots   directories of the context's model to place beneath
+     * @return install placing the content beneath every root
+     * @throws Violation.Unplaced  when no root is given, or one accepts the
+     *                             type nowhere
      * @throws Violation.Ambiguous when one accepts the type in several
      *                             directories
      */
-    @NonNull
-    public Spread spread(@NonNull Set<Layout.Directory> directories) {
-      if (directories.isEmpty()) {
+    public static Install resolve(
+        @NonNull Context context,
+        @NonNull Class<?> type,
+        @NonNull Set<Layout.Directory> roots) {
+      if (roots.isEmpty()) {
         throw new Violation.Unplaced(type);
       }
-      return new Spread(context, directories.stream()
-          .map(directory -> directory.find(type).unique())
+      return new Install(context, type, roots.stream()
+          .map(root -> root.find(type).unique())
           .collect(Collectors.toUnmodifiableSet()));
     }
 
     /**
-     * Finds the directory of the context's model that accepts the type.
-     */
-    private Layout.Directory place() {
-      return context.model().find(type).unique();
-    }
-  }
-
-  /**
-   * An install spread over several places of its context's model at once.
-   * Each call captures content into the plate's stash once and describes the
-   * images that place it at every place, or beneath directories named inside
-   * each.
-   *
-   * @param context context the install runs in
-   * @param places  directories of the context's model to place the content
-   *                at, at least one
-   */
-  record Spread(@NonNull Context context, @NonNull Set<Layout.Directory> places) {
-
-    /**
-     * Copies the places and checks there is at least one.
-     *
-     * @throws IllegalArgumentException when there is no place
-     */
-    public Spread {
-      places = Set.copyOf(places);
-      if (places.isEmpty()) {
-        throw new IllegalArgumentException("An install spreads over at least one place.");
-      }
-    }
-
-    /**
      * Places the source as one file named after it at every place. The model
-     * is checked at every place before the source is read.
+     * is checked at every place before the source is read, so content that
+     * cannot be placed is never captured.
      *
      * @param source content to place
      * @param into   names of the directories beneath each place the file goes
@@ -271,15 +218,14 @@ public interface Installer<Contextual extends Installer.Context> {
      *                     archive puts it
      */
     public Set<Image<?>> unpack(@NonNull Describe archive, @NonNull String... into) throws IOException {
-      return context.archive().unpack(archive, context.model(), places.stream()
-          .map(place -> place.address().resolve(into))
-          .collect(Collectors.toUnmodifiableSet()), context.plate());
+      return context.archive().unpack(archive, context.model(), destinations(into), context.plate());
     }
 
     /**
      * Unpacks the inspected entries of an archive that lie beneath a folder of
-     * it at every place, each at its path relative to that folder, capturing
-     * each file once.
+     * it at every place, each at its path relative to that folder, so content
+     * wrapped in a folder of its own unpacks as if it were not. Each file is
+     * captured once.
      *
      * @param entries file entries of one archive, as its inspection found them
      * @param from    folder of the archive to unpack from, the root address for
@@ -293,11 +239,20 @@ public interface Installer<Contextual extends Installer.Context> {
      *                                  where it is unpacked
      * @throws IllegalArgumentException when no entry lies beneath the folder
      */
-    public Set<Image<?>> unpack(@NonNull List<Archive.Entry> entries, @NonNull Address from,
+    public Set<Image<?>> unpack(
+        @NonNull List<Archive.Entry> entries,
+        @NonNull Address from,
         @NonNull String... into) throws IOException {
-      return context.archive().unpack(entries, from, context.model(), places.stream()
+      return context.archive().unpack(entries, from, context.model(), destinations(into), context.plate());
+    }
+
+    /**
+     * Addresses beneath every place, relative to the model's root.
+     */
+    private Set<Address> destinations(String... into) {
+      return places.stream()
           .map(place -> place.address().resolve(into))
-          .collect(Collectors.toUnmodifiableSet()), context.plate());
+          .collect(Collectors.toUnmodifiableSet());
     }
   }
 }

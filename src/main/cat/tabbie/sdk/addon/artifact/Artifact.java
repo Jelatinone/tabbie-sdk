@@ -22,7 +22,6 @@ import cat.tabbie.sdk.minecraft.distribution.Product;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Platform;
 import cat.tabbie.sdk.platform.layout.Layout;
-import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
 
 /**
@@ -33,7 +32,7 @@ import lombok.NonNull;
  * identify the exact provider-scoped payload; relations name catalog
  * coordinates at any level, matched by {@link Coordinate#includes(Coordinate)}.
  */
-public interface Artifact extends Release.Payload<Artifact.Context> {
+public interface Artifact extends Release.Payload {
 
   /**
    * Stable artifact identity derived from the file coordinates, so equal
@@ -119,29 +118,6 @@ public interface Artifact extends Release.Payload<Artifact.Context> {
         .filter(relation -> relation.getClass() == kind)
         .map(Relation::coordinate)
         .collect(Collectors.toUnmodifiableSet());
-  }
-
-  /**
-   * Places the source as one file, named after it, in the directory of the
-   * context's model that accepts this artifact's type, then captures it into
-   * the plate's stash. Families whose source is an archive to unpack, such
-   * as modpacks, install otherwise.
-   *
-   * <p>
-   * Installing does not ask whether the target supports this artifact:
-   * whoever installs decides that while resolving, and may install it anyway.
-   * Only the model decides where it can go.
-   *
-   * @param context selected target and the plate it is installed on
-   * @return validated immutable images
-   * @throws IOException when the content cannot be captured
-   * @throws Violation   when the tree does not allow the file, such as
-   *                     {@link Violation.Unplaced} when no directory accepts
-   *                     the type
-   */
-  @Override
-  default Set<Image<?>> install(@NonNull Context context) throws IOException {
-    return beneath(context).file(source());
   }
 
   /**
