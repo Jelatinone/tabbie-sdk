@@ -122,29 +122,28 @@ public interface Artifact extends Release.Payload {
 
   /**
    * Checks copied constructor parameters before record fields are assigned.
+   * Whether a declared target supports the artifact's family depends on the
+   * installs core has loaded, so it is not checked here: core decides it
+   * while resolving, through {@link Label#compatibility}.
    *
-   * @param artifactFamily artifact family token
-   * @param coordinates    exact file coordinates
-   * @param artifactName   display name
-   * @param labels         declared targets
-   * @param relations      catalog relationships
+   * @param coordinates  exact file coordinates
+   * @param artifactName display name
+   * @param labels       declared targets
+   * @param relations    catalog relationships
    *
-   * @throws IllegalArgumentException when declarations contradict structural
-   *                                  facts, a relation includes this artifact,
-   *                                  a coordinate has two relations, or an
-   *                                  incompatibility includes another relation
+   * @throws IllegalArgumentException when the name is blank, no target is
+   *                                  declared, a relation includes this
+   *                                  artifact, a coordinate has two relations,
+   *                                  or an incompatibility includes another
+   *                                  relation
    */
   static void validate(
-      @NonNull Class<? extends Artifact> artifactFamily,
       @NonNull Coordinate.File coordinates,
       @NonNull String artifactName,
       @NonNull Set<Label> labels,
       @NonNull Set<Relation> relations) {
     if (artifactName.isBlank() || labels.isEmpty()) {
       throw new IllegalArgumentException("An artifact needs a non-blank name and supported labels.");
-    }
-    if (labels.stream().anyMatch(label -> !label.distribution().supports(artifactFamily))) {
-      throw new IllegalArgumentException("A declared distribution does not support this artifact family.");
     }
     if (relations.stream().anyMatch(relation -> relation.coordinate().includes(coordinates))) {
       throw new IllegalArgumentException("Relations must not reference this artifact.");

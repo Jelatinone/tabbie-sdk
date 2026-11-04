@@ -8,7 +8,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import cat.tabbie.sdk.addon.artifact.Artifact;
 import cat.tabbie.sdk.meta.attribute.Conditions;
 import cat.tabbie.sdk.meta.attribute.Distributions;
 import cat.tabbie.sdk.minecraft.Environment;
@@ -18,8 +17,10 @@ import cat.tabbie.sdk.platform.Platform;
 import lombok.NonNull;
 
 /**
- * A stateless runtime family describing edition, environments, and
- * capabilities. Where content goes is declared by each release's layout, not
+ * A stateless runtime family describing edition and environments. What
+ * content it supports follows from the installs contributed for each content
+ * family, which a {@link cat.tabbie.sdk.addon.artifact.Artifact.Registry}
+ * derives, and where content goes is declared by each release's layout, not
  * by the distribution. Version resolution, installation conflicts, filesystem
  * observations, and deployment belong to Core.
  *
@@ -28,8 +29,10 @@ import lombok.NonNull;
  * and equality is identity. An enum of them is
  * {@link cat.tabbie.sdk.meta.registry.Registered registered} by the module
  * declaring it, the SDK included, so a module can add distributions of its
- * own; a {@link cat.tabbie.sdk.Registry} lists every registered one, and
- * finds one by identifier.
+ * own; a {@link Registry} lists every registered one, and finds one by
+ * identifier. An abstract type of them, such as {@link Java.Launcher}, is
+ * registered as a group an attribute can name, such as
+ * {@code java:launcher}.
  */
 public interface Distribution {
 
@@ -66,29 +69,12 @@ public interface Distribution {
   Set<Environment> environments();
 
   /**
-   * Returns supported artifact-family class tokens.
-   *
-   * @return immutable capabilities
-   */
-  Set<Class<? extends Artifact>> capabilities();
-
-  /**
    * Tests edition membership without discovering a runtime release.
    *
    * @param version discovered game version
    * @return whether the version belongs to the supported edition
    */
   boolean applicable(@NonNull Version version);
-
-  /**
-   * Tests a family interface or concrete artifact against family capabilities.
-   *
-   * @param family family or implementation class
-   * @return whether a declared capability is assignable from the supplied type
-   */
-  default boolean supports(@NonNull Class<? extends Artifact> family) {
-    return capabilities().stream().anyMatch(capability -> capability.isAssignableFrom(family));
-  }
 
   /**
    * Every distribution, and group of them, the loaded modules register: the

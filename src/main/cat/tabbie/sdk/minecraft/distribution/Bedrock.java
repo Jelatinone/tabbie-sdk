@@ -2,11 +2,6 @@ package cat.tabbie.sdk.minecraft.distribution;
 
 import java.util.Set;
 
-import cat.tabbie.sdk.addon.artifact.Artifact;
-import cat.tabbie.sdk.addon.artifact.Behaviourpack;
-import cat.tabbie.sdk.addon.artifact.Modpack;
-import cat.tabbie.sdk.addon.artifact.Plugin;
-import cat.tabbie.sdk.addon.artifact.Resourcepack;
 import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Version;
@@ -15,9 +10,11 @@ import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
 
 /**
- * Bedrock runtime families. Game versions and concrete runtime releases are
+ * Bedrock runtime families, registered as the group {@code bedrock:base} of
+ * every Bedrock distribution. Game versions and concrete runtime releases are
  * described and resolved separately from these stateless family values.
  */
+@Registered("bedrock:base")
 public interface Bedrock extends Distribution {
 
   /**
@@ -28,17 +25,6 @@ public interface Bedrock extends Distribution {
   @Override
   default Set<Environment> environments() {
     return Set.of(Environment.CLIENT, Environment.SERVER);
-  }
-
-  /**
-   * Accepts behaviour packs, Bedrock resource packs, and modpacks unless a
-   * family declares otherwise.
-   *
-   * @return immutable capabilities
-   */
-  @Override
-  default Set<Class<? extends Artifact>> capabilities() {
-    return Set.of(Behaviourpack.class, Resourcepack.Bedrock.class, Modpack.class);
   }
 
   /**
@@ -88,8 +74,10 @@ public interface Bedrock extends Distribution {
   }
 
   /**
-   * Server-only Bedrock runtimes that load plugins in place of behaviour packs.
+   * Server-only Bedrock runtimes that load plugins in place of behaviour packs,
+   * registered as the group {@code bedrock:manager}.
    */
+  @Registered("bedrock:manager")
   interface Manager extends Bedrock {
 
     /**
@@ -100,16 +88,6 @@ public interface Bedrock extends Distribution {
     @Override
     default Set<Environment> environments() {
       return Set.of(Environment.SERVER);
-    }
-
-    /**
-     * Accepts plugins, Bedrock resource packs, and modpacks.
-     *
-     * @return immutable capabilities
-     */
-    @Override
-    default Set<Class<? extends Artifact>> capabilities() {
-      return Set.of(Plugin.class, Resourcepack.Bedrock.class, Modpack.class);
     }
 
     /**

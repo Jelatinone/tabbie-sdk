@@ -2,7 +2,6 @@ package cat.tabbie.sdk.minecraft.distribution;
 
 import java.util.Set;
 
-import cat.tabbie.sdk.addon.artifact.*;
 import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.minecraft.Environment;
 import cat.tabbie.sdk.minecraft.Version;
@@ -11,19 +10,16 @@ import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
 
 /**
- * Java runtime families. Game versions and concrete runtime releases are
+ * Java runtime families, registered as the group {@code java:base} of every
+ * Java distribution. Game versions and concrete runtime releases are
  * described and resolved separately from these stateless family values.
  */
+@Registered("java:base")
 public interface Java extends Distribution {
 
   @Override
   default Set<Environment> environments() {
     return Set.of(Environment.CLIENT, Environment.SERVER);
-  }
-
-  @Override
-  default Set<Class<? extends Artifact>> capabilities() {
-    return Set.of(Datapack.class, Resourcepack.Java.class, Modpack.class);
   }
 
   @Override
@@ -62,8 +58,10 @@ public interface Java extends Distribution {
   }
 
   /**
-   * Java loaders supporting mods on clients and dedicated servers.
+   * Java loaders supporting mods on clients and dedicated servers, registered
+   * as the group {@code java:launcher}.
    */
+  @Registered("java:launcher")
   interface Launcher extends Java {
 
     /**
@@ -111,16 +109,13 @@ public interface Java extends Distribution {
       }
 
     }
-
-    @Override
-    default Set<Class<? extends Artifact>> capabilities() {
-      return Set.of(Mod.class, Datapack.class, Resourcepack.Java.class, Modpack.class);
-    }
   }
 
   /**
-   * Server-only Java runtimes that load plugins.
+   * Server-only Java runtimes that load plugins, registered as the group
+   * {@code java:manager}.
    */
+  @Registered("java:manager")
   interface Manager extends Java {
 
     /**
@@ -177,11 +172,6 @@ public interface Java extends Distribution {
     @Override
     default Set<Environment> environments() {
       return Set.of(Environment.SERVER);
-    }
-
-    @Override
-    default Set<Class<? extends Artifact>> capabilities() {
-      return Set.of(Plugin.class, Datapack.class, Resourcepack.Java.class);
     }
   }
 }

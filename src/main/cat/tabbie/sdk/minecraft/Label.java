@@ -3,7 +3,6 @@ package cat.tabbie.sdk.minecraft;
 import java.util.Arrays;
 import java.util.Locale;
 
-import cat.tabbie.sdk.Registry;
 import cat.tabbie.sdk.addon.artifact.Artifact;
 import cat.tabbie.sdk.minecraft.distribution.Distribution;
 import lombok.NonNull;
@@ -53,7 +52,7 @@ public record Label(@NonNull Version version, @NonNull Distribution distribution
    *                                  distribution the registry does not
    *                                  know, or describes an unsupported target
    */
-  public static Label parse(@NonNull String canonical, @NonNull Registry registry) {
+  public static Label parse(@NonNull String canonical, @NonNull Distribution.Registry registry) {
     String[] parts = canonical.split("/", -1);
     if (parts.length != 3) {
       throw new IllegalArgumentException("Not canonical label text: " + canonical);
@@ -85,14 +84,17 @@ public record Label(@NonNull Version version, @NonNull Distribution distribution
   }
 
   /**
-   * Assesses type support followed by explicit target declarations. Unlisted
-   * targets remain unknown; no compatibility between runtime forks is inferred.
+   * Assesses type support followed by explicit target declarations. Whether
+   * this target supports the artifact's family follows from the installs the
+   * registry holds. Unlisted targets remain unknown; no compatibility between
+   * runtime forks is inferred.
    *
    * @param artifact artifact to assess against this target
+   * @param registry registry holding the installs core has loaded
    * @return structural rejection, declared support, or unknown support
    */
-  public Compatibility compatibility(@NonNull Artifact artifact) {
-    if (!distribution.supports(artifact.getClass())) {
+  public Compatibility compatibility(@NonNull Artifact artifact, @NonNull Artifact.Registry registry) {
+    if (!registry.supports(distribution, environment, artifact.getClass())) {
       return Compatibility.UNSUPPORTED;
     }
     return artifact.labels().stream().anyMatch(label -> label.match(this))

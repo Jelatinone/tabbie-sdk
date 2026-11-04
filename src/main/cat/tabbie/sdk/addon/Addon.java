@@ -140,12 +140,14 @@ public interface Addon {
 
     /**
      * Copies the labels and artifacts, then checks shared release invariants,
-     * that every artifact is a distinct file of this release supporting every
+     * that every artifact is a distinct file of this release declaring every
      * label, and that no artifact conflicts with another of the same build.
+     * Whether each label supports each artifact's family depends on the
+     * installs core has loaded, so {@link #compatibility} assesses it.
      *
      * @throws IllegalArgumentException when publication invariants are violated,
      *                                  no label is advertised, an artifact does
-     *                                  not support every label, or artifacts
+     *                                  not declare every label, or artifacts
      *                                  conflict with each other
      */
     public Build {
@@ -159,8 +161,8 @@ public interface Addon {
       Set<Label> advertised = labels;
       Set<Artifact> artifacts = content;
       if (artifacts.stream().anyMatch(artifact -> advertised.stream()
-          .anyMatch(label -> label.compatibility(artifact) != Compatibility.SUPPORTED))) {
-        throw new IllegalArgumentException("Every build artifact must support every advertised label.");
+          .anyMatch(label -> artifact.labels().stream().noneMatch(label::match)))) {
+        throw new IllegalArgumentException("Every build artifact must declare every advertised label.");
       }
       if (artifacts.stream().anyMatch(artifact -> artifact.conflicts().stream()
           .anyMatch(conflict -> artifacts.stream().anyMatch(other -> conflict.includes(other.coordinates()))))) {
@@ -195,12 +197,13 @@ public interface Addon {
      * Assesses artifact type support and this build's explicit declaration.
      * A structurally unsupported artifact takes precedence over missing evidence.
      *
-     * @param target selected runtime target
+     * @param target   selected runtime target
+     * @param registry registry holding the installs core has loaded
      * @return declared support, structural rejection, or unknown support
      */
-    public Compatibility compatibility(@NonNull Label target) {
+    public Compatibility compatibility(@NonNull Label target, @NonNull Artifact.Registry registry) {
       Set<Compatibility> assessments = content().stream()
-          .map(target::compatibility)
+          .map(artifact -> target.compatibility(artifact, registry))
           .collect(Collectors.toSet());
       if (assessments.contains(Compatibility.UNSUPPORTED)) {
         return Compatibility.UNSUPPORTED;
