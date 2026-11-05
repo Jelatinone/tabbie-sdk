@@ -14,9 +14,12 @@ import lombok.NonNull;
  * <p>
  * A release's layout never names a Cat's Worlds. Core mounts each World into
  * an install's model and names the Worlds the install applies to in its
- * context; {@link Content content that belongs to a World} is placed in each
- * through the directory of its namespace accepting its type, and the
- * context's label says which distribution laid the namespace out. How a
+ * context. An install acting in
+ * {@link cat.tabbie.sdk.meta.action.Closure#NAMESPACES namespaces}, such as a
+ * datapack's, places its content in each through the directory of its
+ * namespace accepting its type, and the context's label says which
+ * distribution laid the namespace out. Whether content belongs to a World or
+ * to the Cat is the install's to say, and may differ by distribution. How a
  * World's data is stored is not the SDK's concern.
  */
 public interface World {
@@ -38,14 +41,6 @@ public interface World {
    */
   @NonNull
   Layout.Directory namespace();
-
-  /**
-   * Content that belongs to a World rather than to a Cat, such as a datapack.
-   * It installs into the Worlds its context names, so a release's layout does
-   * not accept it itself.
-   */
-  interface Content {
-  }
 
   /**
    * Immutable World.

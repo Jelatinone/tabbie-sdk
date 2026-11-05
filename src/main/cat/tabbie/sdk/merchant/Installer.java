@@ -197,7 +197,22 @@ public interface Installer<Contextual extends Installer.Context> {
      * @throws Violation   when the model does not allow the file at a place
      */
     public Set<Image<?>> file(@NonNull Describe source, @NonNull String... into) throws IOException {
-      Address file = Address.of(into).resolve(source.fileName());
+      return file(source, Address.of(into).resolve(source.fileName()));
+    }
+
+    /**
+     * Places the source as one file at an address beneath every place, so
+     * content can be renamed as it is placed, such as an archived pack named
+     * after its identity. The model is checked at every place before the
+     * source is read, so content that cannot be placed is never captured.
+     *
+     * @param source content to place
+     * @param file   address of the file beneath each place
+     * @return images creating the file, one for each place
+     * @throws IOException when the source cannot be captured
+     * @throws Violation   when the model does not allow the file at a place
+     */
+    public Set<Image<?>> file(@NonNull Describe source, @NonNull Address file) throws IOException {
       places.forEach(place -> place.require(file));
       Reference.Captured captured = context.plate().capture(source);
       return places.stream()

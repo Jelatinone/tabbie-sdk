@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import cat.tabbie.sdk.Identity;
 import cat.tabbie.sdk.album.model.Plate;
@@ -11,6 +12,8 @@ import cat.tabbie.sdk.album.revision.Image;
 import cat.tabbie.sdk.merchant.Installer;
 import cat.tabbie.sdk.merchant.Provider.Coordinate;
 import cat.tabbie.sdk.merchant.Release;
+import cat.tabbie.sdk.meta.action.Closure;
+import cat.tabbie.sdk.meta.action.Contribution;
 import cat.tabbie.sdk.meta.action.Install;
 import cat.tabbie.sdk.meta.registry.Contributions;
 import cat.tabbie.sdk.minecraft.Environment;
@@ -311,12 +314,8 @@ public interface Artifact extends Release.Payload {
         @NonNull Distribution distribution,
         @NonNull Environment environment,
         @NonNull Class<? extends Artifact> family) {
-      Set<String> names = distributions.names(distribution);
-      return installs.contributions().stream()
-          .map(Contributions.Contributed::contribution)
-          .filter(install -> family.isAssignableFrom(install.subject()) || install.subject().isAssignableFrom(family))
-          .anyMatch(install -> install.conditions().distributions().appliesTo(names)
-              && install.conditions().environments().appliesTo(environment));
+      return applying(distribution, environment)
+          .anyMatch(install -> family.isAssignableFrom(install.subject()) || install.subject().isAssignableFrom(family));
     }
 
     /**
@@ -358,33 +357,55 @@ public interface Artifact extends Release.Payload {
     }
 
     /**
-     * Checks a release's layout places everything its distribution supports
-     * in the release's environment: each such family in exactly one directory,
-     * and Worlds in exactly one when a family belongs to Worlds. The layout
-     * may accept more, for content installed anyway.
+     * Checks a release's layout places what every install applying to the
+     * release places, where the install's closure says it acts: an install
+     * acting at the root needs its subject accepted in exactly one directory,
+     * and one acting in namespaces needs Worlds accepted in exactly one, where
+     * core mounts each World's namespace. An install applies to the release
+     * when it applies to its distribution and environment, and to the version
+     * of one of its labels on some platform. The layout may accept more, for
+     * content installed anyway.
      *
      * @param build release to check
-     * @throws IllegalArgumentException when a supported family, or Worlds,
-     *                                  have no accepting directory or several
+     * @throws IllegalArgumentException when an applying install's subject, or
+     *                                  Worlds, have no accepting directory or
+     *                                  several
      */
     public void check(@NonNull Product.Build build) {
-      List<Class<? extends Artifact>> supported = families.stream()
-          .filter(family -> supports(build.distribution(), build.environment(), family))
+      List<Contribution<Class<?>, Install.Signature>> applying = applying(build.distribution(), build.environment())
+          .filter(install -> build.labels().stream()
+              .anyMatch(label -> install.conditions().versions().appliesTo(label.version())))
           .toList();
-      // Content that belongs to a World installs into Worlds, through their own layouts
-      supported.stream()
-          .filter(family -> !World.Content.class.isAssignableFrom(family))
-          .filter(family -> build.layout().find(family).directories().size() != 1)
+      applying.stream()
+          .filter(install -> install.closure() == Closure.ROOT)
+          .filter(install -> build.layout().find(install.subject()).directories().size() != 1)
           .findFirst()
-          .ifPresent(family -> {
-            throw new IllegalArgumentException(String.format("%s supports %s, so its layout accepts it in exactly "
-                + "one directory.", build.coordinates().canonical(), family.getName()));
+          .ifPresent(install -> {
+            throw new IllegalArgumentException(String.format("%s installs %s at its root, so its layout accepts it "
+                + "in exactly one directory.", build.coordinates().canonical(), install.subject().getName()));
           });
-      if (supported.stream().anyMatch(World.Content.class::isAssignableFrom)
-          && build.layout().find(World.class).directories().size() != 1) {
-        throw new IllegalArgumentException(String.format("%s supports content for Worlds, so its layout accepts "
-            + "Worlds in exactly one directory.", build.coordinates().canonical()));
-      }
+      applying.stream()
+          .filter(install -> install.closure() == Closure.NAMESPACES)
+          .filter(install -> build.layout().find(World.class).directories().size() != 1)
+          .findFirst()
+          .ifPresent(install -> {
+            throw new IllegalArgumentException(String.format("%s installs %s in Worlds, so its layout accepts "
+                + "Worlds in exactly one directory.", build.coordinates().canonical(), install.subject().getName()));
+          });
+    }
+
+    /**
+     * Installs applying to a distribution in an environment, in any version
+     * on any platform.
+     */
+    private Stream<Contribution<Class<?>, Install.Signature>> applying(
+        Distribution distribution,
+        Environment environment) {
+      Set<String> names = distributions.names(distribution);
+      return installs.contributions().stream()
+          .map(Contributions.Contributed::contribution)
+          .filter(install -> install.conditions().distributions().appliesTo(names)
+              && install.conditions().environments().appliesTo(environment));
     }
   }
 }

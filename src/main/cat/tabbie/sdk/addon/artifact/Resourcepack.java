@@ -91,14 +91,24 @@ public sealed interface Resourcepack extends Artifact {
 
   /**
    * Bedrock resource content. Its files are available to the whole Cat, in
-   * the directory its layout accepts them in. A distribution that loads packs
-   * from folders turns a pack on in a World only once the World's
-   * {@link #CONFIGURATION_JSON_FILE_NAME list} names it by the identity its
-   * {@link Descriptor.Manifest manifest} declares, so installing one there
-   * also lists it in each World it applies to. Uninstalling one reverses
-   * both: its files are deleted, and its entry is removed from each list
-   * wherever the entry is, whatever other packs did to the list since; the
-   * list itself stays.
+   * the directory its layout accepts them in. Each distribution loads packs
+   * in its own way, so a pack installs in one of three:
+   * <ul>
+   * <li>vanilla Bedrock and Endstone load a pack from a folder, and send a
+   * World only the packs its {@link #CONFIGURATION_JSON_FILE_NAME list}
+   * names, by the identity the pack's {@link Descriptor.Manifest manifest}
+   * declares, so the pack is unpacked and listed in each World it applies
+   * to;</li>
+   * <li>Nukkit-MOT and Cloudburst Server load a pack from a folder, and send
+   * every pack they hold, so the pack is unpacked alone;</li>
+   * <li>Cloudburst Nukkit and PowerNukkitX load only archives, and send
+   * every pack they hold, so the pack is placed as the archive it is.</li>
+   * </ul>
+   * None of the last four reads a pack whose manifest writes its version as
+   * a string, so such a pack is refused there before anything is placed.
+   * Uninstalling a pack reverses its install: its files are deleted, and its
+   * entry is removed from each list wherever the entry is, whatever other
+   * packs did to the list since; the list itself stays.
    */
   @Registered
   sealed interface Bedrock extends Resourcepack {
@@ -106,7 +116,9 @@ public sealed interface Resourcepack extends Artifact {
     /**
      * Name of the file in a World's namespace listing the resource packs the
      * World loads: a JSON array of each pack's {@code pack_id} and
-     * {@code version}.
+     * {@code version}. An entry names no subpack, so a pack offering
+     * subpacks loads its base pack, and players choose a subpack themselves.
+     * A subpack is part of its pack, not an artifact of its own.
      */
     String CONFIGURATION_JSON_FILE_NAME = "world_resource_packs.json";
 
@@ -150,34 +162,69 @@ public sealed interface Resourcepack extends Artifact {
     }
 
     /**
-     * Places the pack as the archive it is, named after its source, in the
-     * directory of the Cat's model accepting Bedrock resource packs, on the
-     * Nukkit family and Cloudburst Server, which load archives and send every
-     * pack they hold. The manifest is read first, so content that is not one
-     * pack is refused before anything is placed.
+     * Unpacks the pack into a directory of its own, named by its artifact
+     * identity, beneath the directory of the Cat's model accepting Bedrock
+     * resource packs, on Nukkit-MOT and Cloudburst Server. Both load a pack
+     * from a folder and send every pack they hold, so no World lists it. Only
+     * the folder holding the pack's manifest is unpacked, so a pack wrapped
+     * in folders of its own unpacks as if it were not, however deep. The
+     * manifest is read first, so a pack neither could load is refused before
+     * anything is placed.
      *
      * @param context the work, and where Bedrock resource packs go in the Cat
      * @return validated immutable images
-     * @throws Archive.Rejection.Malformed when the pack does not hold
-     *                                     exactly one manifest, or its
-     *                                     manifest declares no identity
-     * @throws IOException                 when the pack cannot be captured
-     *                                     or is refused
-     * @throws Violation                   when the model does not allow the
-     *                                     file, such as
-     *                                     {@link Violation.Unplaced} when no
-     *                                     directory accepts Bedrock resource
-     *                                     packs
+     * @throws Archive.Rejection.Malformed   when the pack does not hold
+     *                                       exactly one manifest, or its
+     *                                       manifest declares no identity
+     * @throws Archive.Rejection.Unsupported when the manifest writes the
+     *                                       pack's version as a string
+     * @throws IOException                   when the pack cannot be captured
+     *                                       or is refused
+     * @throws Violation                     when the model does not allow
+     *                                       the pack where it goes
      */
     @Install
-    @Distributions({
-        "bedrock:cloudburst",
-        "bedrock:cloudburst-nukkit",
-        "bedrock:nukkit-mot",
-        "bedrock:power-nukkit"})
+    @Distributions({"bedrock:cloudburst", "bedrock:nukkit-mot"})
+    default Set<Image<?>> installUnpackedRoot(@NonNull Install.Context context) throws IOException {
+      List<Archive.Entry> entries = context.archive().inspect(source(), context.plate());
+      Descriptor.Manifest manifest = Descriptor.Manifest.in(entries)
+          .requireNumbered();
+      return context.place().unpack(entries, manifest.root(), artifactId().id().toString());
+    }
+
+    /**
+     * Places the pack as the archive it is, named by its artifact identity as
+     * {@code <id>.mcpack}, in the directory of the Cat's model accepting
+     * Bedrock resource packs, on Cloudburst Nukkit and PowerNukkitX. Both load
+     * only archives, find a manifest at an archive's root or one folder deep,
+     * and send every pack they hold. The name has the extension Cloudburst
+     * Nukkit matches exactly, and two packs sharing a file name never collide.
+     * The manifest is read first, so a pack neither could load is refused
+     * before anything is placed.
+     *
+     * @param context the work, and where Bedrock resource packs go in the Cat
+     * @return validated immutable images
+     * @throws Archive.Rejection.Malformed   when the pack does not hold
+     *                                       exactly one manifest, or its
+     *                                       manifest declares no identity
+     * @throws Archive.Rejection.Unsupported when the manifest lies more than
+     *                                       one folder deep, or writes the
+     *                                       pack's version as a string
+     * @throws IOException                   when the pack cannot be captured
+     *                                       or is refused
+     * @throws Violation                     when the model does not allow
+     *                                       the file, such as
+     *                                       {@link Violation.Unplaced} when
+     *                                       no directory accepts Bedrock
+     *                                       resource packs
+     */
+    @Install
+    @Distributions({"bedrock:cloudburst-nukkit", "bedrock:power-nukkit"})
     default Set<Image<?>> installArchivedRoot(@NonNull Install.Context context) throws IOException {
-      Descriptor.Manifest.in(context.archive().inspect(source(), context.plate()));
-      return context.place().file(source());
+      Descriptor.Manifest.in(context.archive().inspect(source(), context.plate()))
+          .requireDepth(1)
+          .requireNumbered();
+      return context.place().file(source(), Address.of(String.format("%s.mcpack", artifactId().id())));
     }
 
     /**

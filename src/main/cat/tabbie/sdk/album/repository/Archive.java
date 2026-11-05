@@ -809,8 +809,11 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
     }
 
     /**
-     * An entry needs a feature that is not supported, such as its
-     * compression method.
+     * An entry needs a feature that is not supported: one this SDK cannot
+     * read, such as its compression method, or one the target the archive is
+     * installed on cannot load, such as a pack's version written as a string
+     * on a server that reads only numbers. Either way the same archive is
+     * refused on the same target again.
      */
     public static final class Unsupported extends Rejection {
 

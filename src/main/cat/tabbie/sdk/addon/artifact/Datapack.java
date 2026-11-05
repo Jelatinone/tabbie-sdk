@@ -12,7 +12,6 @@ import cat.tabbie.sdk.meta.attribute.Distributions;
 import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.minecraft.Label;
 import cat.tabbie.sdk.minecraft.Parity;
-import cat.tabbie.sdk.minecraft.World;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.layout.Violation;
 import lombok.NonNull;
@@ -24,7 +23,7 @@ import lombok.NonNull;
  */
 @Registered
 @Distributions("java:base")
-public sealed interface Datapack extends Artifact, World.Content {
+public sealed interface Datapack extends Artifact {
 
   /**
    * Places the datapack as one file named after its source in each World of

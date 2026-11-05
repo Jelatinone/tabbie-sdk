@@ -113,6 +113,43 @@ public sealed interface Descriptor permits Descriptor.Manifest, Descriptor.Packm
     }
 
     /**
+     * Checks the pack writes its version as three numbers, as a distribution
+     * that reads no version string needs, such as every server of the Nukkit
+     * family. Run before anything is placed, so a pack the distribution could
+     * not load is never installed.
+     *
+     * @return this manifest
+     * @throws Archive.Rejection.Unsupported when the version is a string, as
+     *                                       manifest format 3 writes it
+     */
+    public Manifest requireNumbered() throws Archive.Rejection.Unsupported {
+      if (version.isString()) {
+        throw new Archive.Rejection.Unsupported(String.format("The manifest at %s writes the pack's version as a "
+            + "string, which the distribution cannot read.", root.resolve(FILE).canonical()));
+      }
+      return this;
+    }
+
+    /**
+     * Checks the manifest lies at most some folders deep in the pack, as a
+     * distribution loading the pack's archive as it is needs. Run before
+     * anything is placed, so a pack the distribution could not load is never
+     * installed.
+     *
+     * @param depth most folders the manifest may lie in, zero for the pack's
+     *              root
+     * @return this manifest
+     * @throws Archive.Rejection.Unsupported when it lies deeper
+     */
+    public Manifest requireDepth(int depth) throws Archive.Rejection.Unsupported {
+      if (root.components().size() > depth) {
+        throw new Archive.Rejection.Unsupported(String.format("The manifest at %s lies more than %d folders deep, "
+            + "where the distribution does not find it.", root.resolve(FILE).canonical(), depth));
+      }
+      return this;
+    }
+
+    /**
      * Describes appending this pack's entry to a World's list of the packs it
      * loads, as the list's JSON form reads it. Its inverse removes the entry
      * wherever it is.

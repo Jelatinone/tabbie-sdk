@@ -74,8 +74,9 @@ public interface Bedrock extends Distribution {
   }
 
   /**
-   * Server-only Bedrock runtimes that load plugins in place of behaviour packs,
-   * registered as the group {@code bedrock:manager}.
+   * Server-only Bedrock runtimes that load plugins, registered as the group
+   * {@code bedrock:manager}. Which of them also load behaviour and resource
+   * packs, and how, the pack families' installs declare.
    */
   @Registered("bedrock:manager")
   interface Manager extends Bedrock {
