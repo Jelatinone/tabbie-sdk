@@ -23,9 +23,9 @@ import lombok.NonNull;
 /**
  * One file of an exact distribution release, such as a server jar or a loader
  * profile. {@link #install} captures its source and describes the images that
- * place it; an {@link Executable} byproduct also describes how an executor
+ * place it; an {@link Executable} distributable also describes how an executor
  * starts and stops it, while a {@link Nonexecutable} one is only placed.
- * Installing a byproduct captures only its own content: it never downloads
+ * Installing a distributable captures only its own content: it never downloads
  * runtimes, runs other installers, or starts processes; carrying out its
  * descriptions belongs to Core.
  *
@@ -33,28 +33,28 @@ import lombok.NonNull;
  * Implementations are records whose compact constructors copy their
  * collections and call {@link #validate(String, Set)}.
  */
-public sealed interface Byproduct extends Release.Payload, Installer<Installer.Context> {
+public sealed interface Distributable extends Release.Payload, Installer<Installer.Context> {
 
   /**
-   * Stable byproduct identity derived from the file coordinates, so equal
+   * Stable distributable identity derived from the file coordinates, so equal
    * coordinates always yield the same identity across processes.
    *
-   * @return byproduct identity
+   * @return distributable identity
    */
-  default Identity<Byproduct> byproductId() {
+  default Identity<Distributable> distributableId() {
     return Identity.create(coordinates().canonical());
   }
 
   /**
-   * Human-readable canonical byproduct name.
+   * Human-readable canonical distributable name.
    *
-   * @return byproduct name
+   * @return distributable name
    */
   @NonNull
-  String byproductName();
+  String distributableName();
 
   /**
-   * Provider-owned description of this byproduct's primary content.
+   * Provider-owned description of this distributable's primary content.
    *
    * @return content source
    */
@@ -62,7 +62,7 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
   Describe source();
 
   /**
-   * Returns the targets this byproduct supports as a whole.
+   * Returns the targets this distributable supports as a whole.
    *
    * @return immutable, nonempty supported targets
    */
@@ -70,7 +70,7 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
   Set<Label> labels();
 
   /**
-   * Returns the machine platforms this byproduct runs on, such as a native
+   * Returns the machine platforms this distributable runs on, such as a native
    * server built for one operating system.
    *
    * @return immutable platforms, empty for every platform
@@ -81,7 +81,7 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
   }
 
   /**
-   * Checks whether this byproduct supports a target on a platform.
+   * Checks whether this distributable supports a target on a platform.
    *
    * @param target   selected target
    * @param platform target machine platform
@@ -94,9 +94,9 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
 
   /**
    * Places the source as one file, named after it, in the directory of the
-   * context's model that accepts this byproduct's type, where
+   * context's model that accepts this distributable's type, where
    * {@link #location} finds it in the Cat's model. Whoever installs chooses
-   * the byproduct that {@link #supports} the target while resolving;
+   * the distributable that {@link #supports} the target while resolving;
    * installing does not ask again.
    *
    * @param context selected target and the plate it is installed on
@@ -110,7 +110,7 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
   }
 
   /**
-   * Locates this byproduct's file in the model of the Cat it runs in:
+   * Locates this distributable's file in the model of the Cat it runs in:
    * beneath the declared directory that accepts its type, named after its
    * source, as its default install places it. Only declarations accept
    * content, so the model alone decides it, whatever is on disk.
@@ -126,28 +126,28 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
   }
 
   /**
-   * Checks declarations before a byproduct is published.
+   * Checks declarations before a distributable is published.
    *
-   * @param byproductName candidate display name
+   * @param distributableName candidate display name
    * @param labels        candidate targets
    * @throws IllegalArgumentException when the name is blank, there are no
    *                                  labels, or labels span distributions
    */
-  static void validate(@NonNull String byproductName, @NonNull Set<Label> labels) {
-    if (byproductName.isBlank() || labels.isEmpty()) {
-      throw new IllegalArgumentException("A byproduct needs a non-blank name and targets.");
+  static void validate(@NonNull String distributableName, @NonNull Set<Label> labels) {
+    if (distributableName.isBlank() || labels.isEmpty()) {
+      throw new IllegalArgumentException("A distributable needs a non-blank name and targets.");
     }
     if (labels.stream().map(Label::distribution).distinct().count() != 1) {
-      throw new IllegalArgumentException("A byproduct serves exactly one distribution.");
+      throw new IllegalArgumentException("A distributable serves exactly one distribution.");
     }
   }
 
   /**
-   * A byproduct an executor runs, such as a server jar or a native server
+   * A distributable an executor runs, such as a server jar or a native server
    * binary. Its start and stop arrangements are descriptions; nothing runs
    * until an executor carries them out.
    */
-  non-sealed interface Executable extends Byproduct {
+  non-sealed interface Executable extends Distributable {
 
     /**
      * Returns the toolchain the started program needs, which the executor
@@ -161,8 +161,8 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
     }
 
     /**
-     * Describes how to start this byproduct in a context, without starting it.
-     * Addresses in the arrangement are bound to physical paths by the
+     * Describes how to start this distributable in a context, without starting
+     * it. Addresses in the arrangement are bound to physical paths by the
      * executor.
      *
      * @param context selected target, the Cat's model and runtime settings
@@ -172,9 +172,9 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
     Allocate allocate(@NonNull Context context);
 
     /**
-     * Describes how to stop this byproduct in a context, without stopping it.
-     * The arrangement must suit the one {@link #allocate} returns for the same
-     * context; see {@link Deallocate} for valid pairings.
+     * Describes how to stop this distributable in a context, without stopping
+     * it. The arrangement must suit the one {@link #allocate} returns for the
+     * same context; see {@link Deallocate} for valid pairings.
      *
      * @param context selected target, the Cat's model and runtime settings
      * @return stop arrangement
@@ -188,7 +188,7 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
     sealed interface Allocate {
 
       /**
-       * Returns the command the executor runs to start the byproduct.
+       * Returns the command the executor runs to start the distributable.
        *
        * @return start command
        */
@@ -196,8 +196,8 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
       Command command();
 
       /**
-       * A process the executor starts and owns until it exits, so it can write to
-       * its input, signal it, and observe its exit.
+       * A process the executor starts and owns until it exits, so it can write
+       * to its input, signal it, and observe its exit.
        *
        * @param command     start command
        * @param pwd         working directory of the process
@@ -217,9 +217,9 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
       }
 
       /**
-       * A command that hands the byproduct to something else, such as a service
-       * manager or an external launcher, and then exits. The executor does not
-       * own the resulting process, so it can only be stopped with
+       * A command that hands the distributable to something else, such as a
+       * service manager or an external launcher, and then exits. The executor
+       * does not own the resulting process, so it can only be stopped with
        * {@link Deallocate.Invoke}.
        *
        * @param command start command, run in the root the executor binds
@@ -231,15 +231,15 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
     /**
      * A declarative stop arrangement an executor carries out. {@link Input} and
      * {@link Signal} need a process the executor owns, so they pair only with
-     * {@link Allocate.Managed Managed}; {@link Invoke} pairs with either. Executors
-     * reject other pairings.
+     * {@link Allocate.Managed Managed}; {@link Invoke} pairs with either.
+     * Executors reject other pairings.
      */
     sealed interface Deallocate {
 
       /**
-       * Returns how long the executor waits for the byproduct to stop. A managed
-       * process still running afterwards is forcibly destroyed; an unmanaged stop
-       * command still running afterwards fails the stop.
+       * Returns how long the executor waits for the distributable to stop. A
+       * managed process still running afterwards is forcibly destroyed; an
+       * unmanaged stop command still running afterwards fails the stop.
        *
        * @return grace period
        */
@@ -257,7 +257,8 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
       }
 
       /**
-       * Asks a managed process to terminate gracefully, as with {@code SIGTERM}.
+       * Asks a managed process to terminate gracefully, as with {@code
+       * SIGTERM}.
        *
        * @param grace time allowed for the process to exit
        */
@@ -266,11 +267,11 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
 
       /**
        * Runs a separate stop command, such as a service manager's stop action.
-       * For a managed byproduct the executor then waits for its process to exit;
-       * for an unmanaged one, for the stop command to exit.
+       * For a managed distributable the executor then waits for its process to
+       * exit; for an unmanaged one, for the stop command to exit.
        *
        * @param command stop command, run in the root the executor binds
-       * @param grace   time allowed for the byproduct to stop
+       * @param grace   time allowed for the distributable to stop
        */
       record Invoke(@NonNull Command command, @NonNull Duration grace) implements Deallocate {
       }
@@ -278,14 +279,14 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
   }
 
   /**
-   * A byproduct that is placed but never run itself, such as a loader library
-   * or a launcher profile that another program reads.
+   * A distributable that is placed but never run itself, such as a loader
+   * library or a launcher profile that another program reads.
    */
-  non-sealed interface Nonexecutable extends Byproduct {
+  non-sealed interface Nonexecutable extends Distributable {
   }
 
   /**
-   * The target an executable byproduct is started for, the model of the Cat
+   * The target an executable distributable is started for, the model of the Cat
    * it runs in, and the runtime settings it is started with. Describing a
    * start reads no file, so the context is a value and holds no plate: the
    * executor binds the arrangement's addresses to paths.
@@ -301,7 +302,7 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
     Label label();
 
     /**
-     * Returns the platform of the machine the byproduct runs on, for
+     * Returns the platform of the machine the distributable runs on, for
      * selecting a native command.
      *
      * @return target platform
@@ -310,8 +311,8 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
     Platform platform();
 
     /**
-     * Returns the model of the Cat the byproduct runs in, as its release
-     * declares it, so a start arrangement can {@link Byproduct#location
+     * Returns the model of the Cat the distributable runs in, as its release
+     * declares it, so a start arrangement can {@link Distributable#location
      * locate} what the release's installs placed without reading the Cat.
      *
      * @return model declared from the root
@@ -320,8 +321,8 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
     Layout.Directory model();
 
     /**
-     * Returns the memory bound the started process is given, interpreted by
-     * the byproduct's {@link Executable#allocate(Context) allocation}, such as
+     * Returns the memory bound the started process is given, interpreted by the
+     * distributable's {@link Executable#allocate(Context) allocation}, such as
      * a JVM's maximum heap.
      *
      * @return maximum memory in bytes, or empty for the program's default
@@ -330,8 +331,8 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
     Optional<Long> maximumMemory();
 
     /**
-     * Returns caller-supplied runtime options the byproduct may apply when it
-     * describes its start arrangement.
+     * Returns caller-supplied runtime options the distributable may apply when
+     * it describes its start arrangement.
      *
      * @return immutable runtime options, possibly empty
      */
@@ -343,8 +344,8 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
      *
      * @param label          selected target
      * @param platform       target platform
-     * @param model          model of the Cat the byproduct runs in, declared
-     *                       from the root
+     * @param model          model of the Cat the distributable runs in,
+     *                       declared from the root
      * @param maximumMemory  positive memory bound in bytes, or empty
      * @param runtimeOptions runtime options
      */
@@ -378,8 +379,8 @@ public sealed interface Byproduct extends Release.Payload, Installer<Installer.C
        *
        * @param label    selected target
        * @param platform target platform
-       * @param model    model of the Cat the byproduct runs in, declared from
-       *                 the root
+       * @param model    model of the Cat the distributable runs in, declared
+       *                 from the root
        */
       public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Layout.Directory model) {
         this(label, platform, model, Optional.empty(), Map.of());

@@ -106,8 +106,8 @@ public interface Release<Content> {
    * Content published as an exact file of a release, such as a mod jar, plugin
    * jar, resource pack archive, or server jar. Content types that correspond to
    * provider files implement this so releases can check payload ownership. How
-   * a payload installs is its type's to say: a byproduct installs itself, and
-   * an artifact through the installs contributed for its family.
+   * a payload installs is its type's to say: a distributable installs itself,
+   * and an artifact through the installs contributed for its family.
    */
   interface Payload {
 
@@ -120,8 +120,9 @@ public interface Release<Content> {
     Coordinate.File coordinates();
 
     /**
-     * Checks that a release's payloads are each a distinct file of that release.
-     * Callers copy the payloads first; this method does not return a copy.
+     * Checks that a release's payloads are each a distinct file of that
+     * release. Callers copy the payloads first; this method does not return a
+     * copy.
      *
      * @param <P>         payload type
      * @param coordinates owning release coordinates

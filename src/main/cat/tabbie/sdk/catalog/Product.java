@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 
-import cat.tabbie.sdk.distribution.Byproduct;
+import cat.tabbie.sdk.distribution.Distributable;
 import cat.tabbie.sdk.distribution.Distribution;
 import cat.tabbie.sdk.model.Layout;
 import cat.tabbie.sdk.model.World;
@@ -110,7 +110,7 @@ public interface Product {
   }
 
   /**
-   * A published release of one distribution: its byproducts; the system
+   * A published release of one distribution: its distributables; the system
    * packages they require; every target it serves; and the layout of a Cat
    * running it, as its provider declares it. A release serves one
    * environment, so a client build and a server build of a distribution are
@@ -132,9 +132,9 @@ public interface Product {
    * @param releaseName   non-blank display name
    * @param releaseDate   publication instant
    * @param releaseNumber positive provider-assigned release number
-   * @param content       nonempty byproducts, each a distinct file of this
+   * @param content       nonempty distributables, each a distinct file of this
    *                      release
-   * @param packages      system packages the byproducts require
+   * @param packages      system packages the distributables require
    * @param distribution  distribution the release is for
    * @param labels        nonempty targets the release serves, such as every
    *                      game version it runs, all of one environment
@@ -146,29 +146,30 @@ public interface Product {
       @NonNull String releaseName,
       @NonNull Instant releaseDate,
       long releaseNumber,
-      @NonNull Set<Byproduct> content,
+      @NonNull Set<Distributable> content,
       @NonNull Set<Package> packages,
       @NonNull Distribution distribution,
       @NonNull Set<Label> labels,
-      @NonNull Layout.Directory layout) implements Release<Byproduct> {
+      @NonNull Layout.Directory layout) implements Release<Distributable> {
 
     /**
-     * Copies the byproducts, packages and labels, then checks shared release
-     * invariants, that every byproduct is a distinct file of this release,
-     * that the labels are of its distribution and of one environment, that
-     * the byproducts serve exactly the labels, and so only its distribution,
-     * that the layout is declared from the root, and that it accepts each
-     * byproduct in exactly one directory, where the byproduct installs and
-     * {@link Byproduct#location} finds it.
+     * Copies the distributables, packages and labels, then checks shared
+     * release invariants, that every distributable is a distinct file of this
+     * release, that the labels are of its distribution and of one environment,
+     * that the distributables serve exactly the labels, and so only its
+     * distribution, that the layout is declared from the root, and that it
+     * accepts each distributable in exactly one directory, where the
+     * distributable installs and {@link Distributable#location} finds it.
      *
-     * @throws IllegalArgumentException when publication invariants are violated,
-     *                                  no label is given, a label is of
-     *                                  another distribution or environment, a
-     *                                  byproduct serves a target that is not a
-     *                                  label, a label is served by no
-     *                                  byproduct, the layout is not declared
-     *                                  from the root, or a byproduct has no
-     *                                  accepting directory or several
+     * @throws IllegalArgumentException when publication invariants are
+     *                                  violated, no label is given, a label is
+     *                                  of another distribution or environment,
+     *                                  a distributable serves a target that is
+     *                                  not a label, a label is served by no
+     *                                  distributable, the layout is not
+     *                                  declared from the root, or a
+     *                                  distributable has no accepting directory
+     *                                  or several
      */
     public Build {
       content = Set.copyOf(content);
@@ -187,21 +188,21 @@ public interface Product {
             + "a server build are separate releases.");
       }
       Set<Label> served = labels;
-      Set<Byproduct> byproducts = content;
-      if (byproducts.stream()
-          .flatMap(byproduct -> byproduct.labels().stream())
+      Set<Distributable> distributables = content;
+      if (distributables.stream()
+          .flatMap(distributable -> distributable.labels().stream())
           .anyMatch(target -> served.stream().noneMatch(target::match))) {
-        throw new IllegalArgumentException("Every byproduct target must be a label of its release.");
+        throw new IllegalArgumentException("Every distributable target must be a label of its release.");
       }
-      if (served.stream().anyMatch(label -> byproducts.stream()
-          .noneMatch(byproduct -> byproduct.labels().stream().anyMatch(label::match)))) {
-        throw new IllegalArgumentException("Every label of a release must be served by one of its byproducts.");
+      if (served.stream().anyMatch(label -> distributables.stream()
+          .noneMatch(distributable -> distributable.labels().stream().anyMatch(label::match)))) {
+        throw new IllegalArgumentException("Every label of a release must be served by one of its distributables.");
       }
       if (!layout.address().isRoot()) {
         throw new IllegalArgumentException("A layout is declared from the root.");
       }
-      if (byproducts.stream().anyMatch(byproduct -> layout.find(byproduct.getClass()).directories().size() != 1)) {
-        throw new IllegalArgumentException("Every byproduct of a release needs exactly one directory of its layout "
+      if (distributables.stream().anyMatch(distributable -> layout.find(distributable.getClass()).directories().size() != 1)) {
+        throw new IllegalArgumentException("Every distributable of a release needs exactly one directory of its layout "
             + "accepting it.");
       }
     }

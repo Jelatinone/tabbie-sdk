@@ -41,7 +41,7 @@ import cat.tabbie.sdk.catalog.Query;
 import cat.tabbie.sdk.catalog.Queryable;
 import cat.tabbie.sdk.content.Artifact;
 import cat.tabbie.sdk.content.Installer;
-import cat.tabbie.sdk.distribution.Byproduct;
+import cat.tabbie.sdk.distribution.Distributable;
 import cat.tabbie.sdk.distribution.Distribution;
 import cat.tabbie.sdk.plate.Archive;
 import cat.tabbie.sdk.platform.Command;
@@ -108,15 +108,15 @@ class ConsumerTest {
   @Test
   void distributionProvider_describesARunnableServer() throws IOException {
     ServerCatalog catalog = new ServerCatalog();
-    Byproduct.Context context = new Byproduct.Context.Default(PAPER_SERVER, LINUX, new Retention(), Relative.root(),
+    Distributable.Context context = new Distributable.Context.Default(PAPER_SERVER, LINUX, new Retention(), Relative.root(),
         Relative.world("world"), Optional.of(2048L * 1024 * 1024), Map.of());
 
     Product paper = collapse(catalog.query(new Query.Singular<>(Provider.Search.of(catalog.project("paper")))))
         .orElseThrow();
     Collection<Product.Build> page = collapse(catalog.builds(paper.coordinates(), Set.of(PAPER_SERVER), 1));
-    Byproduct.Executable server = page.iterator().next().content().stream()
-        .filter(Byproduct.Executable.class::isInstance)
-        .map(Byproduct.Executable.class::cast)
+    Distributable.Executable server = page.iterator().next().content().stream()
+        .filter(Distributable.Executable.class::isInstance)
+        .map(Distributable.Executable.class::cast)
         .findFirst()
         .orElseThrow();
 
@@ -295,12 +295,12 @@ class ConsumerTest {
   /**
    * A runnable Paper server jar.
    */
-  record ServerJar(Coordinate.File coordinates, String byproductName, Describe source, Set<Label> labels)
-      implements Byproduct.Executable {
+  record ServerJar(Coordinate.File coordinates, String distributableName, Describe source, Set<Label> labels)
+      implements Distributable.Executable {
 
     ServerJar {
       labels = Set.copyOf(labels);
-      Byproduct.validate(byproductName, labels);
+      Distributable.validate(distributableName, labels);
     }
 
     @Override
@@ -316,7 +316,7 @@ class ConsumerTest {
     }
 
     @Override
-    public Allocate allocate(Byproduct.Context context) {
+    public Allocate allocate(Distributable.Context context) {
       List<Command.Token> memory = context.maximumMemory()
           .<List<Command.Token>>map(bytes -> List.of(new Command.Option("-Xmx",
               new Command.Argument.Literal(bytes / (1024 * 1024) + "M"), Command.Option.Style.JOINED)))
@@ -329,7 +329,7 @@ class ConsumerTest {
     }
 
     @Override
-    public Deallocate deallocate(Byproduct.Context context) {
+    public Deallocate deallocate(Distributable.Context context) {
       return new Deallocate.Input("stop", Duration.ofMinutes(1));
     }
   }

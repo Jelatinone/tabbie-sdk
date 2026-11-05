@@ -167,12 +167,12 @@ class DistributionContractsTest {
   void byproduct_validatesItsDeclarations() {
     Label quiltServer = new Label(JAVA_VERSION, Launcher.Of.QUILT, Environment.SERVER);
 
-    Byproduct.validate("Server", Set.of(FABRIC_SERVER, FABRIC_CLIENT));
+    Distributable.validate("Server", Set.of(FABRIC_SERVER, FABRIC_CLIENT));
 
-    assertThrows(IllegalArgumentException.class, () -> Byproduct.validate(" ", Set.of(FABRIC_SERVER)));
-    assertThrows(IllegalArgumentException.class, () -> Byproduct.validate("Server", Set.of()));
+    assertThrows(IllegalArgumentException.class, () -> Distributable.validate(" ", Set.of(FABRIC_SERVER)));
+    assertThrows(IllegalArgumentException.class, () -> Distributable.validate("Server", Set.of()));
     assertThrows(IllegalArgumentException.class,
-        () -> Byproduct.validate("Server", Set.of(FABRIC_SERVER, quiltServer)));
+        () -> Distributable.validate("Server", Set.of(FABRIC_SERVER, quiltServer)));
   }
 
   @Test
@@ -184,13 +184,13 @@ class DistributionContractsTest {
     assertFalse(universal.supports(FABRIC_SERVER, WINDOWS));
     assertTrue(linuxOnly.supports(PAPER_SERVER, PLATFORM));
     assertFalse(linuxOnly.supports(PAPER_SERVER, WINDOWS));
-    assertEquals(Identity.create(file("server").canonical()), universal.byproductId());
+    assertEquals(Identity.create(file("server").canonical()), universal.distributableId());
   }
 
   @Test
   void executable_describesHowItStartsAndStops_withoutRunningAnything() {
     ServerJar server = ServerJar.of("server", Set.of());
-    Byproduct.Context context = new Byproduct.Context.Default(PAPER_SERVER, PLATFORM, new MockRetention(),
+    Distributable.Context context = new Distributable.Context.Default(PAPER_SERVER, PLATFORM, new MockRetention(),
         Relative.root("servers", "lobby"), WORLD, Optional.of(4096L * 1024 * 1024), Map.of());
     Command.Resolver resolver = new Command.Resolver() {
 
@@ -205,21 +205,21 @@ class DistributionContractsTest {
       }
     };
 
-    Byproduct.Executable.Allocate start = server.allocate(context);
-    Byproduct.Executable.Deallocate stop = server.deallocate(context);
+    Distributable.Executable.Allocate start = server.allocate(context);
+    Distributable.Executable.Deallocate stop = server.deallocate(context);
 
-    Byproduct.Executable.Allocate.Managed managed = assertInstanceOf(Byproduct.Executable.Allocate.Managed.class,
+    Distributable.Executable.Allocate.Managed managed = assertInstanceOf(Distributable.Executable.Allocate.Managed.class,
         start);
     assertEquals(List.of(Path.of("jdk", "bin", "java").toString(), "-Xmx4096M", "-jar",
         Path.of("srv", "servers", "lobby", "server.jar").toString(), "--nogui"), managed.command().render(resolver));
-    assertEquals(new Byproduct.Executable.Deallocate.Input("stop", Duration.ofSeconds(30)), stop);
+    assertEquals(new Distributable.Executable.Deallocate.Input("stop", Duration.ofSeconds(30)), stop);
   }
 
   @Test
   void managedAllocation_copiesItsEnvironment() {
     Map<String, String> environment = new HashMap<>(Map.of("JAVA_TOOL_OPTIONS", "-Dfile.encoding=UTF-8"));
 
-    Byproduct.Executable.Allocate.Managed managed = new Byproduct.Executable.Allocate.Managed(
+    Distributable.Executable.Allocate.Managed managed = new Distributable.Executable.Allocate.Managed(
         Command.of("server"), Relative.root(), environment);
     environment.clear();
 
@@ -230,21 +230,21 @@ class DistributionContractsTest {
   void byproductContext_copiesOptions_andRequiresAPositiveMemoryBound() {
     Map<String, String> options = new HashMap<>(Map.of("motd", "hello"));
 
-    Byproduct.Context.Default context = new Byproduct.Context.Default(PAPER_SERVER, PLATFORM, new MockRetention(),
+    Distributable.Context.Default context = new Distributable.Context.Default(PAPER_SERVER, PLATFORM, new MockRetention(),
         Relative.root(), WORLD, Optional.of(4L << 30), options);
     options.clear();
 
     assertEquals(Map.of("motd", "hello"), context.runtimeOptions());
     assertEquals(Optional.empty(),
-        new Byproduct.Context.Default(PAPER_SERVER, PLATFORM, new MockRetention(), Relative.root(), WORLD)
+        new Distributable.Context.Default(PAPER_SERVER, PLATFORM, new MockRetention(), Relative.root(), WORLD)
             .maximumMemory());
-    assertThrows(IllegalArgumentException.class, () -> new Byproduct.Context.Default(PAPER_SERVER, PLATFORM,
+    assertThrows(IllegalArgumentException.class, () -> new Distributable.Context.Default(PAPER_SERVER, PLATFORM,
         new MockRetention(), Relative.root(), WORLD, Optional.of(0L), Map.of()));
   }
 
   @Test
   void productBuild_copiesContent_andServesOneDistribution() {
-    Set<Byproduct> content = new HashSet<>(Set.of(ServerJar.of("server", Set.of()), Library.of("library")));
+    Set<Distributable> content = new HashSet<>(Set.of(ServerJar.of("server", Set.of()), Library.of("library")));
 
     Product.Build build = new Product.Build(BUILD, "1.21.1-130", Instant.EPOCH, 130L, content, Set.of());
     content.clear();
@@ -258,7 +258,7 @@ class DistributionContractsTest {
   void productBuild_rejectsByproductsSpanningDistributions() {
     ServerJar fabric = new ServerJar(file("fabric"), "Fabric", source("fabric.jar", bytes("f")),
         Set.of(FABRIC_SERVER), Set.of());
-    Set<Byproduct> mixed = Set.of(ServerJar.of("server", Set.of()), fabric);
+    Set<Distributable> mixed = Set.of(ServerJar.of("server", Set.of()), fabric);
 
     assertThrows(IllegalArgumentException.class, () -> new Product.Build(BUILD, "1", Instant.EPOCH, 1L, mixed,
         Set.of()));
@@ -318,15 +318,15 @@ class DistributionContractsTest {
    */
   record ServerJar(
       Coordinate.File coordinates,
-      String byproductName,
+      String distributableName,
       Describe source,
       Set<Label> labels,
-      Set<Platform> platforms) implements Byproduct.Executable {
+      Set<Platform> platforms) implements Distributable.Executable {
 
     ServerJar {
       labels = Set.copyOf(labels);
       platforms = Set.copyOf(platforms);
-      Byproduct.validate(byproductName, labels);
+      Distributable.validate(distributableName, labels);
     }
 
     static ServerJar of(String key, Set<Platform> platforms) {
@@ -346,7 +346,7 @@ class DistributionContractsTest {
     }
 
     @Override
-    public Allocate allocate(Byproduct.Context context) {
+    public Allocate allocate(Distributable.Context context) {
       List<Command.Token> tokens = new ArrayList<>();
       context.maximumMemory().ifPresent(memory -> tokens.add(new Command.Option("-Xmx",
           new Command.Argument.Literal(memory / (1024 * 1024) + "M"), Command.Option.Style.JOINED)));
@@ -358,7 +358,7 @@ class DistributionContractsTest {
     }
 
     @Override
-    public Deallocate deallocate(Byproduct.Context context) {
+    public Deallocate deallocate(Distributable.Context context) {
       return new Deallocate.Input("stop", Duration.ofSeconds(30));
     }
   }
@@ -366,12 +366,12 @@ class DistributionContractsTest {
   /**
    * A library placed beside the server but never run itself.
    */
-  record Library(Coordinate.File coordinates, String byproductName, Describe source, Set<Label> labels)
-      implements Byproduct.Nonexecutable {
+  record Library(Coordinate.File coordinates, String distributableName, Describe source, Set<Label> labels)
+      implements Distributable.Nonexecutable {
 
     Library {
       labels = Set.copyOf(labels);
-      Byproduct.validate(byproductName, labels);
+      Distributable.validate(distributableName, labels);
     }
 
     static Library of(String key) {
