@@ -16,23 +16,25 @@ import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import cat.tabbie.sdk.addon.artifact.Artifact;
-import cat.tabbie.sdk.addon.artifact.Mod;
+import cat.tabbie.extensions.content.Mod;
+import cat.tabbie.extensions.distribution.java.Launcher;
+import cat.tabbie.extensions.distribution.java.Manager;
+import cat.tabbie.extensions.distribution.java.Vanilla;
 import cat.tabbie.sdk.album.repository.Describe;
 import cat.tabbie.sdk.album.repository.Extract;
 import cat.tabbie.sdk.album.repository.Reference;
-import cat.tabbie.sdk.album.revision.Intermediate;
-import cat.tabbie.sdk.api.Observer;
-import cat.tabbie.sdk.merchant.Provider;
-import cat.tabbie.sdk.merchant.Provider.Coordinate;
-import cat.tabbie.sdk.minecraft.Environment;
-import cat.tabbie.sdk.minecraft.Label;
-import cat.tabbie.sdk.minecraft.Parity;
-import cat.tabbie.sdk.minecraft.Version;
-import cat.tabbie.sdk.minecraft.distribution.Bedrock;
-import cat.tabbie.sdk.minecraft.distribution.Java;
-import cat.tabbie.sdk.platform.Platform;
+import cat.tabbie.sdk.catalog.Coordinate;
+import cat.tabbie.sdk.catalog.Identity;
+import cat.tabbie.sdk.catalog.Provider;
+import cat.tabbie.sdk.content.Artifact;
+import cat.tabbie.sdk.platform.Observer;
 import cat.tabbie.sdk.platform.Relative;
+import cat.tabbie.sdk.revision.Intermediate;
+import cat.tabbie.sdk.target.Environment;
+import cat.tabbie.sdk.target.Label;
+import cat.tabbie.sdk.target.Parity;
+import cat.tabbie.sdk.target.Platform;
+import cat.tabbie.sdk.target.Version;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 
@@ -54,23 +56,23 @@ public final class TestFixtures {
 
   public static final Version.Bedrock BEDROCK_VERSION = new Version.Bedrock("1.21.80", Version.Bedrock.Release.RELEASE);
 
-  public static final Label VANILLA_CLIENT = new Label(JAVA_VERSION, Java.Of.NATIVE, Environment.CLIENT);
+  public static final Label VANILLA_CLIENT = new Label(JAVA_VERSION, Vanilla.NATIVE, Environment.CLIENT);
 
-  public static final Label VANILLA_SERVER = new Label(JAVA_VERSION, Java.Of.NATIVE, Environment.SERVER);
+  public static final Label VANILLA_SERVER = new Label(JAVA_VERSION, Vanilla.NATIVE, Environment.SERVER);
 
-  public static final Label FABRIC_CLIENT = new Label(JAVA_VERSION, Java.Launcher.Of.FABRIC, Environment.CLIENT);
+  public static final Label FABRIC_CLIENT = new Label(JAVA_VERSION, Launcher.Of.FABRIC, Environment.CLIENT);
 
-  public static final Label FABRIC_SERVER = new Label(JAVA_VERSION, Java.Launcher.Of.FABRIC, Environment.SERVER);
+  public static final Label FABRIC_SERVER = new Label(JAVA_VERSION, Launcher.Of.FABRIC, Environment.SERVER);
 
-  public static final Label QUILT_CLIENT = new Label(JAVA_VERSION, Java.Launcher.Of.QUILT, Environment.CLIENT);
+  public static final Label QUILT_CLIENT = new Label(JAVA_VERSION, Launcher.Of.QUILT, Environment.CLIENT);
 
-  public static final Label PAPER_SERVER = new Label(JAVA_VERSION, Java.Manager.Of.PAPER, Environment.SERVER);
+  public static final Label PAPER_SERVER = new Label(JAVA_VERSION, Manager.Of.PAPER, Environment.SERVER);
 
-  public static final Label BEDROCK_CLIENT = new Label(BEDROCK_VERSION, Bedrock.Of.NATIVE, Environment.CLIENT);
+  public static final Label BEDROCK_CLIENT = new Label(BEDROCK_VERSION, cat.tabbie.extensions.distribution.bedrock.Vanilla.NATIVE, Environment.CLIENT);
 
-  public static final Label BEDROCK_SERVER = new Label(BEDROCK_VERSION, Bedrock.Of.NATIVE, Environment.SERVER);
+  public static final Label BEDROCK_SERVER = new Label(BEDROCK_VERSION, cat.tabbie.extensions.distribution.bedrock.Vanilla.NATIVE, Environment.SERVER);
 
-  public static final Label ENDSTONE_SERVER = new Label(BEDROCK_VERSION, Bedrock.Manager.Of.ENDSTONE, Environment.SERVER);
+  public static final Label ENDSTONE_SERVER = new Label(BEDROCK_VERSION, cat.tabbie.extensions.distribution.bedrock.Manager.Of.ENDSTONE, Environment.SERVER);
 
   public static final Platform PLATFORM = new Platform(Platform.Kernel.LINUX, Platform.Architecture.X_64);
 

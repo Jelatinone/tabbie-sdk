@@ -18,6 +18,8 @@ import cat.tabbie.sdk.platform.Command.Argument;
 import cat.tabbie.sdk.platform.Command.Option;
 import cat.tabbie.sdk.platform.Package.Manager;
 import cat.tabbie.sdk.platform.Package.Specification;
+import cat.tabbie.sdk.target.Platform;
+
 
 class CommandPackageTest {
 

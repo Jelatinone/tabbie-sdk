@@ -3,6 +3,7 @@ package cat.tabbie.sdk.platform;
 import java.util.List;
 
 import cat.tabbie.sdk.platform.Package.Manager;
+import cat.tabbie.sdk.target.Platform;
 import lombok.NonNull;
 
 /**

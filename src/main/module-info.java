@@ -6,7 +6,8 @@
  * its descriptions belongs to the consumer.
  *
  * <p>
- * Every package is exported but {@code meta.processor}. A module declares what
+ * Every package is exported but {@code meta.processor}, until the packages
+ * only core uses are exported to core alone. A module declares what
  * it contributes with the {@code meta} actions and attributes, and puts the SDK
  * on its processor path to have those declarations checked, and its
  * registration generated, while it compiles, as the SDK's own are. The
@@ -25,20 +26,18 @@ module cat.tabbie.sdk {
   requires transitive tools.jackson.databind;
 
   exports cat.tabbie.sdk;
-  exports cat.tabbie.sdk.addon;
-  exports cat.tabbie.sdk.addon.artifact;
-  exports cat.tabbie.sdk.album.repository;
-  exports cat.tabbie.sdk.album.revision;
-  exports cat.tabbie.sdk.album.model;
-  exports cat.tabbie.sdk.api;
-  exports cat.tabbie.sdk.merchant;
+  exports cat.tabbie.sdk.catalog;
+  exports cat.tabbie.sdk.content;
+  exports cat.tabbie.sdk.distribution;
+  exports cat.tabbie.sdk.form;
   exports cat.tabbie.sdk.meta.action;
   exports cat.tabbie.sdk.meta.attribute;
   exports cat.tabbie.sdk.meta.registry;
-  exports cat.tabbie.sdk.minecraft;
-  exports cat.tabbie.sdk.minecraft.distribution;
+  exports cat.tabbie.sdk.model;
+  exports cat.tabbie.sdk.plate;
   exports cat.tabbie.sdk.platform;
-  exports cat.tabbie.sdk.platform.layout;
+  exports cat.tabbie.sdk.revision;
+  exports cat.tabbie.sdk.target;
 
   uses cat.tabbie.sdk.meta.registry.Registration;
 

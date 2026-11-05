@@ -5,9 +5,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-import cat.tabbie.sdk.minecraft.Environment;
-import cat.tabbie.sdk.minecraft.Version;
-import cat.tabbie.sdk.platform.Platform;
+import cat.tabbie.sdk.target.Environment;
+import cat.tabbie.sdk.target.Platform;
+import cat.tabbie.sdk.target.Version;
 import lombok.NonNull;
 
 /**

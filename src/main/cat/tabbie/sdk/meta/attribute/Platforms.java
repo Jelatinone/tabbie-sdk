@@ -11,7 +11,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import cat.tabbie.sdk.platform.Platform;
+import cat.tabbie.sdk.target.Platform;
 import lombok.NonNull;
 
 /**

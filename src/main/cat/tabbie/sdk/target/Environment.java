@@ -1,0 +1,20 @@
+package cat.tabbie.sdk.target;
+
+
+/**
+ * Physical runtime being managed. A client may host an integrated logical
+ * server; that does not turn it into a dedicated server. World bindings and
+ * resource-pack delivery are separate installation concerns.
+ */
+public enum Environment {
+
+  /**
+   * Dedicated multiplayer server process.
+   */
+  SERVER,
+
+  /**
+   * Game client process, which may host an integrated singleplayer server.
+   */
+  CLIENT
+}

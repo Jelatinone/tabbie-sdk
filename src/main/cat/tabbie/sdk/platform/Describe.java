@@ -13,15 +13,14 @@ import java.util.HexFormat;
 import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import cat.tabbie.sdk.api.Observer;
 import lombok.NonNull;
 
 /**
  * The source role: a reusable, inspectable description of how to obtain
  * bytes, and what they are called. Providers describe artifact content this
- * way; a {@link cat.tabbie.sdk.album.repository.Stash Stash} describes
+ * way; a {@link cat.tabbie.sdk.plate.Stash Stash} describes
  * retained content this way too, and captures what is described this way
- * with {@link cat.tabbie.sdk.album.repository.Stash#capture(Describe)
+ * with {@link cat.tabbie.sdk.plate.Stash#capture(Describe)
  * capture}. Describing performs no I/O; {@link #open} is repeatable and
  * independent of any prior inspection, so a description can be reopened
  * later without retaining an open handle to whatever it was derived from.

@@ -25,36 +25,37 @@ import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import cat.tabbie.sdk.Identity;
-import cat.tabbie.sdk.addon.Addon;
-import cat.tabbie.sdk.addon.artifact.Artifact;
-import cat.tabbie.sdk.addon.artifact.Datapack;
-import cat.tabbie.sdk.addon.artifact.Mod;
-import cat.tabbie.sdk.album.repository.Archive;
+import cat.tabbie.extensions.content.Datapack;
+import cat.tabbie.extensions.content.Mod;
+import cat.tabbie.extensions.distribution.java.Launcher;
+import cat.tabbie.extensions.distribution.java.Manager;
 import cat.tabbie.sdk.album.repository.Describe;
 import cat.tabbie.sdk.album.repository.Extract;
 import cat.tabbie.sdk.album.repository.Reference;
-import cat.tabbie.sdk.album.revision.Image;
-import cat.tabbie.sdk.album.revision.Intermediate;
-import cat.tabbie.sdk.api.Observer;
-import cat.tabbie.sdk.api.Query;
-import cat.tabbie.sdk.api.Queryable;
-import cat.tabbie.sdk.merchant.Installer;
-import cat.tabbie.sdk.merchant.Provider;
-import cat.tabbie.sdk.merchant.Provider.Coordinate;
-import cat.tabbie.sdk.minecraft.Compatibility;
-import cat.tabbie.sdk.minecraft.Environment;
-import cat.tabbie.sdk.minecraft.Label;
-import cat.tabbie.sdk.minecraft.Parity;
-import cat.tabbie.sdk.minecraft.Version;
-import cat.tabbie.sdk.minecraft.distribution.Byproduct;
-import cat.tabbie.sdk.minecraft.distribution.Distribution;
-import cat.tabbie.sdk.minecraft.distribution.Java;
-import cat.tabbie.sdk.minecraft.distribution.Product;
+import cat.tabbie.sdk.catalog.Addon;
+import cat.tabbie.sdk.catalog.Coordinate;
+import cat.tabbie.sdk.catalog.Identity;
+import cat.tabbie.sdk.catalog.Product;
+import cat.tabbie.sdk.catalog.Provider;
+import cat.tabbie.sdk.catalog.Query;
+import cat.tabbie.sdk.catalog.Queryable;
+import cat.tabbie.sdk.content.Artifact;
+import cat.tabbie.sdk.content.Installer;
+import cat.tabbie.sdk.distribution.Byproduct;
+import cat.tabbie.sdk.distribution.Distribution;
+import cat.tabbie.sdk.plate.Archive;
 import cat.tabbie.sdk.platform.Command;
-import cat.tabbie.sdk.platform.Platform;
+import cat.tabbie.sdk.platform.Observer;
 import cat.tabbie.sdk.platform.Relative;
 import cat.tabbie.sdk.platform.Toolchain;
+import cat.tabbie.sdk.revision.Image;
+import cat.tabbie.sdk.revision.Intermediate;
+import cat.tabbie.sdk.target.Compatibility;
+import cat.tabbie.sdk.target.Environment;
+import cat.tabbie.sdk.target.Label;
+import cat.tabbie.sdk.target.Parity;
+import cat.tabbie.sdk.target.Platform;
+import cat.tabbie.sdk.target.Version;
 
 /**
  * Exercises the SDK the way an external provider and core would, from outside
@@ -65,7 +66,7 @@ class ConsumerTest {
 
   private static final Label FABRIC_SERVER = Label.parse("java:fabric/1.21.1/server");
 
-  private static final Label FABRIC_CLIENT = new Label(Version.interpret("Minecraft 1.21.1"), Java.Launcher.Of.FABRIC,
+  private static final Label FABRIC_CLIENT = new Label(Version.interpret("Minecraft 1.21.1"), Launcher.Of.FABRIC,
       Environment.CLIENT);
 
   private static final Label PAPER_SERVER = Label.parse("java:paper/1.21.1/server");
@@ -120,7 +121,7 @@ class ConsumerTest {
         .orElseThrow();
 
     assertTrue(server.supports(PAPER_SERVER, LINUX));
-    assertEquals(Java.Manager.Of.PAPER, paper.distribution());
+    assertEquals(Manager.Of.PAPER, paper.distribution());
     assertEquals(Optional.of(Toolchain.Java.atLeast(21)), server.toolchain());
     assertEquals(List.of("java", "-Xmx2048M", "-jar", "server.jar", "nogui"),
         server.allocate(context).command().render(new Command.Resolver() {
@@ -344,7 +345,7 @@ class ConsumerTest {
       Coordinate.Build release = project("paper").channel("default").build("1.21.1-130");
       ServerJar jar = new ServerJar(release.file("server"), "Paper", describe("paper.jar",
           "paper".getBytes(StandardCharsets.UTF_8)), Set.of(PAPER_SERVER));
-      paper = new Server(project("paper"), "Paper", Java.Manager.Of.PAPER,
+      paper = new Server(project("paper"), "Paper", Manager.Of.PAPER,
           Set.of(new Product.Build(release, "1.21.1-130", Instant.EPOCH, 130L, Set.of(jar), Set.of())));
     }
 

@@ -6,8 +6,8 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-import cat.tabbie.sdk.addon.artifact.Artifact;
-import cat.tabbie.sdk.minecraft.distribution.Distribution;
+import cat.tabbie.sdk.content.Artifact;
+import cat.tabbie.sdk.distribution.Distribution;
 
 /**
  * Registers a type with tabbie: an enum of {@link Distribution distributions},

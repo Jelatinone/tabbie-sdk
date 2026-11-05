@@ -12,13 +12,13 @@ import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import cat.tabbie.sdk.addon.artifact.Artifact;
+import cat.tabbie.sdk.content.Artifact;
+import cat.tabbie.sdk.content.Install;
+import cat.tabbie.sdk.distribution.Distribution;
 import cat.tabbie.sdk.meta.action.Contribution;
-import cat.tabbie.sdk.meta.action.Install;
 import cat.tabbie.sdk.meta.registry.Contributions;
 import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.meta.registry.Registration;
-import cat.tabbie.sdk.minecraft.distribution.Distribution;
 import lombok.NonNull;
 
 /**

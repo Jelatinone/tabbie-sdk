@@ -11,9 +11,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import cat.tabbie.sdk.minecraft.Environment;
-import cat.tabbie.sdk.minecraft.Version;
-import cat.tabbie.sdk.platform.Platform;
+import cat.tabbie.sdk.target.Environment;
+import cat.tabbie.sdk.target.Platform;
+import cat.tabbie.sdk.target.Version;
 import lombok.NonNull;
 
 /**

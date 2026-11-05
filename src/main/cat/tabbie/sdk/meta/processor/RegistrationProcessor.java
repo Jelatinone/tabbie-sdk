@@ -20,11 +20,11 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.ElementFilter;
 import javax.tools.StandardLocation;
 
-import cat.tabbie.sdk.addon.artifact.Artifact;
+import cat.tabbie.sdk.content.Artifact;
+import cat.tabbie.sdk.distribution.Distribution;
 import cat.tabbie.sdk.meta.attribute.Distributions;
 import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.meta.registry.Registration;
-import cat.tabbie.sdk.minecraft.distribution.Distribution;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;

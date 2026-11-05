@@ -6,7 +6,6 @@ import java.util.HexFormat;
 import java.util.Locale;
 import java.util.OptionalLong;
 
-import cat.tabbie.sdk.api.Observer;
 import lombok.NonNull;
 
 /**

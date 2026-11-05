@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.OptionalInt;
 
+import cat.tabbie.sdk.target.Platform;
+
 class PlatformToolchainTest {
 
   @Test

@@ -10,7 +10,7 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import cat.tabbie.sdk.minecraft.Version;
+import cat.tabbie.sdk.target.Version;
 import lombok.NonNull;
 
 /**
