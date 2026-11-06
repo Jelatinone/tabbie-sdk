@@ -3,7 +3,6 @@ package cat.tabbie.sdk.target;
 import java.util.Arrays;
 import java.util.Locale;
 
-import cat.tabbie.sdk.content.Artifact;
 import cat.tabbie.sdk.distribution.Distribution;
 import lombok.NonNull;
 
@@ -81,24 +80,5 @@ public record Label(@NonNull Version version, @NonNull Distribution distribution
     return version.match(other.version)
         && distribution.equals(other.distribution)
         && environment == other.environment;
-  }
-
-  /**
-   * Assesses type support followed by explicit target declarations. Whether
-   * this target supports the artifact's family follows from the installs the
-   * registry holds. Unlisted targets remain unknown; no compatibility between
-   * runtime forks is inferred.
-   *
-   * @param artifact artifact to assess against this target
-   * @param registry registry holding the installs core has loaded
-   * @return structural rejection, declared support, or unknown support
-   */
-  public Compatibility compatibility(@NonNull Artifact artifact, @NonNull Artifact.Registry registry) {
-    if (!registry.supports(distribution, environment, artifact.getClass())) {
-      return Compatibility.UNSUPPORTED;
-    }
-    return artifact.labels().stream().anyMatch(label -> label.match(this))
-        ? Compatibility.SUPPORTED
-        : Compatibility.UNKNOWN;
   }
 }

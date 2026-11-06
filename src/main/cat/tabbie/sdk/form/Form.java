@@ -233,7 +233,8 @@ public sealed interface Form permits Form.Text, Form.Json {
       if (at.matches()) {
         return writeValue(current.fileName(), written);
       }
-      // Puts the content in place, making the objects on the way the document does not hold yet
+      // Puts the content in place, making the objects on the way the document does
+      // not hold yet
       JsonNode root = document.isContainer() ? document : MAPPER.createObjectNode();
       JsonNode parent = root;
       for (JsonPointer step = at.head(); !step.matches(); step = step.tail()) {
@@ -252,7 +253,7 @@ public sealed interface Form permits Form.Text, Form.Json {
       switch (parent) {
         case ObjectNode holder -> holder.set(last.getMatchingProperty(), written);
         case ArrayNode holder when last.mayMatchElement() && last.getMatchingIndex() < holder.size() ->
-            holder.set(last.getMatchingIndex(), written);
+          holder.set(last.getMatchingIndex(), written);
         default -> throw new IllegalArgumentException("A document reaches its content through objects and arrays.");
       }
       return writeValue(current.fileName(), root);

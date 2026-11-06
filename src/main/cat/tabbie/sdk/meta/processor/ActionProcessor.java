@@ -23,7 +23,7 @@ import javax.lang.model.util.ElementFilter;
 
 import cat.tabbie.sdk.meta.action.Action;
 import cat.tabbie.sdk.meta.action.Closure;
-import cat.tabbie.sdk.meta.action.Contribution;
+import cat.tabbie.sdk.meta.action.Contributor;
 import cat.tabbie.sdk.meta.action.Coverage;
 import cat.tabbie.sdk.meta.attribute.Distributions;
 import cat.tabbie.sdk.meta.attribute.Environments;
@@ -52,7 +52,8 @@ import lombok.experimental.FieldDefaults;
  * declaring the method are public, as is every type enclosing them, so the
  * registry reaches the method through the module's lookup. The contributions
  * of each action to each subject within a type are checked together as a
- * {@link Coverage}, each conflict reported on the later of its two methods.
+ * {@link Coverage}, by key, each conflict reported on the later of its two
+ * methods.
  * Attributes on a method carrying no action, or on a type with no action
  * within it, are an error, since nothing would read them.
  */
@@ -93,7 +94,7 @@ public final class ActionProcessor extends Processor {
       error(type, "%s has attributes but no action within it; attributes only say which targets an action "
           + "applies to.", type.getSimpleName());
     }
-    Map<Covered, List<Contribution<TypeElement, ExecutableElement>>> coverages = new LinkedHashMap<>();
+    Map<Covered, List<Contributor<TypeElement, ExecutableElement>>> coverages = new LinkedHashMap<>();
     for (ExecutableElement method : ElementFilter.methodsIn(type.getEnclosedElements())) {
       List<? extends AnnotationMirror> actions = actions(method);
       if (actions.isEmpty()) {
@@ -109,10 +110,10 @@ public final class ActionProcessor extends Processor {
       }
       for (AnnotationMirror action : actions) {
         try {
-          Contribution<TypeElement, ExecutableElement> contribution = contribution(method, action);
-          signed(method, action, contribution.subject());
-          coverages.computeIfAbsent(new Covered(written(action), contribution.subject()), _ -> new ArrayList<>())
-              .add(contribution);
+          Contributor<TypeElement, ExecutableElement> contributor = contributor(method, action);
+          signed(method, action, contributor.subject());
+          coverages.computeIfAbsent(new Covered(written(action), contributor.subject(), contributor.key()),
+              _ -> new ArrayList<>()).add(contributor);
         } catch (IllegalArgumentException exception) {
           error(method, "%s", exception.getMessage());
         }
@@ -137,6 +138,10 @@ public final class ActionProcessor extends Processor {
       error(action, "@%s is an action, so it declares Class<?>[] subject() default {}, the type a static "
           + "contribution acts on.", action.getSimpleName());
     }
+    keyName(action)
+        .filter(key -> !elements.containsKey(key))
+        .ifPresent(key -> error(action, "@%s is keyed by %s(), so it declares that element.", action.getSimpleName(),
+            key));
     if (signature(action).flatMap(ActionProcessor::method).filter(shape -> shape.getParameters().size() == 2)
         .isEmpty()) {
       error(action, "@%s is an action, so its signature is a functional interface whose one method takes the "
@@ -222,12 +227,13 @@ public final class ActionProcessor extends Processor {
   }
 
   /**
-   * One action, as written, contributed to one subject: what a coverage
-   * checks together.
+   * One action, as written, contributed to one subject by one key: what a
+   * coverage checks together.
    *
    * @param action  the action, such as {@code @Install}
    * @param subject the type it acts on
+   * @param key     the key it is contributed by, or empty for none
    */
-  private record Covered(String action, TypeElement subject) {
+  private record Covered(String action, TypeElement subject, Optional<String> key) {
   }
 }

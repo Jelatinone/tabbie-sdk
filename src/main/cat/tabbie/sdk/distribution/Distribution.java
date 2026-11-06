@@ -10,6 +10,7 @@ import java.util.stream.Stream;
 
 import cat.tabbie.sdk.meta.attribute.Conditions;
 import cat.tabbie.sdk.meta.attribute.Distributions;
+import cat.tabbie.sdk.meta.registry.Registrable;
 import cat.tabbie.sdk.target.Environment;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Platform;
@@ -34,6 +35,7 @@ import lombok.NonNull;
  * registered as a group an attribute can name, such as
  * {@code java:launcher}.
  */
+@Registrable(Registrable.Kind.VALUES)
 public interface Distribution {
 
   /**

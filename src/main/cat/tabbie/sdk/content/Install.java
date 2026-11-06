@@ -7,7 +7,6 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.meta.action.Action;
 import cat.tabbie.sdk.meta.action.Closure;
@@ -103,13 +102,7 @@ public @interface Install {
      *                             directories
      */
     static Context of(@NonNull Artifact artifact, @NonNull Artifact.Context context, @NonNull Closure closure) {
-      Class<?> type = artifact.getClass();
-      return new Default(context, switch (closure) {
-        case ROOT -> new Installer.Install(context, type);
-        case NAMESPACES -> Installer.Install.resolve(context, type, context.worlds().stream()
-            .map(World::namespace)
-            .collect(Collectors.toUnmodifiableSet()));
-      });
+      return new Default(context, Installer.Install.of(context, artifact.getClass(), closure));
     }
 
     /**

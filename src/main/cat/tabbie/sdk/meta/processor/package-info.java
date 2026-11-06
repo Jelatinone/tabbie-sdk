@@ -8,7 +8,7 @@
  * <p>
  * {@link Processor} holds what every processor shares: the annotations it
  * reads, the compiler's utilities, reporting errors, and reading elements
- * into the same {@link cat.tabbie.sdk.meta.action.Contribution} and
+ * into the same {@link cat.tabbie.sdk.meta.action.Contributor} and
  * {@link cat.tabbie.sdk.meta.attribute.Conditions} records the registry
  * reads at run time. Each subject's processor holds only its own rules:
  * {@link ActionProcessor} checks every action and its contributions, each

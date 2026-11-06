@@ -4,8 +4,10 @@
  * method carries a behaviour out; some are nouns whose method returns what
  * they name. An annotation becomes an action when it is marked
  * {@link Action}. Each method carrying one is read into a
- * {@link Contribution}, and the contributions of one action to one subject
- * are checked together as a {@link Coverage}. The
+ * {@link Contributor}, and the contributors of one action to one subject, by
+ * one key, are checked together as a {@link Coverage}. An action's
+ * {@link Cardinality} says how many of its contributors act for one subject at
+ * one target. The
  * {@link cat.tabbie.sdk.meta.attribute attributes} on an action's method, or
  * on a type enclosing it, say which targets it applies to.
  *

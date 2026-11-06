@@ -5,8 +5,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import cat.tabbie.sdk.meta.action.Closure;
 import cat.tabbie.sdk.model.Layout;
 import cat.tabbie.sdk.model.Violation;
+import cat.tabbie.sdk.model.World;
 import cat.tabbie.sdk.plate.Archive;
 import cat.tabbie.sdk.plate.Plate;
 import cat.tabbie.sdk.platform.Address;
@@ -156,6 +158,32 @@ public interface Installer<Contextual extends Installer.Context> {
      */
     public Install(@NonNull Context context, @NonNull Class<?> type) {
       this(context, type, Set.of(context.model().find(type).unique()));
+    }
+
+    /**
+     * Resolves where an action acting where its closure says places content
+     * of a type: in the directory of the context's model accepting it, at the
+     * root; or in the directory accepting it beneath the namespace of each
+     * World the context names, in namespaces. Every action acting in places
+     * resolves its closure here.
+     *
+     * @param context context the action runs in
+     * @param type    type of the content, which says where it goes
+     * @param closure where the action acts
+     * @return the install placing the content
+     * @throws Violation.Unplaced  when no directory accepts the type, or the
+     *                             action acts in namespaces and the context
+     *                             names no World
+     * @throws Violation.Ambiguous when several directories accept it at the
+     *                             root, or beneath one namespace
+     */
+    public static Install of(@NonNull Artifact.Context context, @NonNull Class<?> type, @NonNull Closure closure) {
+      return switch (closure) {
+        case ROOT -> new Install(context, type);
+        case NAMESPACES -> resolve(context, type, context.worlds().stream()
+            .map(World::namespace)
+            .collect(Collectors.toUnmodifiableSet()));
+      };
     }
 
     /**

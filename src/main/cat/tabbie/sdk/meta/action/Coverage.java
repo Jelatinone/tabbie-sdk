@@ -17,7 +17,7 @@ import cat.tabbie.sdk.target.Version;
 import lombok.NonNull;
 
 /**
- * The contributions of one action to one subject, checked together. A
+ * The contributors of one action to one subject, by one key, checked together. A
  * target is one distribution, environment and platform, and for every
  * target, no two contributions apply, and every version between the lowest
  * and highest bound of those that do is covered. The targets checked are
@@ -33,7 +33,7 @@ import lombok.NonNull;
  */
 public record Coverage<Subject, Call>(
     @NonNull String action,
-    @NonNull List<Contribution<Subject, Call>> contributions) {
+    @NonNull List<Contributor<Subject, Call>> contributions) {
 
   /**
    * Copies the contributions.
@@ -52,18 +52,18 @@ public record Coverage<Subject, Call>(
     List<Conflict<Subject, Call>> conflicts = new ArrayList<>();
     Set<List<Object>> reported = new HashSet<>();
     for (Spot spot : spots()) {
-      List<Contribution<Subject, Call>> applying = contributions.stream()
+      List<Contributor<Subject, Call>> applying = contributions.stream()
           .filter(spot::reaches)
           .sorted(Comparator.comparing(
-              (Contribution<Subject, Call> contribution) -> contribution.conditions().versions().low().orElse(null),
+              (Contributor<Subject, Call> contribution) -> contribution.conditions().versions().low().orElse(null),
               Comparator.nullsFirst(Comparator.naturalOrder())))
           .toList();
       if (applying.isEmpty()) {
         continue;
       }
       // The contribution reaching furthest so far; each next one meets it, leaves a gap after it, or overlaps it
-      Contribution<Subject, Call> reach = applying.getFirst();
-      for (Contribution<Subject, Call> next : applying.subList(1, applying.size())) {
+      Contributor<Subject, Call> reach = applying.getFirst();
+      for (Contributor<Subject, Call> next : applying.subList(1, applying.size())) {
         Optional<Version.Number> ends = reach.conditions().versions().high();
         Optional<Version.Number> begins = next.conditions().versions().low();
         if (ends.isEmpty() || begins.isEmpty() || begins.get().compareTo(ends.get()) < 0) {
@@ -105,7 +105,7 @@ public record Coverage<Subject, Call>(
    * standing for every value none names.
    */
   private <Value> Set<Optional<Value>> values(
-      Function<Contribution<Subject, Call>, Set<Value>> named,
+      Function<Contributor<Subject, Call>, Set<Value>> named,
       Comparator<Value> order) {
     return Stream.concat(
         contributions.stream()
@@ -132,7 +132,7 @@ public record Coverage<Subject, Call>(
     /**
      * Whether a contribution applies to this target.
      */
-    boolean reaches(Contribution<?, ?> contribution) {
+    boolean reaches(Contributor<?, ?> contribution) {
       return contribution.conditions().distributions().includes(distribution)
           && contribution.conditions().environments().includes(environment)
           && contribution.conditions().platforms().includes(platform);
@@ -167,7 +167,7 @@ public record Coverage<Subject, Call>(
      * @return later contribution
      */
     @NonNull
-    Contribution<Subject, Call> later();
+    Contributor<Subject, Call> later();
 
     /**
      * Describes the conflict as a complete sentence.
@@ -190,8 +190,8 @@ public record Coverage<Subject, Call>(
      */
     record Overlap<Subject, Call>(
         @NonNull String action,
-        @NonNull Contribution<Subject, Call> earlier,
-        @NonNull Contribution<Subject, Call> later,
+        @NonNull Contributor<Subject, Call> earlier,
+        @NonNull Contributor<Subject, Call> later,
         @NonNull String target) implements Conflict<Subject, Call> {
 
       /**
@@ -203,7 +203,7 @@ public record Coverage<Subject, Call>(
       @Override
       public String message() {
         return String.format("Two %s contributions, %s and %s, both apply to %s; no two may apply to one target.",
-            action, earlier.contributor(), later.contributor(), target);
+            action, earlier.name(), later.name(), target);
       }
     }
 
@@ -220,8 +220,8 @@ public record Coverage<Subject, Call>(
      */
     record Gap<Subject, Call>(
         @NonNull String action,
-        @NonNull Contribution<Subject, Call> earlier,
-        @NonNull Contribution<Subject, Call> later,
+        @NonNull Contributor<Subject, Call> earlier,
+        @NonNull Contributor<Subject, Call> later,
         @NonNull String target) implements Conflict<Subject, Call> {
 
       /**
@@ -247,8 +247,8 @@ public record Coverage<Subject, Call>(
         Version.Number ends = earlier.conditions().versions().high().orElseThrow();
         Version.Number begins = later.conditions().versions().low().orElseThrow();
         return String.format("%s contributions leave the versions from %s up to %s uncovered for %s: %s ends at "
-            + "%s, but %s begins at %s.", action, ends, begins, target, earlier.contributor(), ends,
-            later.contributor(), begins);
+            + "%s, but %s begins at %s.", action, ends, begins, target, earlier.name(), ends,
+            later.name(), begins);
       }
     }
   }

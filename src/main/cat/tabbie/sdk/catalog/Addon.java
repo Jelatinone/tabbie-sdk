@@ -3,10 +3,8 @@ package cat.tabbie.sdk.catalog;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.content.Artifact;
-import cat.tabbie.sdk.target.Compatibility;
 import cat.tabbie.sdk.target.Label;
 import lombok.NonNull;
 
@@ -139,7 +137,8 @@ public interface Addon {
      * that every artifact is a distinct file of this release declaring every
      * label, and that no artifact conflicts with another of the same build.
      * Whether each label supports each artifact's family depends on the
-     * installs core has loaded, so {@link #compatibility} assesses it.
+     * installs core has loaded, so
+     * {@link Artifact.Registry#compatibility(Addon.Build, Label)} assesses it.
      *
      * @throws IllegalArgumentException when publication invariants are violated,
      *                                  no label is advertised, an artifact does
@@ -187,27 +186,6 @@ public interface Addon {
         @NonNull Artifact content) {
       return new Build(coordinates, releaseName, releaseDate, releaseNumber,
           labels, Set.of(content));
-    }
-
-    /**
-     * Assesses artifact type support and this build's explicit declaration.
-     * A structurally unsupported artifact takes precedence over missing evidence.
-     *
-     * @param target   selected runtime target
-     * @param registry registry holding the installs core has loaded
-     * @return declared support, structural rejection, or unknown support
-     */
-    public Compatibility compatibility(@NonNull Label target, @NonNull Artifact.Registry registry) {
-      Set<Compatibility> assessments = content().stream()
-          .map(artifact -> target.compatibility(artifact, registry))
-          .collect(Collectors.toSet());
-      if (assessments.contains(Compatibility.UNSUPPORTED)) {
-        return Compatibility.UNSUPPORTED;
-      }
-      return labels().stream().anyMatch(label -> label.match(target))
-          && assessments.stream().allMatch(result -> result == Compatibility.SUPPORTED)
-              ? Compatibility.SUPPORTED
-              : Compatibility.UNKNOWN;
     }
   }
 }

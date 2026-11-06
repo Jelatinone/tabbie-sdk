@@ -4,10 +4,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -17,13 +21,13 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.ModuleElement;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.tools.StandardLocation;
 
-import cat.tabbie.sdk.content.Artifact;
-import cat.tabbie.sdk.distribution.Distribution;
 import cat.tabbie.sdk.meta.attribute.Distributions;
 import cat.tabbie.sdk.meta.registry.Registered;
+import cat.tabbie.sdk.meta.registry.Registrable;
 import cat.tabbie.sdk.meta.registry.Registration;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
@@ -39,9 +43,10 @@ import lombok.experimental.NonFinal;
  * build, naming the line, when its {@code module-info} does not.
  *
  * <p>
- * A registered type is public, as is every type enclosing it, and is an enum
- * of distributions, an abstract type of them naming its group, or a type of
- * {@link Artifact}; group identifiers are unique within the module. Every
+ * A registered type is public, as is every type enclosing it, and is a type
+ * of a {@link Registrable registrable kind}: of a kind registered by values,
+ * an enum of them or an abstract type naming its group; of a kind registered
+ * by types, any type of it. Group identifiers are unique within the module. Every
  * type is listed together in the first round with anything to list, so a type
  * another processor generates cannot be registered.
  */
@@ -137,39 +142,65 @@ public final class RegistrationProcessor extends Processor {
   }
 
   /**
-   * Checks a registered type is what it may be.
+   * Checks a registered type is what its registrable kind lets it be.
    */
   private void check(TypeElement type) {
     String group = type.getAnnotation(Registered.class).value();
-    boolean distribution = assignable(type.asType(), Distribution.class)
-        && !type.getQualifiedName().contentEquals(Distribution.class.getCanonicalName());
     boolean abstracted = type.getKind() == ElementKind.INTERFACE
         || type.getKind() == ElementKind.CLASS && type.getModifiers().contains(Modifier.ABSTRACT);
+    Optional<Registrable.Kind> kind = kind(type);
     if (!exposed(type)) {
       error(type, "%s is registered, so it and every type enclosing it must be public: the generated %s name it.",
           type.getQualifiedName(), GENERATED);
-    } else if (distribution && type.getKind() == ElementKind.ENUM) {
+    } else if (mirror(type, Registrable.class).isPresent()) {
+      error(type, "%s is a registrable kind, so its own types are registered rather than it.",
+          type.getQualifiedName());
+    } else if (kind.isEmpty()) {
+      error(type, "%s is registered, but is a type of no registrable kind, a type marked @Registrable.",
+          type.getQualifiedName());
+    } else if (kind.get() == Registrable.Kind.TYPES) {
       if (!group.isEmpty()) {
-        error(type, "%s registers each of its distributions, so it names no group; register an abstract type of "
-            + "distributions as the group %s instead.", type.getQualifiedName(), group);
+        error(type, "%s registers itself, so it names no group.", type.getQualifiedName());
       }
-    } else if (distribution && abstracted) {
+    } else if (type.getKind() == ElementKind.ENUM) {
+      if (!group.isEmpty()) {
+        error(type, "%s registers each of its values, so it names no group; register an abstract type of them as "
+            + "the group %s instead.", type.getQualifiedName(), group);
+      }
+    } else if (abstracted) {
       if (!Distributions.Meta.IDENTIFIER.matcher(group).matches()) {
-        error(type, "%s is registered as a group of distributions, so it names the group's identifier, such as "
-            + "java:launcher, rather than \"%s\".", type.getQualifiedName(), group);
+        error(type, "%s is registered as a group, so it names the group's identifier, such as java:launcher, "
+            + "rather than \"%s\".", type.getQualifiedName(), group);
       } else if (groups.putIfAbsent(group, type) != null) {
         error(type, "%s and %s are both registered as the group %s.", groups.get(group).getQualifiedName(),
             type.getQualifiedName(), group);
       }
-    } else if (assignable(type.asType(), Artifact.class)
-        && !type.getQualifiedName().contentEquals(Artifact.class.getCanonicalName())) {
-      if (!group.isEmpty()) {
-        error(type, "%s is a content family, so it names no group.", type.getQualifiedName());
-      }
     } else {
-      error(type, "%s is registered, but is neither an enum or abstract type of distributions nor a content "
-          + "family, a type of Artifact.", type.getQualifiedName());
+      error(type, "%s is registered as a type of a kind registered by values, so it is an enum of them or an "
+          + "abstract type grouping them.", type.getQualifiedName());
     }
+  }
+
+  /**
+   * Finds the registrable kind a type is a type of: the nearest of its
+   * supertypes marked {@link Registrable}.
+   */
+  private Optional<Registrable.Kind> kind(TypeElement type) {
+    Deque<TypeMirror> pending = new ArrayDeque<>(types.directSupertypes(type.asType()));
+    Set<String> seen = new HashSet<>();
+    while (!pending.isEmpty()) {
+      TypeMirror next = pending.removeFirst();
+      if (!(types.asElement(next) instanceof TypeElement element)
+          || !seen.add(element.getQualifiedName().toString())) {
+        continue;
+      }
+      Registrable registrable = element.getAnnotation(Registrable.class);
+      if (registrable != null) {
+        return Optional.of(registrable.value());
+      }
+      pending.addAll(types.directSupertypes(next));
+    }
+    return Optional.empty();
   }
 
   /**

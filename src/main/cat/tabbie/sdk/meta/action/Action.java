@@ -30,11 +30,14 @@ import java.lang.annotation.Target;
  * so they are named apart: {@code <action><Qualifier><Closure>}, followed for
  * versioned contributions by their bounds, such as {@code installRoot},
  * {@code installListedRoot} or {@code installRoot_1_20_5to26_3}.</li>
- * <li>Each method carrying it is read into a {@link Contribution}, and the
- * contributions of one action to one subject in a type are checked together
- * as a {@link Coverage}: no two apply to one target, and for each target,
- * every version between the lowest and highest bound they name is covered.
- * Versions outside those bounds are simply not supported.</li>
+ * <li>Each method carrying it is read into a {@link Contributor}, and the
+ * contributors of one action to one subject in a type, by one key, are checked
+ * together as a {@link Coverage}: no two apply to one target, and for each
+ * target, every version between the lowest and highest bound they name is
+ * covered. Versions outside those bounds are simply not supported.</li>
+ * <li>Its {@link #cardinality() cardinality} says how many of its contributors
+ * act for one subject at one target, and its {@link #key() key} which of its
+ * elements keeps contributors apart, so that only those sharing a key meet.</li>
  * </ul>
  *
  * <p>
@@ -56,4 +59,21 @@ public @interface Action {
    * @return the signature every contribution has
    */
   Class<?> value();
+
+  /**
+   * Returns how many of the action's contributors act for one subject at one
+   * target.
+   *
+   * @return cardinality, {@link Cardinality#ONE} by default
+   */
+  Cardinality cardinality() default Cardinality.ONE;
+
+  /**
+   * Returns the name of the action's element whose value keys its
+   * contributors, such as the file an activation edits. Contributors keyed by
+   * different values never meet, so each value has a winner of its own.
+   *
+   * @return element name, or empty when contributors are keyed by nothing
+   */
+  String key() default "";
 }

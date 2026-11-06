@@ -31,7 +31,7 @@ import javax.tools.Diagnostic;
 
 import cat.tabbie.sdk.meta.action.Action;
 import cat.tabbie.sdk.meta.action.Closure;
-import cat.tabbie.sdk.meta.action.Contribution;
+import cat.tabbie.sdk.meta.action.Contributor;
 import cat.tabbie.sdk.meta.attribute.Conditions;
 import cat.tabbie.sdk.meta.attribute.Distributions;
 import cat.tabbie.sdk.meta.attribute.Environments;
@@ -50,7 +50,7 @@ import lombok.experimental.NonFinal;
  * rules, run once each round, and once more when processing is over.
  *
  * <p>
- * Reading a method here builds the same {@link Contribution} and
+ * Reading a method here builds the same {@link Contributor} and
  * {@link Conditions} the registry builds from the same annotations when it
  * loads a module, through the same factories, so what a module's compiler
  * checks is what the registry chooses from.
@@ -133,15 +133,15 @@ public abstract sealed class Processor extends AbstractProcessor
   /**
    * Reads a method contributing an action, as the registry reads it at run
    * time: the type it acts on, each attribute from its nearest declaration,
-   * and where it acts.
+   * where it acts, and its key.
    *
    * @param method method carrying the action
    * @param action the action, as the method carries it
-   * @return the contribution, holding the method's element
+   * @return the contributor, holding the method's element
    * @throws IllegalArgumentException when an attribute is malformed, or the
    *                                  action does not declare where it acts
    */
-  protected Contribution<TypeElement, ExecutableElement> contribution(
+  protected Contributor<TypeElement, ExecutableElement> contributor(
       @NonNull ExecutableElement method,
       @NonNull AnnotationMirror action) {
     Conditions conditions = Conditions.of(
@@ -149,7 +149,42 @@ public abstract sealed class Processor extends AbstractProcessor
         nearest(method, Distributions.class).stream().findFirst(),
         nearest(method, Environments.class).stream().findFirst(),
         nearest(method, Platforms.class));
-    return new Contribution<>(name(method), subject(method, action), conditions, closure(action), method);
+    return new Contributor<>(name(method), subject(method, action), conditions, closure(action), key(action),
+        method);
+  }
+
+  /**
+   * Returns the value a contribution is keyed by: that of the element its
+   * action's {@link Action#key() key} names, written as the registry writes
+   * it, a class by its binary name.
+   *
+   * @param action the action, as a method carries it
+   * @return the key, or empty when the action is keyed by nothing
+   */
+  protected Optional<String> key(@NonNull AnnotationMirror action) {
+    return keyName((TypeElement) action.getAnnotationType().asElement())
+        .flatMap(name -> element(action, name))
+        .map(AnnotationValue::getValue)
+        .map(value -> switch (value) {
+          case TypeMirror type -> elements.getBinaryName((TypeElement) types.asElement(type)).toString();
+          case VariableElement constant -> constant.getSimpleName().toString();
+          default -> String.valueOf(value);
+        });
+  }
+
+  /**
+   * Returns the name of the element an action is keyed by, as its
+   * {@link Action} names it.
+   *
+   * @param action an action's annotation type
+   * @return the element's name, or empty when the action is keyed by nothing
+   */
+  protected Optional<String> keyName(@NonNull TypeElement action) {
+    return mirror(action, Action.class)
+        .flatMap(marked -> element(marked, "key"))
+        .map(AnnotationValue::getValue)
+        .map(String.class::cast)
+        .filter(name -> !name.isEmpty());
   }
 
   /**

@@ -6,19 +6,23 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import cat.tabbie.sdk.catalog.Addon;
 import cat.tabbie.sdk.catalog.Coordinate;
 import cat.tabbie.sdk.catalog.Identity;
 import cat.tabbie.sdk.catalog.Product;
 import cat.tabbie.sdk.catalog.Release;
 import cat.tabbie.sdk.distribution.Distribution;
 import cat.tabbie.sdk.meta.action.Closure;
-import cat.tabbie.sdk.meta.action.Contribution;
+import cat.tabbie.sdk.meta.action.Contributor;
+import cat.tabbie.sdk.meta.registry.Contribution;
 import cat.tabbie.sdk.meta.registry.Contributions;
+import cat.tabbie.sdk.meta.registry.Registrable;
 import cat.tabbie.sdk.model.Layout;
 import cat.tabbie.sdk.model.World;
 import cat.tabbie.sdk.plate.Plate;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.revision.Image;
+import cat.tabbie.sdk.target.Compatibility;
 import cat.tabbie.sdk.target.Environment;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Parity;
@@ -36,6 +40,7 @@ import lombok.NonNull;
  * relations name catalog coordinates at any level, matched by
  * {@link Coordinate#includes(Coordinate)}.
  */
+@Registrable(Registrable.Kind.TYPES)
 public interface Artifact extends Release.Payload {
 
   /**
@@ -128,7 +133,7 @@ public interface Artifact extends Release.Payload {
    * Checks copied constructor parameters before record fields are assigned.
    * Whether a declared target supports the artifact's family depends on the
    * installs core has loaded, so it is not checked here: core decides it
-   * while resolving, through {@link Label#compatibility}.
+   * while resolving, through {@link Registry#compatibility(Artifact, Label)}.
    *
    * @param coordinates  exact file coordinates
    * @param artifactName display name
@@ -317,37 +322,94 @@ public interface Artifact extends Release.Payload {
     }
 
     /**
-     * Installs an artifact on a target, through the install that wins by
-     * precedence, acting where its closure says, and checks the images it
-     * describes.
+     * Assesses an artifact against a target: unsupported when no install of
+     * its family applies to the target's distribution there, supported when
+     * the artifact also declares the target, and unknown otherwise. No
+     * compatibility between runtime forks is inferred.
+     *
+     * @param artifact artifact to assess
+     * @param target   target to assess it against
+     * @return structural rejection, declared support, or unknown support
+     */
+    public Compatibility compatibility(@NonNull Artifact artifact, @NonNull Label target) {
+      if (!supports(target.distribution(), target.environment(), artifact.getClass())) {
+        return Compatibility.UNSUPPORTED;
+      }
+      return artifact.labels().stream().anyMatch(label -> label.match(target))
+          ? Compatibility.SUPPORTED
+          : Compatibility.UNKNOWN;
+    }
+
+    /**
+     * Assesses an addon build against a target: unsupported when one of its
+     * artifacts is, supported when the build advertises the target and every
+     * artifact is supported there, and unknown otherwise.
+     *
+     * @param build  build to assess
+     * @param target target to assess it against
+     * @return structural rejection, declared support, or unknown support
+     */
+    public Compatibility compatibility(@NonNull Addon.Build build, @NonNull Label target) {
+      Set<Compatibility> assessments = build.content().stream()
+          .map(artifact -> compatibility(artifact, target))
+          .collect(Collectors.toSet());
+      if (assessments.contains(Compatibility.UNSUPPORTED)) {
+        return Compatibility.UNSUPPORTED;
+      }
+      return build.labels().stream().anyMatch(label -> label.match(target))
+          && assessments.stream().allMatch(result -> result == Compatibility.SUPPORTED)
+              ? Compatibility.SUPPORTED
+              : Compatibility.UNKNOWN;
+    }
+
+    /**
+     * Installs an artifact on a target with no preference, as
+     * {@link #install(Artifact, Context, Set)} does.
      *
      * @param artifact artifact to install
      * @param context  target, model, plate and Worlds the install draws on
      * @return validated immutable images
      * @throws IOException              as the install throws
      * @throws IllegalArgumentException when no install of the artifact applies
-     *                                  to the target, which core rules out
-     *                                  while resolving
-     * @throws IllegalStateException    when installs
-     *                                  {@link Contributions#clashes() clash}
-     *                                  at the target, which core refuses when
-     *                                  it starts
+     *                                  to the target
+     * @throws IllegalStateException    when installs clash at the target
      */
     public Set<Image<?>> install(@NonNull Artifact artifact, @NonNull Context context) throws IOException {
+      return install(artifact, context, Set.of());
+    }
+
+    /**
+     * Installs an artifact on a target, through the install that wins by
+     * precedence, or by the user's preference among those precedence cannot
+     * decide between, acting where its closure says, and checks the images it
+     * describes.
+     *
+     * @param artifact  artifact to install
+     * @param context   target, model, plate and Worlds the install draws on
+     * @param preferred {@link Contributions.Contributed#identity() identities}
+     *                  of the installs the user prefers
+     * @return validated immutable images
+     * @throws IOException              as the install throws
+     * @throws IllegalArgumentException when no install of the artifact applies
+     *                                  to the target, which core rules out
+     *                                  while resolving
+     * @throws IllegalStateException    when installs clash at the target and
+     *                                  the user prefers none of them, which
+     *                                  core asks about first
+     */
+    public Set<Image<?>> install(
+        @NonNull Artifact artifact,
+        @NonNull Context context,
+        @NonNull Set<String> preferred) throws IOException {
       Label label = context.label();
-      List<Contributions.Contributed<Install.Signature>> chosen = installs.choose(artifact.getClass(),
-          distributions.target(label, context.platform()));
-      if (chosen.isEmpty()) {
-        throw new IllegalArgumentException(String.format("No install of %s applies to %s.",
-            artifact.getClass().getName(), label.canonical()));
-      }
-      if (chosen.size() > 1) {
-        throw new IllegalStateException(String.format("%s all install %s for %s, and none is narrower than the "
-            + "others nor from a module reading theirs.", chosen.stream()
-                .map(Contributions.Contributed::describe)
-                .toList(), artifact.getClass().getName(), label.canonical()));
-      }
-      var install = chosen.getFirst().contribution();
+      Contributor<Class<?>, Install.Signature> install = switch (installs.choose(artifact.getClass(),
+          distributions.target(label, context.platform()), preferred)) {
+        case Contribution.Concur<Install.Signature>(var chosen) when chosen.isEmpty() ->
+            throw new IllegalArgumentException(String.format("No install of %s applies to %s.",
+                artifact.getClass().getName(), label.canonical()));
+        case Contribution.Concur<Install.Signature>(var chosen) -> chosen.getFirst().contributor();
+        case Contribution.Clash<Install.Signature> clash -> throw new IllegalStateException(clash.message());
+      };
       Set<Image<?>> images = install.call().install(artifact, Install.Context.of(artifact, context,
           install.closure()));
       Image.validate(images);
@@ -370,7 +432,7 @@ public interface Artifact extends Release.Payload {
      *                                  several
      */
     public void check(@NonNull Product.Build build) {
-      List<Contribution<Class<?>, Install.Signature>> applying = applying(build.distribution(), build.environment())
+      List<Contributor<Class<?>, Install.Signature>> applying = applying(build.distribution(), build.environment())
           .filter(install -> build.labels().stream()
               .anyMatch(label -> install.conditions().versions().appliesTo(label.version())))
           .toList();
@@ -396,12 +458,12 @@ public interface Artifact extends Release.Payload {
      * Installs applying to a distribution in an environment, in any version
      * on any platform.
      */
-    private Stream<Contribution<Class<?>, Install.Signature>> applying(
+    private Stream<Contributor<Class<?>, Install.Signature>> applying(
         Distribution distribution,
         Environment environment) {
       Set<String> names = distributions.names(distribution);
       return installs.contributions().stream()
-          .map(Contributions.Contributed::contribution)
+          .map(Contributions.Contributed::contributor)
           .filter(install -> install.conditions().distributions().appliesTo(names)
               && install.conditions().environments().appliesTo(environment));
     }
