@@ -3,6 +3,7 @@ package cat.tabbie.sdk.content;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -14,6 +15,7 @@ import cat.tabbie.sdk.catalog.Release;
 import cat.tabbie.sdk.distribution.Distribution;
 import cat.tabbie.sdk.meta.action.Closure;
 import cat.tabbie.sdk.meta.action.Contributor;
+import cat.tabbie.sdk.meta.attribute.Region;
 import cat.tabbie.sdk.meta.registry.Contribution;
 import cat.tabbie.sdk.meta.registry.Contributions;
 import cat.tabbie.sdk.meta.registry.Registrable;
@@ -317,7 +319,7 @@ public interface Artifact extends Release.Payload {
         @NonNull Distribution distribution,
         @NonNull Environment environment,
         @NonNull Class<? extends Artifact> family) {
-      return applying(distribution, environment)
+      return applying(distribution, environment, _ -> true)
           .anyMatch(install -> family.isAssignableFrom(install.subject()) || install.subject().isAssignableFrom(family));
     }
 
@@ -422,9 +424,9 @@ public interface Artifact extends Release.Payload {
      * acting at the root needs its subject accepted in exactly one directory,
      * and one acting in namespaces needs Worlds accepted in exactly one, where
      * core mounts each World's namespace. An install applies to the release
-     * when it applies to its distribution and environment, and to the version
-     * of one of its labels on some platform. The layout may accept more, for
-     * content installed anyway.
+     * when one of its regions applies to its distribution and environment,
+     * and to the version of one of its labels, on some platform. The layout
+     * may accept more, for content installed anyway.
      *
      * @param build release to check
      * @throws IllegalArgumentException when an applying install's subject, or
@@ -432,9 +434,8 @@ public interface Artifact extends Release.Payload {
      *                                  several
      */
     public void check(@NonNull Product.Build build) {
-      List<Contributor<Class<?>, Install.Signature>> applying = applying(build.distribution(), build.environment())
-          .filter(install -> build.labels().stream()
-              .anyMatch(label -> install.conditions().versions().appliesTo(label.version())))
+      List<Contributor<Class<?>, Install.Signature>> applying = applying(build.distribution(), build.environment(),
+          region -> build.labels().stream().anyMatch(label -> region.versions().appliesTo(label.version())))
           .toList();
       applying.stream()
           .filter(install -> install.closure() == Closure.ROOT)
@@ -455,17 +456,18 @@ public interface Artifact extends Release.Payload {
     }
 
     /**
-     * Installs applying to a distribution in an environment, in any version
-     * on any platform.
+     * Installs with a region applying to a distribution in an environment,
+     * on any platform, at versions the region's own test accepts.
      */
     private Stream<Contributor<Class<?>, Install.Signature>> applying(
         Distribution distribution,
-        Environment environment) {
+        Environment environment,
+        Predicate<Region> versions) {
       Set<String> names = distributions.names(distribution);
       return installs.contributions().stream()
           .map(Contributions.Contributed::contributor)
-          .filter(install -> install.conditions().distributions().appliesTo(names)
-              && install.conditions().environments().appliesTo(environment));
+          .filter(install -> install.conditions().regions().stream()
+              .anyMatch(region -> region.appliesTo(names) && region.appliesTo(environment) && versions.test(region)));
     }
   }
 }

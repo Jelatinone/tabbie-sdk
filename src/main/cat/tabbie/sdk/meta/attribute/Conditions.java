@@ -2,8 +2,8 @@ package cat.tabbie.sdk.meta.attribute;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import cat.tabbie.sdk.target.Environment;
 import cat.tabbie.sdk.target.Platform;
@@ -11,104 +11,128 @@ import cat.tabbie.sdk.target.Version;
 import lombok.NonNull;
 
 /**
- * Everything a contribution's attributes say about the targets it applies
- * to: its versions, distributions, environments and platforms, each read
- * from the attribute's nearest declaration, and each every target when none
- * is declared. It applies to a target when every one of them does.
+ * Everything a contribution's {@link Applies} declarations say about the
+ * targets it applies to: the regions it applies to, read from its own
+ * declarations within those of each type enclosing it. It applies to a
+ * target when one of its regions does.
  *
- * @param versions      versions it applies to
- * @param distributions distributions it applies to
- * @param environments  environments it applies to
- * @param platforms     platforms it applies to
+ * <p>
+ * Two contributions' conditions compare cell by cell. A cell is one
+ * registered distribution, in one environment, on one platform, holding the
+ * versions the conditions' regions apply to there. Groups so expand into the
+ * distributions they hold, and two contributions compare exactly, whichever
+ * regions each is written in.
+ *
+ * @param regions the regions it applies to, at least one
  */
-public record Conditions(
-    @NonNull Versions.Meta versions,
-    @NonNull Distributions.Meta distributions,
-    @NonNull Environments.Meta environments,
-    @NonNull Platforms.Meta platforms) implements Condition {
+public record Conditions(@NonNull Set<Region> regions) implements Condition {
 
   /**
-   * Every target, as a contribution with no attributes applies to.
+   * Every target, as a contribution with no declaration applies to.
    */
-  public static final Conditions EVERY = new Conditions(Versions.Meta.EVERY, Distributions.Meta.EVERY,
-      Environments.Meta.EVERY, Platforms.Meta.EVERY);
+  public static final Conditions EVERY = new Conditions(Set.of(Region.EVERY));
 
   /**
-   * Checks every part is given.
+   * Every platform, as cells span them.
+   */
+  private static final List<Platform> PLATFORMS = Stream.of(Platform.Kernel.values())
+      .flatMap(kernel -> Stream.of(Platform.Architecture.values())
+          .map(architecture -> new Platform(kernel, architecture)))
+      .toList();
+
+  /**
+   * Copies the regions, and checks there is one.
+   *
+   * @throws IllegalArgumentException when there are none
    */
   public Conditions {
+    regions = Set.copyOf(regions);
+    if (regions.isEmpty()) {
+      throw new IllegalArgumentException("A contribution applies to at least one region.");
+    }
   }
 
   /**
-   * Reads what the nearest declaration of each attribute says, as the
-   * processor and the registry each find them.
+   * Reads a contribution's declarations, as the processor and the registry
+   * each find them: each level's within the regions of the level enclosing
+   * it, so each of its regions takes what it leaves out from each enclosing
+   * region. A level declaring none keeps the enclosing regions as they are.
    *
-   * @param versions      nearest {@link Versions}, or empty when none is
-   *                      declared
-   * @param distributions nearest {@link Distributions}, or empty when none is
-   *                      declared
-   * @param environments  nearest {@link Environments}, or empty when none is
-   *                      declared
-   * @param platforms     nearest {@link Platforms}, each as repeated, empty
-   *                      when none is declared
+   * @param declarations the declarations at each level, from the outermost
+   *                     type enclosing the contribution to the contribution
+   *                     itself, each level's as repeated
    * @return what they say together
-   * @throws IllegalArgumentException when an attribute is malformed
+   * @throws IllegalArgumentException when a declaration is malformed
    */
-  public static Conditions of(
-      @NonNull Optional<Versions> versions,
-      @NonNull Optional<Distributions> distributions,
-      @NonNull Optional<Environments> environments,
-      @NonNull List<Platforms> platforms) {
-    return new Conditions(
-        versions.map(Versions.Meta::of).orElse(Versions.Meta.EVERY),
-        distributions.map(Distributions.Meta::of).orElse(Distributions.Meta.EVERY),
-        environments.map(Environments.Meta::of).orElse(Environments.Meta.EVERY),
-        Platforms.Meta.of(platforms.toArray(Platforms[]::new)));
+  public static Conditions of(@NonNull List<List<Applies>> declarations) {
+    List<Region> regions = List.of(Region.EVERY);
+    for (List<Applies> level : declarations) {
+      if (!level.isEmpty()) {
+        regions = regions.stream()
+            .flatMap(enclosing -> level.stream().map(written -> Region.of(written, enclosing)))
+            .toList();
+      }
+    }
+    return new Conditions(Set.copyOf(regions));
   }
 
   @Override
   public boolean appliesTo(@NonNull Target target) {
-    return versions.appliesTo(target)
-        && distributions.appliesTo(target)
-        && environments.appliesTo(target)
-        && platforms.appliesTo(target);
+    return regions.stream().anyMatch(region -> region.appliesTo(target));
   }
 
   /**
    * Whether every target these apply to, others apply to as well, so these
-   * are no wider. Distributions are compared by what they name, through the
-   * groups they name, so naming a distribution is narrower than naming its
-   * group.
+   * are no wider: whether in each cell, every version these apply to, the
+   * other's apply to.
    *
    * @param other         conditions to compare with
    * @param distributions every registered distribution, each by its names
-   * @return whether these lie within the other's in every attribute
+   * @return whether these lie within the other's in every cell
    */
   public boolean within(@NonNull Conditions other, @NonNull Collection<Set<String>> distributions) {
-    return versions.within(other.versions)
-        && this.distributions.within(other.distributions, distributions)
-        && environments.within(other.environments)
-        && platforms.within(other.platforms);
+    return cells(distributions).allMatch(cell -> versions(cell).stream()
+        .allMatch(range -> range.within(other.versions(cell))));
   }
 
   /**
-   * Whether these and other conditions share a target: whether every one of
-   * their attributes shares a value.
+   * Whether these and other conditions share a target: whether in some cell,
+   * a version these apply to, the other's apply to.
    *
    * @param other         conditions to compare with
    * @param distributions every registered distribution, each by its names
    * @return whether some target lies within both
    */
   public boolean overlaps(@NonNull Conditions other, @NonNull Collection<Set<String>> distributions) {
-    return versions.overlaps(other.versions)
-        && this.distributions.overlaps(other.distributions, distributions)
-        && environments.overlaps(other.environments)
-        && platforms.overlaps(other.platforms);
+    return cells(distributions).anyMatch(cell -> versions(cell).stream()
+        .anyMatch(range -> other.versions(cell).stream().anyMatch(range::overlaps)));
+  }
+
+  /**
+   * Lists every cell: each distribution in each environment on each platform.
+   */
+  private static Stream<Cell> cells(Collection<Set<String>> distributions) {
+    return distributions.stream()
+        .flatMap(names -> Stream.of(Environment.values())
+            .flatMap(environment -> PLATFORMS.stream()
+                .map(platform -> new Cell(names, environment, platform))));
+  }
+
+  /**
+   * Returns the versions of each region applying in a cell.
+   */
+  private List<Region.Range> versions(Cell cell) {
+    return regions.stream()
+        .filter(region -> region.appliesTo(cell.names())
+            && region.appliesTo(cell.environment())
+            && region.appliesTo(cell.platform()))
+        .map(Region::versions)
+        .toList();
   }
 
   /**
    * One target a contribution may be chosen for: a distribution, by every
-   * name an attribute may give it, in one environment, on one platform, at
+   * name a declaration may give it, in one environment, on one platform, at
    * one game version.
    *
    * @param distributions the distribution's identifier, and the identifier of
@@ -129,5 +153,11 @@ public record Conditions(
     public Target {
       distributions = Set.copyOf(distributions);
     }
+  }
+
+  /**
+   * One distribution, by its names, in one environment, on one platform.
+   */
+  private record Cell(Set<String> names, Environment environment, Platform platform) {
   }
 }

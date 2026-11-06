@@ -25,7 +25,7 @@ import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.tools.StandardLocation;
 
-import cat.tabbie.sdk.meta.attribute.Distributions;
+import cat.tabbie.sdk.meta.attribute.Applies;
 import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.meta.registry.Registrable;
 import cat.tabbie.sdk.meta.registry.Registration;
@@ -168,7 +168,7 @@ public final class RegistrationProcessor extends Processor {
             + "the group %s instead.", type.getQualifiedName(), group);
       }
     } else if (abstracted) {
-      if (!Distributions.Meta.IDENTIFIER.matcher(group).matches()) {
+      if (!Applies.IDENTIFIER.matcher(group).matches()) {
         error(type, "%s is registered as a group, so it names the group's identifier, such as java:launcher, "
             + "rather than \"%s\".", type.getQualifiedName(), group);
       } else if (groups.putIfAbsent(group, type) != null) {

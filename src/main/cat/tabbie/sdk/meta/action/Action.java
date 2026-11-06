@@ -11,9 +11,10 @@ import java.lang.annotation.Target;
  * SDK chooses by target, placed on the method that provides it. Most actions
  * are verbs whose method carries a behaviour out, such as installing a
  * family's content; some are nouns whose method returns what they name, such
- * as the toolchain a server needs. Attributes on the method, or on a type
- * enclosing it, say which targets it applies to; a method with none applies to
- * every target.
+ * as the toolchain a server needs.
+ * {@link cat.tabbie.sdk.meta.attribute.Applies} declarations on the method,
+ * and on the types enclosing it, say which targets it applies to; a method
+ * with none applies to every target.
  *
  * <p>
  * Every action has the same shape, so a new action is only an annotation
@@ -32,9 +33,10 @@ import java.lang.annotation.Target;
  * {@code installListedRoot} or {@code installRoot_1_20_5to26_3}.</li>
  * <li>Each method carrying it is read into a {@link Contributor}, and the
  * contributors of one action to one subject in a type, by one key, are checked
- * together as a {@link Coverage}: no two apply to one target, and for each
- * target, every version between the lowest and highest bound they name is
- * covered. Versions outside those bounds are simply not supported.</li>
+ * together as a {@link Coverage}: no two apply to one version of a target,
+ * and for each target, every version between the lowest and highest bound
+ * they name is covered. Versions outside those bounds are simply not
+ * supported.</li>
  * <li>Its {@link #cardinality() cardinality} says how many of its contributors
  * act for one subject at one target, and its {@link #key() key} which of its
  * elements keeps contributors apart, so that only those sharing a key meet.</li>

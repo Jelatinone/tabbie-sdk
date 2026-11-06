@@ -22,7 +22,8 @@ import lombok.NonNull;
 
 /**
  * Installs an artifact: the method describes the images placing it, for the
- * targets its attributes name, and acts where its {@link Closure closure}
+ * targets its {@link cat.tabbie.sdk.meta.attribute.Applies} declarations
+ * name, and acts where its {@link Closure closure}
  * names, in the Cat's root unless it says otherwise. Every install has the
  * one {@link Signature}: an instance method takes its {@link Context} and
  * installs artifacts of the type declaring it; a static method takes the type

@@ -8,8 +8,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import cat.tabbie.sdk.meta.attribute.Applies;
 import cat.tabbie.sdk.meta.attribute.Conditions;
-import cat.tabbie.sdk.meta.attribute.Distributions;
 import cat.tabbie.sdk.meta.registry.Registrable;
 import cat.tabbie.sdk.target.Environment;
 import cat.tabbie.sdk.target.Label;
@@ -32,7 +32,7 @@ import lombok.NonNull;
  * declaring it, such as the first-party extensions, so any module can add
  * distributions of its own; a {@link Registry} lists every registered one, and finds one by
  * identifier. An abstract type of them, such as the mod loaders, is
- * registered as a group an attribute can name, such as
+ * registered as a group {@link Applies} can name, such as
  * {@code java:launcher}.
  */
 @Registrable(Registrable.Kind.VALUES)
@@ -50,7 +50,7 @@ public interface Distribution {
    *                                  hyphen-separated words
    */
   static void validate(@NonNull String id) {
-    if (!Distributions.Meta.IDENTIFIER.matcher(id).matches()) {
+    if (!Applies.IDENTIFIER.matcher(id).matches()) {
       throw new IllegalArgumentException(
           String.format("%s is not a distribution identifier.", id));
     }
@@ -125,8 +125,8 @@ public interface Distribution {
     }
 
     /**
-     * Names a distribution as attributes name it: by its own identifier, and
-     * the identifier of every group it belongs to.
+     * Names a distribution as {@link Applies} names it: by its own
+     * identifier, and the identifier of every group it belongs to.
      *
      * @param distribution a distribution
      * @return its names
@@ -139,7 +139,7 @@ public interface Distribution {
     }
 
     /**
-     * Names every registered distribution as attributes name it, as
+     * Names every registered distribution as {@link Applies} names it, as
      * contributions compare the distributions they apply to.
      *
      * @return each distribution's names

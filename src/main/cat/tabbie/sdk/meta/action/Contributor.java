@@ -12,11 +12,8 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import cat.tabbie.sdk.meta.attribute.Applies;
 import cat.tabbie.sdk.meta.attribute.Conditions;
-import cat.tabbie.sdk.meta.attribute.Distributions;
-import cat.tabbie.sdk.meta.attribute.Environments;
-import cat.tabbie.sdk.meta.attribute.Platforms;
-import cat.tabbie.sdk.meta.attribute.Versions;
 import lombok.NonNull;
 
 /**
@@ -58,9 +55,9 @@ public record Contributor<Subject, Call>(
    * Reads a method contributing an action, as the registry does when it
    * loads a module: the type it acts on, from the action's {@code subject}
    * element or else the type declaring the method; where it acts, from the
-   * action's {@code value} element, when it declares one; its key; each
-   * attribute from its nearest declaration, the method's own first, then its
-   * type's, then each enclosing type's outwards; and the method, as its
+   * action's {@code value} element, when it declares one; its key; the
+   * targets it applies to, from its own {@link Applies} declarations within
+   * its type's, within each enclosing type's outwards; and the method, as its
    * action's signature.
    *
    * @param <Call>    the action's signature
@@ -71,7 +68,7 @@ public record Contributor<Subject, Call>(
    *                  provides it
    * @return the contributor
    * @throws IllegalArgumentException when the annotation is not an action, or
-   *                                  an attribute is malformed, which the
+   *                                  a declaration is malformed, which the
    *                                  processors rule out while the module
    *                                  compiles
    * @throws IllegalStateException    when the lookup cannot reach the method
@@ -96,11 +93,13 @@ public record Contributor<Subject, Call>(
     Optional<String> key = marked.key().isEmpty()
         ? Optional.empty()
         : element(action, marked.key()).map(Contributor::keyed);
-    Conditions conditions = Conditions.of(
-        nearest(method, Versions.class).stream().findFirst(),
-        nearest(method, Distributions.class).stream().findFirst(),
-        nearest(method, Environments.class).stream().findFirst(),
-        nearest(method, Platforms.class));
+    Conditions conditions = Conditions.of(Stream.iterate((AnnotatedElement) method, Objects::nonNull,
+        element -> element instanceof Method declared
+            ? declared.getDeclaringClass()
+            : ((Class<?>) element).getEnclosingClass())
+        .map(element -> List.of(element.getAnnotationsByType(Applies.class)))
+        .toList()
+        .reversed());
     try {
       Call call = MethodHandleProxies.asInterfaceInstance(signature, lookup.unreflect(method));
       return new Contributor<>(name(method), subject, conditions, closure, key, call);
@@ -133,23 +132,6 @@ public record Contributor<Subject, Call>(
       throw new IllegalStateException(String.format("@%s's %s cannot be read.",
           action.annotationType().getSimpleName(), name), exception);
     }
-  }
-
-  /**
-   * Returns the nearest declaration of an attribute: on the method itself,
-   * or else on the nearest type enclosing it.
-   */
-  private static <Attribute extends Annotation> List<Attribute> nearest(
-      Method method,
-      Class<Attribute> attribute) {
-    return Stream.iterate((AnnotatedElement) method, Objects::nonNull,
-        element -> element instanceof Method declared
-            ? declared.getDeclaringClass()
-            : ((Class<?>) element).getEnclosingClass())
-        .map(element -> List.of(element.getAnnotationsByType(attribute)))
-        .filter(found -> !found.isEmpty())
-        .findFirst()
-        .orElse(List.of());
   }
 
   /**

@@ -32,11 +32,8 @@ import javax.tools.Diagnostic;
 import cat.tabbie.sdk.meta.action.Action;
 import cat.tabbie.sdk.meta.action.Closure;
 import cat.tabbie.sdk.meta.action.Contributor;
+import cat.tabbie.sdk.meta.attribute.Applies;
 import cat.tabbie.sdk.meta.attribute.Conditions;
-import cat.tabbie.sdk.meta.attribute.Distributions;
-import cat.tabbie.sdk.meta.attribute.Environments;
-import cat.tabbie.sdk.meta.attribute.Platforms;
-import cat.tabbie.sdk.meta.attribute.Versions;
 import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
@@ -132,25 +129,38 @@ public abstract sealed class Processor extends AbstractProcessor
 
   /**
    * Reads a method contributing an action, as the registry reads it at run
-   * time: the type it acts on, each attribute from its nearest declaration,
-   * where it acts, and its key.
+   * time: the type it acts on, the targets it applies to, where it acts, and
+   * its key.
    *
    * @param method method carrying the action
    * @param action the action, as the method carries it
    * @return the contributor, holding the method's element
-   * @throws IllegalArgumentException when an attribute is malformed, or the
+   * @throws IllegalArgumentException when a declaration is malformed, or the
    *                                  action does not declare where it acts
    */
   protected Contributor<TypeElement, ExecutableElement> contributor(
       @NonNull ExecutableElement method,
       @NonNull AnnotationMirror action) {
-    Conditions conditions = Conditions.of(
-        nearest(method, Versions.class).stream().findFirst(),
-        nearest(method, Distributions.class).stream().findFirst(),
-        nearest(method, Environments.class).stream().findFirst(),
-        nearest(method, Platforms.class));
-    return new Contributor<>(name(method), subject(method, action), conditions, closure(action), key(action),
+    return new Contributor<>(name(method), subject(method, action), conditions(method), closure(action), key(action),
         method);
+  }
+
+  /**
+   * Reads the targets a method applies to, as the registry reads them at run
+   * time: its own {@link Applies} declarations within those of the type
+   * declaring it, within those of each type enclosing that one outwards.
+   *
+   * @param method a method
+   * @return what its declarations say together
+   * @throws IllegalArgumentException when a declaration is malformed
+   */
+  protected static Conditions conditions(@NonNull ExecutableElement method) {
+    return Conditions.of(Stream.iterate((Element) method,
+        enclosing -> enclosing instanceof ExecutableElement || enclosing instanceof TypeElement,
+        Element::getEnclosingElement)
+        .map(enclosing -> List.of(enclosing.getAnnotationsByType(Applies.class)))
+        .toList()
+        .reversed());
   }
 
   /**
@@ -303,28 +313,6 @@ public abstract sealed class Processor extends AbstractProcessor
   protected static Stream<TypeElement> nested(@NonNull Collection<? extends Element> elements) {
     return ElementFilter.typesIn(elements).stream()
         .flatMap(type -> Stream.concat(Stream.of(type), nested(type.getEnclosedElements())));
-  }
-
-  /**
-   * Returns the nearest declaration of an attribute: on the element itself,
-   * or else on the nearest type enclosing it.
-   *
-   * @param <Attribute> the attribute's type
-   * @param element     a method or type
-   * @param attribute   the attribute's type
-   * @return each declaration of the attribute where it is nearest, empty
-   *         when none is
-   */
-  protected static <Attribute extends Annotation> List<Attribute> nearest(
-      @NonNull Element element,
-      @NonNull Class<Attribute> attribute) {
-    return Stream.iterate(element,
-        enclosing -> enclosing instanceof ExecutableElement || enclosing instanceof TypeElement,
-        Element::getEnclosingElement)
-        .map(enclosing -> List.of(enclosing.getAnnotationsByType(attribute)))
-        .filter(found -> !found.isEmpty())
-        .findFirst()
-        .orElse(List.of());
   }
 
   /**

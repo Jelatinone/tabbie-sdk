@@ -1,6 +1,5 @@
 package cat.tabbie.sdk.meta.processor;
 
-import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,10 +24,7 @@ import cat.tabbie.sdk.meta.action.Action;
 import cat.tabbie.sdk.meta.action.Closure;
 import cat.tabbie.sdk.meta.action.Contributor;
 import cat.tabbie.sdk.meta.action.Coverage;
-import cat.tabbie.sdk.meta.attribute.Distributions;
-import cat.tabbie.sdk.meta.attribute.Environments;
-import cat.tabbie.sdk.meta.attribute.Platforms;
-import cat.tabbie.sdk.meta.attribute.Versions;
+import cat.tabbie.sdk.meta.attribute.Applies;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 
@@ -53,18 +49,12 @@ import lombok.experimental.FieldDefaults;
  * registry reaches the method through the module's lookup. The contributions
  * of each action to each subject within a type are checked together as a
  * {@link Coverage}, by key, each conflict reported on the later of its two
- * methods.
- * Attributes on a method carrying no action, or on a type with no action
- * within it, are an error, since nothing would read them.
+ * methods. An {@link Applies} declaration on a method carrying no action, or
+ * on a type with no action within it, is an error, since nothing would read
+ * it, as is a malformed one, reported on each method it reaches.
  */
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public final class ActionProcessor extends Processor {
-
-  /**
-   * Every attribute, as a method or type may carry it.
-   */
-  static List<Class<? extends Annotation>> ATTRIBUTES = List.of(Versions.class, Distributions.class,
-      Environments.class, Platforms.class);
 
   /**
    * Creates the processor, as javac does when it finds it on the processor
@@ -91,7 +81,7 @@ public final class ActionProcessor extends Processor {
     if (attributed(type) && nested(List.of(type))
         .flatMap(inner -> ElementFilter.methodsIn(inner.getEnclosedElements()).stream())
         .allMatch(method -> actions(method).isEmpty())) {
-      error(type, "%s has attributes but no action within it; attributes only say which targets an action "
+      error(type, "%s declares @Applies but no action within it; @Applies only says which targets an action "
           + "applies to.", type.getSimpleName());
     }
     Map<Covered, List<Contributor<TypeElement, ExecutableElement>>> coverages = new LinkedHashMap<>();
@@ -99,7 +89,7 @@ public final class ActionProcessor extends Processor {
       List<? extends AnnotationMirror> actions = actions(method);
       if (actions.isEmpty()) {
         if (attributed(method)) {
-          error(method, "%s has attributes but no action; attributes only say which targets an action applies "
+          error(method, "%s declares @Applies but no action; @Applies only says which targets an action applies "
               + "to.", name(method));
         }
         continue;
@@ -220,10 +210,10 @@ public final class ActionProcessor extends Processor {
   }
 
   /**
-   * Whether an element carries any attribute itself.
+   * Whether an element declares the targets it applies to itself.
    */
   private static boolean attributed(Element element) {
-    return ATTRIBUTES.stream().anyMatch(attribute -> element.getAnnotationsByType(attribute).length > 0);
+    return element.getAnnotationsByType(Applies.class).length > 0;
   }
 
   /**

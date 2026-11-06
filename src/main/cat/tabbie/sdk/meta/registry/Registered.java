@@ -20,8 +20,8 @@ import java.lang.annotation.Target;
  * kind, when it loads the module.
  *
  * <p>
- * A group lets an attribute name many values at once, such as
- * {@code @Distributions("java:launcher")} for every Java mod loader. Groups
+ * A group lets a declaration name many values at once, such as
+ * {@code @Applies(to = "java:launcher")} for every Java mod loader. Groups
  * nest as their types do: a value of a type belongs to the type's group, and
  * to the group of every registered type it extends.
  *
