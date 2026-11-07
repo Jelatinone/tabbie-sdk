@@ -10,22 +10,19 @@ import cat.tabbie.sdk.model.Layout;
 import cat.tabbie.sdk.model.Violation;
 import cat.tabbie.sdk.model.World;
 import cat.tabbie.sdk.plate.Archive;
-import cat.tabbie.sdk.plate.Plate;
 import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.revision.Image;
-import cat.tabbie.sdk.target.Label;
-import cat.tabbie.sdk.target.Platform;
 import lombok.NonNull;
 
 /**
  * Captures content and describes the images that place it. An install places
- * content against the model its context names alone, never reading the
- * Cat's files, and captures into the stash of the context's {@link Plate}.
- * Nothing beneath the Cat's root changes until the images are exposed, and
- * installers never launch processes. Whoever installs, such as the
- * interpreter or the command line, only supplies a context.
+ * content against the model its work names alone, never reading the Cat's
+ * files, and captures through the work's {@link Capture}. Nothing beneath the
+ * Cat's root changes until the images are exposed, and installers never
+ * launch processes. Whoever installs, such as the interpreter or the command
+ * line, only supplies the work.
  *
  * <p>
  * A file other content also edits, such as the list a World keeps of the
@@ -39,18 +36,18 @@ import lombok.NonNull;
  * file's existence, and the content only its change, so uninstalling the
  * content leaves the file in place.
  *
- * @apiNote An install may run on a rehearsal plate: captures land in its stash
- *          as they would on an acting plate, and the images it returns name
+ * @apiNote An install may run while core rehearses: captures land in the
+ *          stash as they would while acting, and the images it returns name
  *          files by address, so they expose on any plate of the same Cat.
- * @param <Contextual> accepted target context
+ * @param <Contextual> accepted work
  */
 @FunctionalInterface
-public interface Installer<Contextual extends Installer.Context> {
+public interface Installer<Contextual extends Work> {
 
   /**
    * Captures the supplied content and describes the images that place it.
    *
-   * @param context target context, naming the model to place against
+   * @param context the work, naming the model to place against
    * @return validated immutable images
    * @throws IOException when the content cannot be captured
    * @throws Violation   when the model does not allow the content where it
@@ -59,76 +56,21 @@ public interface Installer<Contextual extends Installer.Context> {
   Set<Image<?>> install(@NonNull Contextual context) throws IOException;
 
   /**
-   * Selected target, the model an install places content against, and the
-   * plate whose stash keeps what it captures.
-   */
-  interface Context {
-
-    /**
-     * Returns the explicitly selected target.
-     *
-     * @return selected target
-     */
-    @NonNull
-    Label label();
-
-    /**
-     * Returns the platform of the machine being installed to, for selecting
-     * native content.
-     *
-     * @return target platform
-     */
-    @NonNull
-    Platform platform();
-
-    /**
-     * Returns the model the install places content against: the layout of
-     * the Cat's release, with core's own layer and the Worlds the install
-     * applies to mounted in it. Whatever already exists in the Cat is not the
-     * model's to say.
-     *
-     * @return model declared from the Cat's root
-     */
-    @NonNull
-    Layout.Directory model();
-
-    /**
-     * Returns the plate whose stash keeps what the install captures, and whose
-     * scratch space unpacking uses. An install never goes through the plate's
-     * tree.
-     *
-     * @return caller-owned plate
-     */
-    @NonNull
-    Plate plate();
-
-    /**
-     * Returns the limits applied when unpacking archives.
-     *
-     * @return archive limits, {@link Archive#DEFAULT} by default
-     */
-    @NonNull
-    default Archive archive() {
-      return Archive.DEFAULT;
-    }
-  }
-
-  /**
-   * One install of a type of content: its context, the type that says where
-   * the content goes, and the places it goes. Each place is a directory of the
-   * context's model accepting the type, found when the install is made, so
+   * One install of a type of content: its work, the type that says where the
+   * content goes, and the places it goes. Each place is a directory of the
+   * work's model accepting the type, found when the install is made, so
    * content with nowhere to go is refused before anything is read. Content of
    * the Cat has one place, the model's accepting directory; content of Worlds
-   * has one beneath each World's namespace. Each call captures content into
-   * the plate's stash once, and describes the images that place it at every
+   * has one beneath each World's namespace. Each call captures content through
+   * the work's capture once, and describes the images that place it at every
    * place, or beneath directories named inside each.
    *
-   * @param context context the install runs in
-   * @param type    type of the content, which says where it goes
-   * @param places  directories of the context's model accepting the type, at
-   *                least one
+   * @param work   work the install runs in
+   * @param type   type of the content, which says where it goes
+   * @param places directories of the work's model accepting the type, at least
+   *               one
    */
-  record Install(@NonNull Context context, @NonNull Class<?> type, @NonNull Set<Layout.Directory> places) {
+  record Install(@NonNull Work work, @NonNull Class<?> type, @NonNull Set<Layout.Directory> places) {
 
     /**
      * Copies the places, and checks there is at least one and each accepts
@@ -149,38 +91,38 @@ public interface Installer<Contextual extends Installer.Context> {
 
     /**
      * Creates an install placing content of the Cat, in the directory of the
-     * context's model accepting the type.
+     * work's model accepting the type.
      *
-     * @param context context the install runs in
-     * @param type    type of the content, which says where it goes
+     * @param work work the install runs in
+     * @param type type of the content, which says where it goes
      * @throws Violation.Unplaced  when no directory accepts the type
      * @throws Violation.Ambiguous when several directories accept it
      */
-    public Install(@NonNull Context context, @NonNull Class<?> type) {
-      this(context, type, Set.of(context.model().find(type).unique()));
+    public Install(@NonNull Work work, @NonNull Class<?> type) {
+      this(work, type, Set.of(work.model().find(type).unique()));
     }
 
     /**
      * Resolves where an action acting where its closure says places content
-     * of a type: in the directory of the context's model accepting it, at the
+     * of a type: in the directory of the work's model accepting it, at the
      * root; or in the directory accepting it beneath the namespace of each
-     * World the context names, in namespaces. Every action acting in places
+     * World the work names, in namespaces. Every action acting in places
      * resolves its closure here.
      *
-     * @param context context the action runs in
+     * @param work    work the action runs in
      * @param type    type of the content, which says where it goes
      * @param closure where the action acts
      * @return the install placing the content
      * @throws Violation.Unplaced  when no directory accepts the type, or the
-     *                             action acts in namespaces and the context
-     *                             names no World
+     *                             action acts in namespaces and the work names
+     *                             no World
      * @throws Violation.Ambiguous when several directories accept it at the
      *                             root, or beneath one namespace
      */
-    public static Install of(@NonNull Artifact.Context context, @NonNull Class<?> type, @NonNull Closure closure) {
+    public static Install of(@NonNull Artifact.Context work, @NonNull Class<?> type, @NonNull Closure closure) {
       return switch (closure) {
-        case ROOT -> new Install(context, type);
-        case NAMESPACES -> resolve(context, type, context.worlds().stream()
+        case ROOT -> new Install(work, type);
+        case NAMESPACES -> resolve(work, type, work.worlds().stream()
             .map(World::namespace)
             .collect(Collectors.toUnmodifiableSet()));
       };
@@ -188,12 +130,12 @@ public interface Installer<Contextual extends Installer.Context> {
 
     /**
      * Resolves an install placing content beneath each of several directories
-     * of the context's model, in the directory beneath each accepting the
-     * type, such as the datapacks directory of each World's namespace.
+     * of the work's model, in the directory beneath each accepting the type,
+     * such as the datapacks directory of each World's namespace.
      *
-     * @param context context the install runs in
-     * @param type    type of the content, which says where it goes
-     * @param roots   directories of the context's model to place beneath
+     * @param work  work the install runs in
+     * @param type  type of the content, which says where it goes
+     * @param roots directories of the work's model to place beneath
      * @return install placing the content beneath every root
      * @throws Violation.Unplaced  when no root is given, or one accepts the
      *                             type nowhere
@@ -201,13 +143,13 @@ public interface Installer<Contextual extends Installer.Context> {
      *                             directories
      */
     public static Install resolve(
-        @NonNull Context context,
+        @NonNull Work work,
         @NonNull Class<?> type,
         @NonNull Set<Layout.Directory> roots) {
       if (roots.isEmpty()) {
         throw new Violation.Unplaced(type);
       }
-      return new Install(context, type, roots.stream()
+      return new Install(work, type, roots.stream()
           .map(root -> root.find(type).unique())
           .collect(Collectors.toUnmodifiableSet()));
     }
@@ -242,15 +184,15 @@ public interface Installer<Contextual extends Installer.Context> {
      */
     public Set<Image<?>> file(@NonNull Describe source, @NonNull Address file) throws IOException {
       places.forEach(place -> place.require(file));
-      Reference.Captured captured = context.plate().capture(source);
+      Reference.Captured captured = work.capture().capture(source);
       return places.stream()
           .<Image<?>>map(place -> place.create(file, captured))
           .collect(Collectors.toUnmodifiableSet());
     }
 
     /**
-     * Unpacks an archive at every place within the context's limits,
-     * inspecting it and capturing each of its files once.
+     * Unpacks an archive at every place within core's limits, inspecting it
+     * and capturing each of its files once.
      *
      * @param archive archive to unpack
      * @param into    names of the directories beneath each place the archive
@@ -261,7 +203,7 @@ public interface Installer<Contextual extends Installer.Context> {
      *                     archive puts it
      */
     public Set<Image<?>> unpack(@NonNull Describe archive, @NonNull String... into) throws IOException {
-      return context.archive().unpack(archive, context.model(), destinations(into), context.plate());
+      return work.capture().unpack(archive, work.model(), destinations(into));
     }
 
     /**
@@ -286,7 +228,7 @@ public interface Installer<Contextual extends Installer.Context> {
         @NonNull List<Archive.Entry> entries,
         @NonNull Address from,
         @NonNull String... into) throws IOException {
-      return context.archive().unpack(entries, from, context.model(), destinations(into), context.plate());
+      return work.capture().unpack(entries, from, work.model(), destinations(into));
     }
 
     /**

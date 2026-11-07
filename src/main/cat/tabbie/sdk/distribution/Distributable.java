@@ -9,6 +9,7 @@ import java.util.Set;
 import cat.tabbie.sdk.catalog.Identity;
 import cat.tabbie.sdk.catalog.Release;
 import cat.tabbie.sdk.content.Installer;
+import cat.tabbie.sdk.content.Work;
 import cat.tabbie.sdk.model.Layout;
 import cat.tabbie.sdk.model.Violation;
 import cat.tabbie.sdk.platform.Address;
@@ -33,7 +34,7 @@ import lombok.NonNull;
  * Implementations are records whose compact constructors copy their
  * collections and call {@link #validate(String, Set)}.
  */
-public sealed interface Distributable extends Release.Payload, Installer<Installer.Context> {
+public sealed interface Distributable extends Release.Payload, Installer<Work> {
 
   /**
    * Stable distributable identity derived from the file coordinates, so equal
@@ -94,19 +95,20 @@ public sealed interface Distributable extends Release.Payload, Installer<Install
 
   /**
    * Places the source as one file, named after it, in the directory of the
-   * context's model that accepts this distributable's type, where
+   * work's model that accepts this distributable's type, where
    * {@link #location} finds it in the Cat's model. Whoever installs chooses
    * the distributable that {@link #supports} the target while resolving;
    * installing does not ask again.
    *
-   * @param context selected target and the plate it is installed on
+   * @param work selected target, the model, and the capture of the work it is
+   *             installed in
    * @return validated immutable images
    * @throws IOException when the content cannot be captured
-   * @throws Violation   when the tree does not allow the file
+   * @throws Violation   when the model does not allow the file
    */
   @Override
-  default Set<Image<?>> install(@NonNull Installer.Context context) throws IOException {
-    return new Installer.Install(context, getClass()).file(source());
+  default Set<Image<?>> install(@NonNull Work work) throws IOException {
+    return new Installer.Install(work, getClass()).file(source());
   }
 
   /**

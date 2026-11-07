@@ -21,7 +21,6 @@ import cat.tabbie.sdk.meta.registry.Contributions;
 import cat.tabbie.sdk.meta.registry.Registrable;
 import cat.tabbie.sdk.model.Layout;
 import cat.tabbie.sdk.model.World;
-import cat.tabbie.sdk.plate.Plate;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.target.Compatibility;
@@ -34,8 +33,8 @@ import lombok.NonNull;
 /**
  * Provider-described content. How it is placed is contributed for its family
  * by {@link cat.tabbie.sdk.content.Install} methods, which capture bytes
- * from the artifact's source into the stash of the plate it is installed on
- * and describe changes without writing to the Cat's files; a
+ * from the artifact's source through the {@link Capture} of the work it is
+ * installed in and describe changes without writing to the Cat's files; a
  * {@link Registry} chooses the install that applies to a target, and what a
  * distribution supports follows from them. Sources remain
  * caller-owned. File coordinates identify the exact provider-scoped payload;
@@ -221,13 +220,12 @@ public interface Artifact extends Release.Payload {
   }
 
   /**
-   * Selected target, the model an artifact is placed against, the plate whose
-   * stash keeps what it captures, and the Worlds its content applies to.
+   * The work content is placed in, and the Worlds its content applies to.
    * Where content goes is not the context's to say: an artifact finds the
    * directory of the model accepting its type, or, when its content belongs to
    * a World, the directory of each of the Worlds accepting it.
    */
-  interface Context extends Installer.Context {
+  interface Context extends Work {
 
     /**
      * Returns the Worlds that content belonging to a World is installed into,
@@ -240,21 +238,13 @@ public interface Artifact extends Release.Payload {
     Set<World> worlds();
 
     /**
-     * Context of a selected target, placed against a model.
+     * Content's context in some work, answering the work's parts from it.
      *
-     * @param label    selected target
-     * @param platform target platform
-     * @param model    model the artifact is placed against
-     * @param plate    caller-owned plate whose stash keeps what it captures
-     * @param worlds   Worlds of the model that content belonging to a World
-     *                 applies to
+     * @param work   the work content is placed in
+     * @param worlds Worlds of the work's model that content belonging to a
+     *               World applies to
      */
-    record Default(
-        @NonNull Label label,
-        @NonNull Platform platform,
-        @NonNull Layout.Directory model,
-        @NonNull Plate plate,
-        @NonNull Set<World> worlds) implements Context {
+    record Default(@NonNull Work work, @NonNull Set<World> worlds) implements Context {
 
       /**
        * Copies the Worlds.
@@ -266,17 +256,30 @@ public interface Artifact extends Release.Payload {
       /**
        * Creates a context that applies to no World.
        *
-       * @param label    selected target
-       * @param platform target platform
-       * @param model    model the artifact is placed against
-       * @param plate    caller-owned plate whose stash keeps what it captures
+       * @param work the work content is placed in
        */
-      public Default(
-          @NonNull Label label,
-          @NonNull Platform platform,
-          @NonNull Layout.Directory model,
-          @NonNull Plate plate) {
-        this(label, platform, model, plate, Set.of());
+      public Default(@NonNull Work work) {
+        this(work, Set.of());
+      }
+
+      @Override
+      public Label label() {
+        return work.label();
+      }
+
+      @Override
+      public Platform platform() {
+        return work.platform();
+      }
+
+      @Override
+      public Layout.Directory model() {
+        return work.model();
+      }
+
+      @Override
+      public Capture capture() {
+        return work.capture();
       }
     }
   }
@@ -369,7 +372,7 @@ public interface Artifact extends Release.Payload {
      * {@link #install(Artifact, Context, Set)} does.
      *
      * @param artifact artifact to install
-     * @param context  target, model, plate and Worlds the install draws on
+     * @param context  the work and Worlds the install draws on
      * @return validated immutable images
      * @throws IOException              as the install throws
      * @throws IllegalArgumentException when no install of the artifact applies
@@ -387,7 +390,7 @@ public interface Artifact extends Release.Payload {
      * describes.
      *
      * @param artifact  artifact to install
-     * @param context   target, model, plate and Worlds the install draws on
+     * @param context   the work and Worlds the install draws on
      * @param preferred {@link Contributions.Contributed#identity() identities}
      *                  of the installs the user prefers
      * @return validated immutable images

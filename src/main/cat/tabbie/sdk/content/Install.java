@@ -13,8 +13,6 @@ import cat.tabbie.sdk.meta.action.Closure;
 import cat.tabbie.sdk.model.Layout;
 import cat.tabbie.sdk.model.Violation;
 import cat.tabbie.sdk.model.World;
-import cat.tabbie.sdk.plate.Archive;
-import cat.tabbie.sdk.plate.Plate;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Platform;
@@ -71,11 +69,10 @@ public @interface Install {
   }
 
   /**
-   * What an install is given: the target, model, plate, archive limits and
-   * Worlds of the work, and where it places content, as its closure says: the
-   * directory of the Cat's model accepting the artifact for
-   * {@link Closure#ROOT ROOT}, or that beneath every World's namespace for
-   * {@link Closure#NAMESPACES NAMESPACES}.
+   * What an install is given: the work and Worlds of its content's context,
+   * and where it places content, as its closure says: the directory of the
+   * Cat's model accepting the artifact for {@link Closure#ROOT ROOT}, or that
+   * beneath every World's namespace for {@link Closure#NAMESPACES NAMESPACES}.
    */
   interface Context extends Artifact.Context {
 
@@ -92,8 +89,7 @@ public @interface Install {
      * Makes the context an install acting where its closure says is given.
      *
      * @param artifact artifact being installed
-     * @param context  the work: its target, model, plate, archive limits and
-     *                 Worlds
+     * @param context  the work and Worlds of the artifact's content
      * @param closure  where the install acts
      * @return its context
      * @throws Violation.Unplaced  when the install acts in Worlds and the work
@@ -107,42 +103,43 @@ public @interface Install {
     }
 
     /**
-     * The context of one install.
+     * The context of one install, answering its content's parts from the
+     * context it holds.
      *
-     * @param label    selected target
-     * @param platform target platform
-     * @param model    model the artifact is placed against
-     * @param plate    caller-owned plate whose stash keeps what it captures
-     * @param archive  limits applied when unpacking archives
-     * @param worlds   Worlds the work applies to
-     * @param place    where the install places content
+     * @param content the work and Worlds of the artifact's content
+     * @param place   where the install places content
      */
-    record Default(
-        @NonNull Label label,
-        @NonNull Platform platform,
-        @NonNull Layout.Directory model,
-        @NonNull Plate plate,
-        @NonNull Archive archive,
-        @NonNull Set<World> worlds,
-        @NonNull Installer.Install place) implements Context {
+    record Default(@NonNull Artifact.Context content, @NonNull Installer.Install place) implements Context {
 
       /**
-       * Copies the Worlds.
+       * Checks every part is given.
        */
       public Default {
-        worlds = Set.copyOf(worlds);
       }
 
-      /**
-       * Creates the context of an install of some work.
-       *
-       * @param context the work: its target, model, plate, archive limits and
-       *                Worlds
-       * @param place   where the install places content
-       */
-      public Default(@NonNull Artifact.Context context, @NonNull Installer.Install place) {
-        this(context.label(), context.platform(), context.model(), context.plate(), context.archive(),
-            context.worlds(), place);
+      @Override
+      public Label label() {
+        return content.label();
+      }
+
+      @Override
+      public Platform platform() {
+        return content.platform();
+      }
+
+      @Override
+      public Layout.Directory model() {
+        return content.model();
+      }
+
+      @Override
+      public Capture capture() {
+        return content.capture();
+      }
+
+      @Override
+      public Set<World> worlds() {
+        return content.worlds();
       }
     }
   }
