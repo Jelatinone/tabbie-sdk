@@ -26,8 +26,13 @@
  * coordinates</li>
  * <li>{@link cat.tabbie.sdk.platform}: bytes, paths, packages, toolchains and
  * commands</li>
- * <li>{@link cat.tabbie.sdk.plate}: plates, their trees and leases, the
- * stash, and archives</li>
+ * <li>{@link cat.tabbie.sdk.plate}: plates, their leases, the stash, and
+ * archives</li>
  * </ul>
+ *
+ * <p>
+ * This package and {@link cat.tabbie.sdk.plate} are exported to core alone:
+ * an extension describes content and the images placing it, and only core
+ * holds the registry or a plate.
  */
 package cat.tabbie.sdk;

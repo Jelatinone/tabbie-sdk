@@ -13,6 +13,11 @@
  * into the plate's stash.
  *
  * <p>
+ * This package is exported to core alone. An action reaches what it may do
+ * with bytes through the {@link cat.tabbie.sdk.content.Capture Capture} core
+ * makes over a plate, and never holds the plate itself.
+ *
+ * <p>
  * The SDK defines plates and leases but implements neither: whoever runs the
  * work supplies the plate, and so decides whether it rehearses over an overlay
  * or acts on the files beneath its root. Captured bytes are verified by digest

@@ -44,6 +44,11 @@ tasks.withType(JavaCompile).configureEach {
   options.encoding = 'UTF-8'
 }
 
+tasks.named('compileJava') {
+  // Core, which some packages are exported to alone, is never on the SDK's module path
+  options.compilerArgs.add('-Xlint:-module')
+}
+
 tasks.named('compileProcessorJava') {
   modularity.inferModulePath = false
 }

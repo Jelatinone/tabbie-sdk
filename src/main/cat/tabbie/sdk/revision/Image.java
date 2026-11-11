@@ -11,6 +11,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.form.Form;
+import cat.tabbie.sdk.form.Json;
+import cat.tabbie.sdk.form.Unreadable;
 import cat.tabbie.sdk.model.Node;
 import cat.tabbie.sdk.model.Violation;
 import cat.tabbie.sdk.plate.Lease;
@@ -466,7 +468,7 @@ public sealed interface Image<State extends Image.Alteration> {
    * Changes selected ranges of an existing file's text, stored as
    * corresponding chunks, at least one of which edits the text. The text is
    * the file as the configuration's view reads it: its own text, or a view a
-   * lease keeps well formed, such as {@link Form.Json one element
+   * lease keeps well formed, such as {@link Json one element
    * of a JSON array per line}. Chunks are anchored at lines, or, to change a
    * file other content shares without reading it, at the end of the text or
    * by their own lines, as {@link Chunk.Anchor} describes. A configuration
@@ -522,7 +524,7 @@ public sealed interface Image<State extends Image.Alteration> {
      * @throws Malformation.Unchanged   when no chunk edits its text
      */
     public Configuration(@NonNull List<Chunk> chunks, @NonNull Address address) {
-      this(chunks, address, new Form.Text());
+      this(chunks, address, new cat.tabbie.sdk.form.Text());
     }
 
     /**
@@ -574,7 +576,7 @@ public sealed interface Image<State extends Image.Alteration> {
           case Node.Directory _ -> new Scrutiny.Fail<>(null,
               new Refusal(new Refusal.Occupied(address, Refusal.Kind.FILE, Refusal.Kind.DIRECTORY)));
         };
-      } catch (Form.Unreadable unreadable) {
+      } catch (Unreadable unreadable) {
         // The file cannot be read in this configuration's view
         return new Scrutiny.Fail<>(null, unreadable);
       } catch (Violation violation) {
@@ -660,7 +662,7 @@ public sealed interface Image<State extends Image.Alteration> {
       String text;
       try {
         text = view.decode(content);
-      } catch (Form.Unreadable unreadable) {
+      } catch (Unreadable unreadable) {
         throw new Malformation.Discontinuous(address, unreadable);
       }
       if (!Chunk.matches(chunks, text)) {

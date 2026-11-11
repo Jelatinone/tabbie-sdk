@@ -6,13 +6,14 @@
  * its descriptions belongs to the consumer.
  *
  * <p>
- * Every package is exported but {@code meta.processor}, until the packages
- * only core uses are exported to core alone. A module declares what
- * it contributes with the {@code meta} actions and attributes, and puts the SDK
- * on its processor path to have those declarations checked, and its
- * registration generated, while it compiles, as the SDK's own are. The
- * compiler the processors run in is needed only then; the registry reads the
- * same annotations at run time.
+ * Every package is exported to every module but {@code meta.processor} and
+ * two only core uses, which are exported to core alone: {@code plate}, which
+ * carries work out, and the root package, which holds the registry. A module
+ * declares what it contributes with the {@code meta} actions and attributes,
+ * and puts the SDK on its processor path to have those declarations checked,
+ * and its registration generated, while it compiles, as the SDK's own are.
+ * The compiler the processors run in is needed only then; the registry reads
+ * the same annotations at run time.
  *
  * <p>
  * Lombok is a compile-time dependency only; consumers need no Lombok at
@@ -25,7 +26,7 @@ module cat.tabbie.sdk {
   requires static lombok;
   requires transitive tools.jackson.databind;
 
-  exports cat.tabbie.sdk;
+  exports cat.tabbie.sdk to cat.tabbie.core;
   exports cat.tabbie.sdk.catalog;
   exports cat.tabbie.sdk.content;
   exports cat.tabbie.sdk.distribution;
@@ -34,7 +35,7 @@ module cat.tabbie.sdk {
   exports cat.tabbie.sdk.meta.attribute;
   exports cat.tabbie.sdk.meta.registry;
   exports cat.tabbie.sdk.model;
-  exports cat.tabbie.sdk.plate;
+  exports cat.tabbie.sdk.plate to cat.tabbie.core;
   exports cat.tabbie.sdk.platform;
   exports cat.tabbie.sdk.revision;
   exports cat.tabbie.sdk.target;

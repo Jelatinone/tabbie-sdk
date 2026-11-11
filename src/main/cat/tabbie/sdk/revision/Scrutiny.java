@@ -58,7 +58,7 @@ public sealed interface Scrutiny<T> {
    * the lines its chunks select no longer match their before fragments; with
    * the tree's violation when the tree holds no file there or does not permit
    * the change; with
-   * {@link cat.tabbie.sdk.form.Form.Unreadable} when the file
+   * {@link cat.tabbie.sdk.form.Unreadable} when the file
    * cannot be read in its view; and with the plate's refusal when the file is
    * gone or cannot be written.</li>
    * </ul>

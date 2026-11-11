@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.function.UnaryOperator;
 
 import cat.tabbie.sdk.form.Form;
+import cat.tabbie.sdk.form.Unreadable;
 import cat.tabbie.sdk.model.Node;
 import cat.tabbie.sdk.model.Rule;
 import cat.tabbie.sdk.model.Violation;
@@ -81,7 +82,7 @@ public sealed interface Lease extends AutoCloseable {
      *
      * @param form form to read the content in
      * @return content in the form
-     * @throws Form.Unreadable when the content is not in the form
+     * @throws Unreadable when the content is not in the form
      * @throws IOException     as {@link #read()} throws
      */
     @NonNull
@@ -143,7 +144,7 @@ public sealed interface Lease extends AutoCloseable {
      *
      * @param form form to read and write the content in
      * @param edit derives the new content from the current content
-     * @throws Form.Unreadable when the current content is not in the form
+     * @throws Unreadable when the current content is not in the form
      * @throws IOException     as {@link #update(Edit)} throws
      */
     default void update(@NonNull Form form, @NonNull UnaryOperator<String> edit) throws IOException {

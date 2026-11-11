@@ -9,7 +9,6 @@ import cat.tabbie.sdk.meta.action.Closure;
 import cat.tabbie.sdk.model.Layout;
 import cat.tabbie.sdk.model.Violation;
 import cat.tabbie.sdk.model.World;
-import cat.tabbie.sdk.plate.Archive;
 import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Reference;
@@ -225,7 +224,7 @@ public interface Installer<Contextual extends Work> {
      * @throws IllegalArgumentException when no entry lies beneath the folder
      */
     public Set<Image<?>> unpack(
-        @NonNull List<Archive.Entry> entries,
+        @NonNull List<Capture.Entry> entries,
         @NonNull Address from,
         @NonNull String... into) throws IOException {
       return work.capture().unpack(entries, from, work.model(), destinations(into));
