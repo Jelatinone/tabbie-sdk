@@ -19,14 +19,14 @@ import cat.tabbie.sdk.content.Capture.Entry;
 import cat.tabbie.sdk.content.Capture.Rejection;
 import cat.tabbie.sdk.model.Layout;
 import cat.tabbie.sdk.model.Node;
-import cat.tabbie.sdk.model.Violation;
-import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Observer;
 import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.revision.Intermediate;
 import cat.tabbie.sdk.revision.Scrutiny;
+import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
 /**

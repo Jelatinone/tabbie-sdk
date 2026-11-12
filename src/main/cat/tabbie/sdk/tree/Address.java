@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.platform;
+package cat.tabbie.sdk.tree;
 
 import java.io.Serial;
 import java.nio.file.Path;

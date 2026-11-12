@@ -2,7 +2,7 @@ package cat.tabbie.sdk.revision;
 
 import java.io.Serial;
 
-import cat.tabbie.sdk.platform.Address;
+import cat.tabbie.sdk.tree.Address;
 import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
@@ -13,7 +13,7 @@ import lombok.experimental.FieldDefaults;
  * constructing, composing, reducing and validating images throw a subtype
  * that says exactly why instead of producing one. It is the description-time
  * counterpart of a plate's
- * {@link cat.tabbie.sdk.plate.Refusal Refusal}, which refuses a
+ * {@link cat.tabbie.sdk.tree.Refusal Refusal}, which refuses a
  * well-formed change when it is carried out.
  */
 public abstract sealed class Malformation extends IllegalArgumentException {

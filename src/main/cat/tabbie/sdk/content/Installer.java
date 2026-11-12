@@ -7,12 +7,12 @@ import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.meta.action.Closure;
 import cat.tabbie.sdk.model.Layout;
-import cat.tabbie.sdk.model.Violation;
-import cat.tabbie.sdk.model.World;
-import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.revision.Image;
+import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Violation;
+import cat.tabbie.sdk.tree.World;
 import lombok.NonNull;
 
 /**

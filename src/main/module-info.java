@@ -39,6 +39,7 @@ module cat.tabbie.sdk {
   exports cat.tabbie.sdk.platform;
   exports cat.tabbie.sdk.revision;
   exports cat.tabbie.sdk.target;
+  exports cat.tabbie.sdk.tree;
 
   uses cat.tabbie.sdk.meta.registry.Registration;
 

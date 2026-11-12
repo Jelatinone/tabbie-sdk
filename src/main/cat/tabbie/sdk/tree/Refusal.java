@@ -1,9 +1,8 @@
-package cat.tabbie.sdk.plate;
+package cat.tabbie.sdk.tree;
 
 import java.io.Serial;
 import java.nio.file.FileSystemException;
 
-import cat.tabbie.sdk.platform.Address;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

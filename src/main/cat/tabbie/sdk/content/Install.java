@@ -11,11 +11,11 @@ import java.util.Set;
 import cat.tabbie.sdk.meta.action.Action;
 import cat.tabbie.sdk.meta.action.Closure;
 import cat.tabbie.sdk.model.Layout;
-import cat.tabbie.sdk.model.Violation;
-import cat.tabbie.sdk.model.World;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Platform;
+import cat.tabbie.sdk.tree.Violation;
+import cat.tabbie.sdk.tree.World;
 import lombok.NonNull;
 
 /**

@@ -3,9 +3,10 @@ package cat.tabbie.sdk.model;
 import java.util.List;
 import java.util.Optional;
 
-import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.revision.Image;
+import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
 /**

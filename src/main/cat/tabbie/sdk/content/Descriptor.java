@@ -1,6 +1,6 @@
 package cat.tabbie.sdk.content;
 
-import cat.tabbie.sdk.platform.Address;
+import cat.tabbie.sdk.tree.Address;
 import lombok.NonNull;
 
 /**

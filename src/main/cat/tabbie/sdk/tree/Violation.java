@@ -1,11 +1,11 @@
-package cat.tabbie.sdk.model;
+package cat.tabbie.sdk.tree;
 
 import java.io.Serial;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import cat.tabbie.sdk.plate.Refusal;
-import cat.tabbie.sdk.platform.Address;
+import cat.tabbie.sdk.model.Node;
+import cat.tabbie.sdk.model.Rule;
 import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;

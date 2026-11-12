@@ -13,6 +13,7 @@ import java.util.HexFormat;
 import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import cat.tabbie.sdk.tree.Address;
 import lombok.NonNull;
 
 /**

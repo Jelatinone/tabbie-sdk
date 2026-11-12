@@ -7,10 +7,11 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import cat.tabbie.sdk.form.Form;
-import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.revision.Chunk;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.revision.Malformation;
+import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
 /**

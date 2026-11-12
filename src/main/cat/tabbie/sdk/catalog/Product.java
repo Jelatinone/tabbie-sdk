@@ -7,10 +7,10 @@ import java.util.Set;
 import cat.tabbie.sdk.distribution.Distributable;
 import cat.tabbie.sdk.distribution.Distribution;
 import cat.tabbie.sdk.model.Layout;
-import cat.tabbie.sdk.model.World;
 import cat.tabbie.sdk.platform.Package;
 import cat.tabbie.sdk.target.Environment;
 import cat.tabbie.sdk.target.Label;
+import cat.tabbie.sdk.tree.World;
 import lombok.NonNull;
 
 /**

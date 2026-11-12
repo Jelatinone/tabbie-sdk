@@ -8,8 +8,8 @@
  * an observer. Its tree is made of {@link cat.tabbie.sdk.model.Node nodes},
  * views of what exists on the plate. A {@link Lease} holds one file for
  * reading, writing, or both, or one place for creating a file, until it
- * closes, and a {@link Refusal} says why a plate would not carry out an
- * operation the tree allows. {@link Archive} bounds and unpacks ZIP content
+ * closes, and a {@link cat.tabbie.sdk.tree.Refusal Refusal} says why a plate
+ * would not carry out an operation the tree allows. {@link Archive} bounds and unpacks ZIP content
  * into the plate's stash.
  *
  * <p>

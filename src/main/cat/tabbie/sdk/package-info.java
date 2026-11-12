@@ -16,16 +16,18 @@
  * their releases carry</li>
  * <li>{@link cat.tabbie.sdk.target}: game versions, and the targets content
  * is installed on</li>
- * <li>{@link cat.tabbie.sdk.model}: the layout content is placed against, and
- * the Worlds it holds</li>
+ * <li>{@link cat.tabbie.sdk.tree}: addresses, Worlds, and the failures of
+ * describing and carrying out changes</li>
+ * <li>{@link cat.tabbie.sdk.model}: the layout content is placed
+ * against</li>
  * <li>{@link cat.tabbie.sdk.revision}: descriptions of change, and the
  * deferred work that produces them</li>
  * <li>{@link cat.tabbie.sdk.form}: the forms a file's content is read and
  * written in</li>
  * <li>{@link cat.tabbie.sdk.catalog}: providers, their projects, releases and
  * coordinates</li>
- * <li>{@link cat.tabbie.sdk.platform}: bytes, paths, packages, toolchains and
- * commands</li>
+ * <li>{@link cat.tabbie.sdk.platform}: bytes, machines, packages, toolchains
+ * and commands</li>
  * <li>{@link cat.tabbie.sdk.plate}: plates, their leases, the stash, and
  * archives</li>
  * </ul>

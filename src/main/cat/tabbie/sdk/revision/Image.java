@@ -14,14 +14,14 @@ import cat.tabbie.sdk.form.Form;
 import cat.tabbie.sdk.form.Json;
 import cat.tabbie.sdk.form.Unreadable;
 import cat.tabbie.sdk.model.Node;
-import cat.tabbie.sdk.model.Violation;
 import cat.tabbie.sdk.plate.Lease;
 import cat.tabbie.sdk.plate.Plate;
-import cat.tabbie.sdk.plate.Refusal;
 import cat.tabbie.sdk.plate.Stash;
-import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Reference;
+import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Refusal;
+import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
 /**

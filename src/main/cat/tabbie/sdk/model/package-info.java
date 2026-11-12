@@ -7,11 +7,13 @@
  * so new content is placed against it without reading any file, and it
  * describes its changes as images. A type finds the declared directories
  * {@link Layout.Accepting accepting} it, and asking for something a model or a
- * tree does not hold or allow is a {@link Violation}.
+ * tree does not hold or allow is a
+ * {@link cat.tabbie.sdk.tree.Violation Violation}.
  *
  * <p>
- * A {@link World} is a World as a model holds it: the name a Cat selects it
- * by, and the directory of its namespace. {@link Node Nodes} are what exists
+ * A {@link cat.tabbie.sdk.tree.World World} is a World as a model holds it:
+ * the name a Cat selects it by, and the directory of its namespace.
+ * {@link Node Nodes} are what exists
  * on a plate, holding no rules, and {@link Shape} is what a model and a plate's
  * tree have in common. Each distribution release declares a layout,
  * and core builds an install's model from it, with its own layer and the

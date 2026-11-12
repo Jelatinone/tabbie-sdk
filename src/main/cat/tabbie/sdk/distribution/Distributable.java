@@ -11,14 +11,14 @@ import cat.tabbie.sdk.catalog.Release;
 import cat.tabbie.sdk.content.Installer;
 import cat.tabbie.sdk.content.Work;
 import cat.tabbie.sdk.model.Layout;
-import cat.tabbie.sdk.model.Violation;
-import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Command;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Toolchain;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Platform;
+import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
 /**

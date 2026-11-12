@@ -1,6 +1,5 @@
 /**
- * Bytes, paths, and processes, described rather than touched. An
- * {@link Address} is a canonical relative path, such as a file in a Cat.
+ * Bytes, machines, and processes, described rather than touched.
  * {@link Describe} is the source role, a reusable description of how to obtain
  * bytes and what they are called, and a {@link Reference} is the identity of
  * bytes by content alone, expected or verified. A {@link Host} is one machine

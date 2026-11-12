@@ -5,12 +5,12 @@ import java.nio.file.Path;
 import java.util.OptionalLong;
 
 import cat.tabbie.sdk.model.Node;
-import cat.tabbie.sdk.platform.Address;
 import cat.tabbie.sdk.platform.Command;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Observer;
 import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.platform.Toolchain;
+import cat.tabbie.sdk.tree.Address;
 import lombok.NonNull;
 
 /**

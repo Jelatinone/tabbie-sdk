@@ -1,5 +1,6 @@
-package cat.tabbie.sdk.model;
+package cat.tabbie.sdk.tree;
 
+import cat.tabbie.sdk.model.Layout;
 import lombok.NonNull;
 
 /**

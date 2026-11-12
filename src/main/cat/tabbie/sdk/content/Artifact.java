@@ -20,7 +20,6 @@ import cat.tabbie.sdk.meta.registry.Contribution;
 import cat.tabbie.sdk.meta.registry.Contributions;
 import cat.tabbie.sdk.meta.registry.Registrable;
 import cat.tabbie.sdk.model.Layout;
-import cat.tabbie.sdk.model.World;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.target.Compatibility;
@@ -28,6 +27,7 @@ import cat.tabbie.sdk.target.Environment;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Parity;
 import cat.tabbie.sdk.target.Platform;
+import cat.tabbie.sdk.tree.World;
 import lombok.NonNull;
 
 /**
