@@ -11,6 +11,7 @@ import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Reason;
 import cat.tabbie.sdk.tree.Violation;
 import cat.tabbie.sdk.tree.World;
 import lombok.NonNull;
@@ -94,8 +95,10 @@ public interface Installer<Contextual extends Work> {
      *
      * @param work work the install runs in
      * @param type type of the content, which says where it goes
-     * @throws Violation.Unplaced  when no directory accepts the type
-     * @throws Violation.Ambiguous when several directories accept it
+     * @throws Violation with {@link Reason.Placement.Unplaced} when no
+     *                   directory accepts the type
+     * @throws Violation with {@link Reason.Placement.Ambiguous} when several
+     *                   directories accept it
      */
     public Install(@NonNull Work work, @NonNull Class<?> type) {
       this(work, type, Set.of(work.model().find(type).unique()));
@@ -112,11 +115,12 @@ public interface Installer<Contextual extends Work> {
      * @param type    type of the content, which says where it goes
      * @param closure where the action acts
      * @return the install placing the content
-     * @throws Violation.Unplaced  when no directory accepts the type, or the
-     *                             action acts in namespaces and the work names
-     *                             no World
-     * @throws Violation.Ambiguous when several directories accept it at the
-     *                             root, or beneath one namespace
+     * @throws Violation with {@link Reason.Placement.Unplaced} when no
+     *                   directory accepts the type, or the action acts in
+     *                   namespaces and the work names no World
+     * @throws Violation with {@link Reason.Placement.Ambiguous} when several
+     *                   directories accept it at the root, or beneath one
+     *                   namespace
      */
     public static Install of(@NonNull Artifact.Context work, @NonNull Class<?> type, @NonNull Closure closure) {
       return switch (closure) {
@@ -136,17 +140,17 @@ public interface Installer<Contextual extends Work> {
      * @param type  type of the content, which says where it goes
      * @param roots directories of the work's model to place beneath
      * @return install placing the content beneath every root
-     * @throws Violation.Unplaced  when no root is given, or one accepts the
-     *                             type nowhere
-     * @throws Violation.Ambiguous when one accepts the type in several
-     *                             directories
+     * @throws Violation with {@link Reason.Placement.Unplaced} when no root is
+     *                   given, or one accepts the type nowhere
+     * @throws Violation with {@link Reason.Placement.Ambiguous} when one
+     *                   accepts the type in several directories
      */
     public static Install resolve(
         @NonNull Work work,
         @NonNull Class<?> type,
         @NonNull Set<Layout.Directory> roots) {
       if (roots.isEmpty()) {
-        throw new Violation.Unplaced(type);
+        throw new Violation(new Reason.Placement.Unplaced(type));
       }
       return new Install(work, type, roots.stream()
           .map(root -> root.find(type).unique())

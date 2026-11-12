@@ -14,6 +14,7 @@ import cat.tabbie.sdk.model.Layout;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Platform;
+import cat.tabbie.sdk.tree.Reason;
 import cat.tabbie.sdk.tree.Violation;
 import cat.tabbie.sdk.tree.World;
 import lombok.NonNull;
@@ -92,11 +93,11 @@ public @interface Install {
      * @param context  the work and Worlds of the artifact's content
      * @param closure  where the install acts
      * @return its context
-     * @throws Violation.Unplaced  when the install acts in Worlds and the work
-     *                             names none, or a place accepts the
-     *                             artifact's type nowhere
-     * @throws Violation.Ambiguous when a place accepts it in several
-     *                             directories
+     * @throws Violation with {@link Reason.Placement.Unplaced} when the install
+     *                   acts in Worlds and the work names none, or a place
+     *                   accepts the artifact's type nowhere
+     * @throws Violation with {@link Reason.Placement.Ambiguous} when a place
+     *                   accepts it in several directories
      */
     static Context of(@NonNull Artifact artifact, @NonNull Artifact.Context context, @NonNull Closure closure) {
       return new Default(context, Installer.Install.of(context, artifact.getClass(), closure));

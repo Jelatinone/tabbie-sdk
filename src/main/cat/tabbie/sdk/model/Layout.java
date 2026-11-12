@@ -9,8 +9,8 @@ import java.util.stream.Stream;
 import cat.tabbie.sdk.form.Form;
 import cat.tabbie.sdk.revision.Chunk;
 import cat.tabbie.sdk.revision.Image;
-import cat.tabbie.sdk.revision.Malformation;
 import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Reason;
 import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
@@ -251,9 +251,12 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
      *
      * @param tail address of the file relative to this directory
      * @return this directory
-     * @throws Violation.Terminal       when a declared file lies on the way
-     * @throws Violation.Occupied       when a directory is declared at the tail
-     * @throws Violation.Forbidden      when the place is not creatable
+     * @throws Violation                with {@link Reason.Place.Beneath} when a
+     *                                  declared file lies on the way
+     * @throws Violation                with {@link Reason.Place.Occupied} when
+     *                                  a directory is declared at the tail
+     * @throws Violation                with {@link Reason.Place.Denied} when
+     *                                  the place is not creatable
      * @throws IllegalArgumentException when the tail names this directory
      */
     @Override
@@ -268,15 +271,17 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
       if (declared.isPresent() && !rest.isRoot()) {
         switch (declared.get()) {
           case Layout.Directory directory -> directory.require(rest);
-          case Layout.File file -> throw new Violation.Terminal(file.address(), rest.components().getFirst());
+          case Layout.File file -> throw new Violation(
+              new Reason.Place.Beneath(file.address(), rest.components().getFirst()));
         }
         return this;
       }
       declared.filter(Layout.Directory.class::isInstance).ifPresent(directory -> {
-        throw new Violation.Occupied(directory.address());
+        throw new Violation(
+            new Reason.Place.Occupied(directory.address(), Reason.Place.Kind.ABSENT, Reason.Place.Kind.DIRECTORY));
       });
       if (!declared.orElse(this).permits(Rule.Permission.CREATABLE)) {
-        throw new Violation.Forbidden(address.resolve(tail), Rule.Permission.CREATABLE);
+        throw new Violation(new Reason.Place.Denied(address.resolve(tail), Rule.Permission.CREATABLE));
       }
       return this;
     }
@@ -299,8 +304,10 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
      * @return image configuring the file
      * @throws Violation                when the model does not allow creating
      *                                  the file there
-     * @throws Violation.Forbidden      when the place is not editable
-     * @throws Malformation.Unchanged   when no chunk edits the content
+     * @throws Violation                with {@link Reason.Place.Denied} when
+     *                                  the place is not editable
+     * @throws Violation                with {@link Reason.Change.Unchanged}
+     *                                  when no chunk edits the content
      * @throws IllegalArgumentException when the tail names this directory, or a
      *                                  chunk is anchored at lines
      */
@@ -322,7 +329,7 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
         place = next.get();
       }
       if (!place.permits(Rule.Permission.EDITABLE)) {
-        throw new Violation.Forbidden(address.resolve(tail), Rule.Permission.EDITABLE);
+        throw new Violation(new Reason.Place.Denied(address.resolve(tail), Rule.Permission.EDITABLE));
       }
       return new Image.Configuration(chunks, address.resolve(tail), view);
     }
@@ -424,7 +431,8 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
      * Copies the directories, and checks that each accepts the type and is
      * listed once.
      *
-     * @throws Violation.Unaccepted     when a directory does not accept the
+     * @throws Violation                with {@link Reason.Placement.Unaccepted}
+     *                                  when a directory does not accept the
      *                                  type
      * @throws IllegalArgumentException when a directory is listed twice
      */
@@ -432,7 +440,7 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
       directories = List.copyOf(directories);
       for (Layout.Directory directory : directories) {
         if (!directory.accepts(type)) {
-          throw new Violation.Unaccepted(directory.address(), type);
+          throw new Violation(new Reason.Placement.Unaccepted(directory.address(), type));
         }
       }
       if (directories.stream().map(Layout::address).distinct().count() != directories.size()) {
@@ -445,16 +453,19 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
      * the same way wherever the model puts it.
      *
      * @return the only accepting directory
-     * @throws Violation.Unplaced  when no directory accepts the type
-     * @throws Violation.Ambiguous when several do
+     * @throws Violation with {@link Reason.Placement.Unplaced} when no
+     *                   directory accepts the type
+     * @throws Violation with {@link Reason.Placement.Ambiguous} when several do
      */
     @NonNull
     public Layout.Directory unique() {
       if (directories.isEmpty()) {
-        throw new Violation.Unplaced(type);
+        throw new Violation(new Reason.Placement.Unplaced(type));
       }
       if (directories.size() > 1) {
-        throw new Violation.Ambiguous(type, directories.stream().map(Layout::address).toList());
+        throw new Violation(new Reason.Placement.Ambiguous(type, directories.stream()
+            .map(Layout::address)
+            .toList()));
       }
       return directories.getFirst();
     }

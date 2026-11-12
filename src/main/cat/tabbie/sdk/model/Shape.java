@@ -6,6 +6,7 @@ import java.util.Optional;
 import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Reason;
 import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
@@ -56,8 +57,10 @@ public sealed interface Shape permits Shape.File, Shape.Directory, Layout, Node 
    *
    * @param tail address relative to this place
    * @return the place there, or this place for the root address
-   * @throws Violation.Missing  when nothing is at a step
-   * @throws Violation.Terminal when a step leads beneath a file
+   * @throws Violation with {@link Reason.Place.Missing} when nothing is at a
+   *                   step
+   * @throws Violation with {@link Reason.Place.Beneath} when a step leads
+   *                   beneath a file
    */
   @NonNull
   default Shape locate(@NonNull Address tail) {
@@ -65,8 +68,8 @@ public sealed interface Shape permits Shape.File, Shape.Directory, Layout, Node 
     for (String name : tail.components()) {
       reached = switch (reached) {
         case Shape.Directory directory -> directory.child(name)
-            .orElseThrow(() -> new Violation.Missing(directory.address().resolve(name)));
-        case Shape.File file -> throw new Violation.Terminal(file.address(), name);
+            .orElseThrow(() -> new Violation(new Reason.Place.Missing(directory.address().resolve(name))));
+        case Shape.File file -> throw new Violation(new Reason.Place.Beneath(file.address(), name));
       };
     }
     return reached;
@@ -78,8 +81,10 @@ public sealed interface Shape permits Shape.File, Shape.Directory, Layout, Node 
    *
    * @param names single-name components, none for this place itself
    * @return the place there
-   * @throws Violation.Missing        when nothing is at a step
-   * @throws Violation.Terminal       when a step leads beneath a file
+   * @throws Violation                with {@link Reason.Place.Missing} when
+   *                                  nothing is at a step
+   * @throws Violation                with {@link Reason.Place.Beneath} when a
+   *                                  step leads beneath a file
    * @throws IllegalArgumentException when a component is not a single portable
    *                                  filename
    */

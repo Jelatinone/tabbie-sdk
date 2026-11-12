@@ -27,6 +27,8 @@ import cat.tabbie.sdk.target.Environment;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Parity;
 import cat.tabbie.sdk.target.Platform;
+import cat.tabbie.sdk.tree.Reason;
+import cat.tabbie.sdk.tree.Violation;
 import cat.tabbie.sdk.tree.World;
 import lombok.NonNull;
 
@@ -398,9 +400,10 @@ public interface Artifact extends Release.Payload {
      * @throws IllegalArgumentException when no install of the artifact applies
      *                                  to the target, which core rules out
      *                                  while resolving
-     * @throws IllegalStateException    when installs clash at the target and
-     *                                  the user prefers none of them, which
-     *                                  core asks about first
+     * @throws Violation                with {@link Reason.Registry.Clash} when
+     *                                  installs clash at the target and the
+     *                                  user prefers none of them, which core
+     *                                  asks about first
      */
     public Set<Image<?>> install(
         @NonNull Artifact artifact,
@@ -413,7 +416,10 @@ public interface Artifact extends Release.Payload {
             throw new IllegalArgumentException(String.format("No install of %s applies to %s.",
                 artifact.getClass().getName(), label.canonical()));
         case Contribution.Concur<Install.Signature>(var chosen) -> chosen.getFirst().contributor();
-        case Contribution.Clash<Install.Signature> clash -> throw new IllegalStateException(clash.message());
+        case Contribution.Clash<Install.Signature> clash -> throw new Violation(new Reason.Registry.Clash(
+            clash.contributors().stream()
+                .map(Contributions.Contributed::identity)
+                .collect(Collectors.toSet())));
       };
       Set<Image<?>> images = install.call().install(artifact, Install.Context.of(artifact, context,
           install.closure()));

@@ -18,6 +18,7 @@ import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Platform;
 import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Reason;
 import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
@@ -119,8 +120,10 @@ public sealed interface Distributable extends Release.Payload, Installer<Work> {
    *
    * @param model model of a Cat, declared from its root
    * @return address of the file beneath the Cat's root
-   * @throws Violation.Unplaced  when no directory accepts the type
-   * @throws Violation.Ambiguous when several directories accept the type
+   * @throws Violation with {@link Reason.Placement.Unplaced} when no directory
+   *                   accepts the type
+   * @throws Violation with {@link Reason.Placement.Ambiguous} when several
+   *                   directories accept the type
    */
   @NonNull
   default Address location(@NonNull Layout.Directory model) {

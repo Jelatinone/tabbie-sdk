@@ -1,15 +1,12 @@
 package cat.tabbie.sdk.tree;
 
-import java.io.Serial;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import lombok.AccessLevel;
 import lombok.NonNull;
-import lombok.experimental.FieldDefaults;
 
 /**
  * A canonical relative path, held as single-name components so equality and
@@ -130,11 +127,12 @@ public record Address(@NonNull List<String> components) {
    *
    * @param directory directory this address must lie in
    * @return this address
-   * @throws Outside when this address lies elsewhere
+   * @throws Violation with {@link Reason.Place.Outside} when this address lies
+   *                   elsewhere
    */
   public Address require(@NonNull Address directory) {
     if (!equals(directory) && !within(directory)) {
-      throw new Outside(this, directory);
+      throw new Violation(new Reason.Place.Outside(this, directory));
     }
     return this;
   }
@@ -146,7 +144,8 @@ public record Address(@NonNull List<String> components) {
    * @param directory directory this address lies in
    * @return address beneath the directory, the root address for the
    *         directory itself
-   * @throws Outside when this address lies elsewhere
+   * @throws Violation with {@link Reason.Place.Outside} when this address lies
+   *                   elsewhere
    */
   public Address relativeTo(@NonNull Address directory) {
     require(directory);
@@ -216,56 +215,5 @@ public record Address(@NonNull List<String> components) {
    */
   public String canonical() {
     return String.join("/", components);
-  }
-
-  /**
-   * Thrown when an address does not lie in the directory work requires it in.
-   */
-  @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-  public static final class Outside extends IllegalArgumentException {
-
-    @Serial
-    private static final long serialVersionUID = 1L;
-
-    transient Address address;
-
-    transient Address directory;
-
-    /**
-     * Describes an address outside the directory it must lie in.
-     *
-     * @param address   address that lies elsewhere
-     * @param directory directory it must lie in
-     */
-    public Outside(@NonNull Address address, @NonNull Address directory) {
-      super("%s does not lie in %s.".formatted(shown(address), shown(directory)));
-      this.address = address;
-      this.directory = directory;
-    }
-
-    /**
-     * Returns the address that lies elsewhere.
-     *
-     * @return address
-     */
-    public Address address() {
-      return address;
-    }
-
-    /**
-     * Returns the directory the address must lie in.
-     *
-     * @return required directory
-     */
-    public Address directory() {
-      return directory;
-    }
-
-    /**
-     * Shows an address in a message, naming the base itself for the root.
-     */
-    private static String shown(Address address) {
-      return address.isRoot() ? "the root" : address.canonical();
-    }
   }
 }

@@ -20,6 +20,7 @@ import cat.tabbie.sdk.plate.Stash;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Reason;
 import cat.tabbie.sdk.tree.Refusal;
 import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
@@ -44,8 +45,8 @@ import lombok.NonNull;
  * <p>
  * An image is always well formed: it changes something, and its file lies
  * beneath its root. Describing a change that is not throws a
- * {@link Malformation} saying why, so no image needs checking for a change
- * that does nothing.
+ * {@link Violation} whose {@link Reason.Change} says why, so no image needs
+ * checking for a change that does nothing.
  *
  * <p>
  * Images name content by {@link Reference.Captured reference}, never by its
@@ -110,20 +111,22 @@ public sealed interface Image<State extends Image.Alteration> {
    * file appears once, and no changed file lies beneath another.
    *
    * @param images generated images
-   * @throws Malformation.Clash  when two images change the same file
-   * @throws Malformation.Nested when a changed file lies beneath another
+   * @throws Violation with {@link Reason.Change.Clash} when two images change
+   *                   the same file
+   * @throws Violation with {@link Reason.Change.Nested} when a changed file
+   *                   lies beneath another
    */
   static void validate(@NonNull Collection<? extends Image<?>> images) {
     Map<Address, Image<?>> files = new LinkedHashMap<>();
     for (Image<?> image : images) {
       if (files.putIfAbsent(image.address(), image) != null) {
-        throw new Malformation.Clash(image.address());
+        throw new Violation(new Reason.Change.Clash(image.address()));
       }
     }
     for (Address file : files.keySet()) {
       for (Optional<Address> parent = file.parent(); parent.isPresent(); parent = parent.get().parent()) {
         if (files.containsKey(parent.get())) {
-          throw new Malformation.Nested(parent.get(), file);
+          throw new Violation(new Reason.Change.Nested(parent.get(), file));
         }
       }
     }
@@ -163,16 +166,16 @@ public sealed interface Image<State extends Image.Alteration> {
    *               first's after state
    * @param stash  stash holding the files' content, read only when folding
    * @return combined change, or empty when the pair has no net effect
-   * @throws Malformation.Unrelated     when the changes are of different files
-   * @throws Malformation.Discontinuous when the second does not continue from
-   *                                    the first
-   * @throws IOException                when folded content cannot be read or
-   *                                    captured
+   * @throws Violation   with {@link Reason.Change.Unrelated} when the changes
+   *                     are of different files
+   * @throws Violation   with {@link Reason.Change.Discontinuous} when the
+   *                     second does not continue from the first
+   * @throws IOException when folded content cannot be read or captured
    */
   static Optional<Image<?>> compose(@NonNull Image<?> first, @NonNull Image<?> second, @NonNull Stash stash)
       throws IOException {
     if (!first.address().equals(second.address())) {
-      throw new Malformation.Unrelated(first.address(), second.address());
+      throw new Violation(new Reason.Change.Unrelated(first.address(), second.address()));
     }
     return switch (first) {
       case Installation earlier -> switch (second) {
@@ -195,11 +198,10 @@ public sealed interface Image<State extends Image.Alteration> {
    * @param stash   stash holding the files' content, read only when an
    *                installation and a configuration of one file fold
    * @return immutable valid net change
-   * @throws Malformation when a set is invalid, its changes are
-   *                      discontinuous, or the net change is order
-   *                      dependent, such as a file replaced by a
-   *                      directory of the same name
-   * @throws IOException  when folded content cannot be read or captured
+   * @throws Violation   when a set is invalid, its changes are discontinuous,
+   *                     or the net change is order dependent, such as a file
+   *                     replaced by a directory of the same name
+   * @throws IOException when folded content cannot be read or captured
    */
   static Set<Image<?>> reduce(@NonNull List<? extends Collection<? extends Image<?>>> changes,
       @NonNull Stash stash) throws IOException {
@@ -243,15 +245,15 @@ public sealed interface Image<State extends Image.Alteration> {
      *
      * @param lease lease on the file
      * @return the file's content, or absence when nothing is at its path
-     * @throws Refusal     with {@link Refusal.Occupied} when something other
-     *                     than a file is at the path
+     * @throws Refusal     with {@link Reason.Place.Occupied} when something
+     *                     other than a file is at the path
      * @throws IOException when the file cannot be read
      */
     static File of(@NonNull Lease.Read lease) throws IOException {
       try {
         return new Present(lease.read().identify());
       } catch (Refusal refusal) {
-        if (refusal.reason() instanceof Refusal.Missing) {
+        if (refusal.reason() instanceof Reason.Place.Missing) {
           return new Absent();
         }
         throw refusal;
@@ -324,16 +326,17 @@ public sealed interface Image<State extends Image.Alteration> {
     /**
      * Rejects the root itself as a file, and a change that changes nothing.
      *
-     * @throws Malformation.Root      when the address is the root itself
-     * @throws Malformation.Unchanged when both states are the same, including
-     *                                both absent
+     * @throws Violation with {@link Reason.Change.Root} when the address is the
+     *                   root itself
+     * @throws Violation with {@link Reason.Change.Unchanged} when both states
+     *                   are the same, including both absent
      */
     public Installation {
       if (address.isRoot()) {
-        throw new Malformation.Root(address);
+        throw new Violation(new Reason.Change.Root(address));
       }
       if (before.same(after)) {
-        throw new Malformation.Unchanged(address);
+        throw new Violation(new Reason.Change.Unchanged(address));
       }
     }
 
@@ -351,8 +354,8 @@ public sealed interface Image<State extends Image.Alteration> {
         }
         return switch (held.get()) {
           case Node.File file -> changed(file, plate);
-          case Node.Directory _ -> new Scrutiny.Fail<>(null,
-              new Refusal(new Refusal.Occupied(address, Refusal.Kind.FILE, Refusal.Kind.DIRECTORY)));
+          case Node.Directory _ -> new Scrutiny.Fail<>(null, new Refusal(
+              new Reason.Place.Occupied(address, Reason.Place.Kind.FILE, Reason.Place.Kind.DIRECTORY)));
         };
       } catch (Violation violation) {
         // A path beneath a file, or a change the tree does not permit, has no
@@ -360,11 +363,11 @@ public sealed interface Image<State extends Image.Alteration> {
         return new Scrutiny.Fail<>(null, violation);
       } catch (Refusal refusal) {
         // A path no file can occupy, or one that may not be written, has no
-        // file state to report
-        return switch (refusal.reason()) {
-          case Refusal.Mismatch _,Refusal.Denied _ -> new Scrutiny.Fail<>(null, refusal);
-          case Refusal.Held _ -> throw refusal;
-        };
+        // file state to report; a refusal that may pass is tried again instead
+        if (refusal.reason().retryable()) {
+          throw refusal;
+        }
+        return new Scrutiny.Fail<>(null, refusal);
       }
     }
 
@@ -375,8 +378,11 @@ public sealed interface Image<State extends Image.Alteration> {
     private Optional<Node> held(Plate plate) {
       try {
         return Optional.of(plate.root().locate(address));
-      } catch (Violation.Missing _) {
-        return Optional.empty();
+      } catch (Violation violation) {
+        if (violation.reason() instanceof Reason.Place.Missing) {
+          return Optional.empty();
+        }
+        throw violation;
       }
     }
 
@@ -432,11 +438,12 @@ public sealed interface Image<State extends Image.Alteration> {
      * @param later later installation, whose before state must be the same as
      *              this one's after state
      * @return combined installation, or empty when the later one undoes this
-     * @throws Malformation.Discontinuous when the states do not continue
+     * @throws Violation with {@link Reason.Change.Discontinuous} when the
+     *                   states do not continue
      */
     Optional<Image<?>> compose(@NonNull Installation later) {
       if (!after.same(later.before())) {
-        throw new Malformation.Discontinuous(address);
+        throw new Violation(new Reason.Change.Discontinuous(address));
       }
       return between(before, later.after(), address);
     }
@@ -448,15 +455,14 @@ public sealed interface Image<State extends Image.Alteration> {
      * @param later configuration of the installed file
      * @param stash stash holding the installed content
      * @return folded installation, or empty when it changes nothing
-     * @throws Malformation.Discontinuous when this installation leaves no file,
-     *                                    or the chunks do not match its text
-     *                                    in the configuration's view
-     * @throws IOException                when the content cannot be read or
-     *                                    captured
+     * @throws Violation   with {@link Reason.Change.Discontinuous} when this
+     *                     installation leaves no file, or the chunks do not
+     *                     match its text in the configuration's view
+     * @throws IOException when the content cannot be read or captured
      */
     Optional<Image<?>> fold(@NonNull Configuration later, @NonNull Stash stash) throws IOException {
       if (!(after instanceof File.Present(Reference.Captured installed))) {
-        throw new Malformation.Discontinuous(address);
+        throw new Violation(new Reason.Change.Discontinuous(address));
       }
       Describe current = stash.retained(installed);
       Reference.Captured content = stash.capture(later.view().encode(current, later.revised(current)));
@@ -499,17 +505,19 @@ public sealed interface Image<State extends Image.Alteration> {
      *
      * @throws IllegalArgumentException when the chunks are out of order,
      *                                  overlap, or mix anchors
-     * @throws Malformation.Root        when the address is the root itself
-     * @throws Malformation.Unchanged   when no chunk edits its text
+     * @throws Violation                with {@link Reason.Change.Root} when the
+     *                                  address is the root itself
+     * @throws Violation                with {@link Reason.Change.Unchanged}
+     *                                  when no chunk edits its text
      */
     public Configuration {
       chunks = List.copyOf(chunks);
       Chunk.validateChunks(chunks);
       if (address.isRoot()) {
-        throw new Malformation.Root(address);
+        throw new Violation(new Reason.Change.Root(address));
       }
       if (chunks.stream().noneMatch(Chunk::edits)) {
-        throw new Malformation.Unchanged(address);
+        throw new Violation(new Reason.Change.Unchanged(address));
       }
     }
 
@@ -520,8 +528,10 @@ public sealed interface Image<State extends Image.Alteration> {
      * @param address changed file, beneath the plate's root
      * @throws IllegalArgumentException when the chunks are out of order,
      *                                  overlap, or mix anchors
-     * @throws Malformation.Root        when the address is the root itself
-     * @throws Malformation.Unchanged   when no chunk edits its text
+     * @throws Violation                with {@link Reason.Change.Root} when the
+     *                                  address is the root itself
+     * @throws Violation                with {@link Reason.Change.Unchanged}
+     *                                  when no chunk edits its text
      */
     public Configuration(@NonNull List<Chunk> chunks, @NonNull Address address) {
       this(chunks, address, new cat.tabbie.sdk.form.Text());
@@ -533,8 +543,10 @@ public sealed interface Image<State extends Image.Alteration> {
      * @param before  text before
      * @param after   text after
      * @param address changed file, beneath the plate's root
-     * @throws Malformation.Root      when the address is the root itself
-     * @throws Malformation.Unchanged when no fragment changes
+     * @throws Violation with {@link Reason.Change.Root} when the address is the
+     *                   root itself
+     * @throws Violation with {@link Reason.Change.Unchanged} when no fragment
+     *                   changes
      */
     public Configuration(
         @NonNull Text before, @NonNull Text after, @NonNull Address address) {
@@ -573,8 +585,8 @@ public sealed interface Image<State extends Image.Alteration> {
       try {
         return switch (plate.root().locate(address)) {
           case Node.File file -> configured(file);
-          case Node.Directory _ -> new Scrutiny.Fail<>(null,
-              new Refusal(new Refusal.Occupied(address, Refusal.Kind.FILE, Refusal.Kind.DIRECTORY)));
+          case Node.Directory _ -> new Scrutiny.Fail<>(null, new Refusal(
+              new Reason.Place.Occupied(address, Reason.Place.Kind.FILE, Reason.Place.Kind.DIRECTORY)));
         };
       } catch (Unreadable unreadable) {
         // The file cannot be read in this configuration's view
@@ -584,11 +596,12 @@ public sealed interface Image<State extends Image.Alteration> {
         // tree does not permit the change
         return new Scrutiny.Fail<>(null, violation);
       } catch (Refusal refusal) {
-        // The file is gone, is not a file, or may not be written
-        return switch (refusal.reason()) {
-          case Refusal.Mismatch _,Refusal.Denied _ -> new Scrutiny.Fail<>(null, refusal);
-          case Refusal.Held _ -> throw refusal;
-        };
+        // The file is gone, is not a file, or may not be written; a refusal
+        // that may pass is tried again instead
+        if (refusal.reason().retryable()) {
+          throw refusal;
+        }
+        return new Scrutiny.Fail<>(null, refusal);
       }
     }
 
@@ -653,20 +666,20 @@ public sealed interface Image<State extends Image.Alteration> {
      *
      * @param content complete content the chunks must match in the view
      * @return complete resulting text of the view
-     * @throws Malformation.Discontinuous when the content cannot be read in
-     *                                    the view, or the chunks do not match
-     *                                    it
-     * @throws IOException                when the content cannot be read
+     * @throws Violation   with {@link Reason.Change.Discontinuous} when the
+     *                     content cannot be read in the view, or the chunks do
+     *                     not match it
+     * @throws IOException when the content cannot be read
      */
     String revised(@NonNull Describe content) throws IOException {
       String text;
       try {
         text = view.decode(content);
       } catch (Unreadable unreadable) {
-        throw new Malformation.Discontinuous(address, unreadable);
+        throw new Violation(new Reason.Change.Discontinuous(address), unreadable);
       }
       if (!Chunk.matches(chunks, text)) {
-        throw new Malformation.Discontinuous(address);
+        throw new Violation(new Reason.Change.Discontinuous(address));
       }
       return Chunk.apply(chunks, text);
     }
@@ -676,20 +689,19 @@ public sealed interface Image<State extends Image.Alteration> {
      *
      * @param later later configuration
      * @return combined configuration, or empty when the pair has no net effect
-     * @throws Malformation.Discontinuous when the two read the file in
-     *                                    different views, or overlapping
-     *                                    regions disagree about the text
-     *                                    between them
+     * @throws Violation with {@link Reason.Change.Discontinuous} when the two
+     *                   read the file in different views, or overlapping
+     *                   regions disagree about the text between them
      */
     Optional<Image<?>> compose(@NonNull Configuration later) {
       if (!view.equals(later.view())) {
-        throw new Malformation.Discontinuous(address);
+        throw new Violation(new Reason.Change.Discontinuous(address));
       }
       List<Chunk> composed;
       try {
         composed = Chunk.compose(chunks, later.chunks());
       } catch (IllegalArgumentException exception) {
-        throw new Malformation.Discontinuous(address, exception);
+        throw new Violation(new Reason.Change.Discontinuous(address), exception);
       }
       return between(composed, address, view);
     }
@@ -702,15 +714,14 @@ public sealed interface Image<State extends Image.Alteration> {
      * @param later installation replacing or deleting the configured file
      * @param stash stash holding the configured content
      * @return folded installation, or empty when it changes nothing
-     * @throws Malformation.Discontinuous when the later installation expects no
-     *                                    file, or the chunks do not match its
-     *                                    before content in the view
-     * @throws IOException                when the content cannot be read or
-     *                                    captured
+     * @throws Violation   with {@link Reason.Change.Discontinuous} when the
+     *                     later installation expects no file, or the chunks do
+     *                     not match its before content in the view
+     * @throws IOException when the content cannot be read or captured
      */
     Optional<Image<?>> fold(@NonNull Installation later, @NonNull Stash stash) throws IOException {
       if (!(later.before() instanceof File.Present(Reference.Captured configured))) {
-        throw new Malformation.Discontinuous(address);
+        throw new Violation(new Reason.Change.Discontinuous(address));
       }
       Describe current = stash.retained(configured);
       Reference.Captured content = stash.capture(view.encode(current, preimage().revised(current)));
@@ -740,10 +751,9 @@ record Folding(Map<Address, Image<?>> net, Map<Address, Image.Alteration> settle
    *
    * @param image later change
    * @param stash stash holding the files' content, for folding
-   * @throws Malformation.Discontinuous when the change does not continue from
-   *                                    the state its file is in
-   * @throws IOException                when folded content cannot be read or
-   *                                    captured
+   * @throws Violation   with {@link Reason.Change.Discontinuous} when the
+   *                     change does not continue from the state its file is in
+   * @throws IOException when folded content cannot be read or captured
    */
   void fold(Image<?> image, Stash stash) throws IOException {
     Address address = image.address();
@@ -752,7 +762,7 @@ record Folding(Map<Address, Image<?>> net, Map<Address, Image.Alteration> settle
       Image.Alteration state = settled.remove(address);
       if (state instanceof Image.File file && image instanceof Image.Installation installation
           && !file.same(installation.before())) {
-        throw new Malformation.Discontinuous(address);
+        throw new Violation(new Reason.Change.Discontinuous(address));
       }
       net.put(address, image);
       return;

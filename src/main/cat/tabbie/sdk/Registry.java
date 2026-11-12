@@ -27,6 +27,8 @@ import cat.tabbie.sdk.meta.registry.Contributions;
 import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.meta.registry.Registrable;
 import cat.tabbie.sdk.meta.registry.Registration;
+import cat.tabbie.sdk.tree.Reason;
+import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
 /**
@@ -74,12 +76,14 @@ public record Registry(
    *
    * @param registrations registrations, in the order they were found
    * @return the registry
-   * @throws IllegalArgumentException when a type is registered twice, two
-   *                                  values or groups of a kind share an
-   *                                  identifier, or a registered type is of
-   *                                  no registrable kind
-   * @throws IllegalStateException    when a registration's lookup cannot
-   *                                  reach one of its contributors
+   * @throws Violation with {@link Reason.Registry.Duplicate} when a type is
+   *                   registered twice, or two values or groups of a kind
+   *                   share an identifier; with
+   *                   {@link Reason.Registry.Unregistered} when a registered
+   *                   type is of no registrable kind; and with
+   *                   {@link Reason.Registry.Unreachable} when a
+   *                   registration's lookup cannot reach one of its
+   *                   contributors
    */
   public static Registry of(@NonNull List<Registration> registrations) {
     Map<Class<?>, List<Object>> values = new LinkedHashMap<>();
@@ -120,7 +124,7 @@ public record Registry(
    * loaded: the SDK's own, and those of the modules beside it.
    *
    * @return the registry
-   * @throws IllegalArgumentException as {@link #of(List)} does
+   * @throws Violation as {@link #of(List)} does
    */
   public static Registry load() {
     return of(ServiceLoader.load(Registration.class).stream()
@@ -134,7 +138,7 @@ public record Registry(
    *
    * @param layer layer to load from
    * @return the registry
-   * @throws IllegalArgumentException as {@link #of(List)} does
+   * @throws Violation as {@link #of(List)} does
    */
   public static Registry load(@NonNull ModuleLayer layer) {
     return of(ServiceLoader.load(layer, Registration.class).stream()
@@ -226,19 +230,18 @@ public record Registry(
       Map<Class<?>, List<Object>> values,
       Map<Class<?>, Map<String, Class<?>>> groups,
       Map<Class<?>, Set<Class<?>>> types) {
-    Class<?> kind = kind(type).orElseThrow(() -> new IllegalArgumentException(String.format(
-        "%s is registered, but is a type of no registrable kind.", type.getName())));
+    Class<?> kind = kind(type).orElseThrow(() -> new Violation(new Reason.Registry.Unregistered(type.getName())));
     switch (kind.getAnnotation(Registrable.class).value()) {
       case VALUES -> {
         if (type.isEnum()) {
           values.computeIfAbsent(kind, _ -> new ArrayList<>()).addAll(List.of(type.getEnumConstants()));
         } else if (groups.computeIfAbsent(kind, _ -> new LinkedHashMap<>()).putIfAbsent(group, type) != null) {
-          throw new IllegalArgumentException(String.format("Two groups are registered as %s.", group));
+          throw new Violation(new Reason.Registry.Duplicate(group));
         }
       }
       case TYPES -> {
         if (!types.computeIfAbsent(kind, _ -> new LinkedHashSet<>()).add(type)) {
-          throw new IllegalArgumentException(String.format("%s is registered twice.", type.getName()));
+          throw new Violation(new Reason.Registry.Duplicate(type.getName()));
         }
       }
     }

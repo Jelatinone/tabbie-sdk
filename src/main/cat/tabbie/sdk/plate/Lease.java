@@ -9,6 +9,7 @@ import cat.tabbie.sdk.model.Node;
 import cat.tabbie.sdk.model.Rule;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Reason;
 import cat.tabbie.sdk.tree.Refusal;
 import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
@@ -65,13 +66,13 @@ public sealed interface Lease extends AutoCloseable {
      * Returns the file's content as it stands under this lease.
      *
      * @return content, readable until this lease closes
-     * @throws Violation.Forbidden   when the plate's model does not make
-     *                               the file
+     * @throws Violation             with {@link Reason.Place.Denied} when the
+     *                               plate's model does not make the file
      *                               {@link Rule.Permission#READABLE readable}
-     * @throws Refusal               with {@link Refusal.Missing} when nothing
-     *                               is at the path any more, or
-     *                               {@link Refusal.Occupied} when something
-     *                               other than a file is there
+     * @throws Refusal               with {@link Reason.Place.Missing} when
+     *                               nothing is at the path any more, or
+     *                               {@link Reason.Place.Occupied} when
+     *                               something other than a file is there
      * @throws IOException           when the path cannot be inspected
      * @throws IllegalStateException when this lease is closed
      */
@@ -105,14 +106,14 @@ public sealed interface Lease extends AutoCloseable {
      * instead.
      *
      * @param content bytes to write
-     * @throws Violation.Forbidden   when the plate's model does not make
-     *                               the file
+     * @throws Violation             with {@link Reason.Place.Denied} when the
+     *                               plate's model does not make the file
      *                               {@link Rule.Permission#EDITABLE editable}
-     * @throws Refusal               with {@link Refusal.Occupied} when
+     * @throws Refusal               with {@link Reason.Place.Occupied} when
      *                               something other than a file is at the path
      *                               or a file lies above it, or
-     *                               {@link Refusal.Denied} when the file may
-     *                               not be written
+     *                               {@link Reason.Place.Unwritable} when the
+     *                               file may not be written
      * @throws IOException           when writing or verifying fails
      * @throws IllegalStateException when this lease is closed
      */
@@ -124,17 +125,18 @@ public sealed interface Lease extends AutoCloseable {
      * readable until the new content is in place.
      *
      * @param edit derives the new content from the current content
-     * @throws Violation.Forbidden   when the plate's model does not make
-     *                               the file
+     * @throws Violation             with {@link Reason.Place.Denied} when the
+     *                               plate's model does not make the file
      *                               {@link Rule.Permission#EDITABLE editable}
-     * @throws Refusal               with {@link Refusal.Missing} when nothing
-     *                               is at the path, {@link Refusal.Occupied}
-     *                               when something other than a file is there
-     *                               or a file lies above it, or
-     *                               {@link Refusal.Denied} when the file may
-     *                               not be written
-     * @throws IOException           when reading, editing, writing or
-     *                               verifying fails
+     * @throws Refusal               with {@link Reason.Place.Missing} when
+     *                               nothing is at the path,
+     *                               {@link Reason.Place.Occupied} when
+     *                               something other than a file is there or a
+     *                               file lies above it, or
+     *                               {@link Reason.Place.Unwritable} when the
+     *                               file may not be written
+     * @throws IOException           when reading, editing, writing or verifying
+     *                               fails
      * @throws IllegalStateException when this lease is closed
      */
     void update(@NonNull Edit edit) throws IOException;
@@ -156,8 +158,8 @@ public sealed interface Lease extends AutoCloseable {
      * Deletes the file. Directories it leaves empty stay. The file then leaves
      * the tree, though the layout may still declare its place.
      *
-     * @throws Violation.Forbidden   when the plate's model does not make
-     *                               the file
+     * @throws Violation             with {@link Reason.Place.Denied} when the
+     *                               plate's model does not make the file
      *                               {@link Rule.Permission#DELETABLE deletable}
      * @throws Refusal               as {@link #update(Edit)} refuses
      * @throws IOException           when deleting fails
@@ -188,12 +190,12 @@ public sealed interface Lease extends AutoCloseable {
      *
      * @param content bytes to write
      * @return the created file
-     * @throws Refusal               with {@link Refusal.Occupied} when
+     * @throws Refusal               with {@link Reason.Place.Occupied} when
      *                               something has come to be at the path or a
      *                               file has come to lie above it since the
      *                               lease was granted, or
-     *                               {@link Refusal.Denied} when the path may
-     *                               not be written
+     *                               {@link Reason.Place.Unwritable} when the
+     *                               path may not be written
      * @throws IOException           when writing or verifying fails
      * @throws IllegalStateException when this lease is closed, or has already
      *                               created its file

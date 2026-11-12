@@ -9,8 +9,8 @@ import cat.tabbie.sdk.plate.Lease;
 import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.revision.Chunk;
 import cat.tabbie.sdk.revision.Image;
-import cat.tabbie.sdk.revision.Malformation;
 import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Reason;
 import cat.tabbie.sdk.tree.Refusal;
 import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
@@ -93,8 +93,8 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * Leases this file for reading.
      *
      * @return open lease, owned by the caller
-     * @throws Refusal     with {@link Refusal.Held} when the plate does not
-     *                     wait and the file is leased for writing
+     * @throws Refusal     with {@link Reason.Place.Held} when the plate does
+     *                     not wait and the file is leased for writing
      * @throws IOException when the lease cannot be taken
      */
     @NonNull
@@ -104,8 +104,8 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * Leases this file for writing.
      *
      * @return open lease, owned by the caller
-     * @throws Refusal     with {@link Refusal.Held} when the plate does not
-     *                     wait and the file is leased
+     * @throws Refusal     with {@link Reason.Place.Held} when the plate does
+     *                     not wait and the file is leased
      * @throws IOException when the lease cannot be taken
      */
     @NonNull
@@ -116,8 +116,8 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * before it changes it.
      *
      * @return open lease, owned by the caller
-     * @throws Refusal     with {@link Refusal.Held} when the plate does not
-     *                     wait and the file is leased
+     * @throws Refusal     with {@link Reason.Place.Held} when the plate does
+     *                     not wait and the file is leased
      * @throws IOException when the lease cannot be taken
      */
     @NonNull
@@ -129,7 +129,8 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * @param before retained content before
      * @param after  retained content after
      * @return image replacing the file
-     * @throws Malformation.Unchanged when both contents are the same
+     * @throws Violation with {@link Reason.Change.Unchanged} when both contents
+     *                   are the same
      */
     @NonNull
     default Image<Image.File> replace(@NonNull Reference.Captured before, @NonNull Reference.Captured after) {
@@ -155,7 +156,8 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * @param before text before
      * @param after  text after
      * @return image configuring the file
-     * @throws Malformation.Unchanged when no fragment changes
+     * @throws Violation with {@link Reason.Change.Unchanged} when no fragment
+     *                   changes
      */
     @NonNull
     default Image<Image.Text> configure(@NonNull Image.Text before, @NonNull Image.Text after) {
@@ -168,7 +170,8 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      *
      * @param chunks changed chunks
      * @return image configuring the file
-     * @throws Malformation.Unchanged when no chunk edits its text
+     * @throws Violation with {@link Reason.Change.Unchanged} when no chunk
+     *                   edits its text
      */
     @NonNull
     default Image<Image.Text> configure(@NonNull List<Chunk> chunks) {
@@ -182,7 +185,8 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * @param before text before
      * @param after  text after
      * @return image configuring the file
-     * @throws Malformation.Unchanged when the texts are equal
+     * @throws Violation with {@link Reason.Change.Unchanged} when the texts are
+     *                   equal
      */
     @NonNull
     default Image<Image.Text> configure(@NonNull String before, @NonNull String after) {
@@ -197,7 +201,8 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * @param after        text after
      * @param contextLines number of context lines to keep
      * @return image configuring the file
-     * @throws Malformation.Unchanged when the texts are equal
+     * @throws Violation with {@link Reason.Change.Unchanged} when the texts are
+     *                   equal
      */
     @NonNull
     default Image<Image.Text> configure(@NonNull String before, @NonNull String after, int contextLines) {
@@ -237,8 +242,10 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      *
      * @param tail address of the file relative to this directory
      * @return this directory
-     * @throws Violation.Occupied       when something exists at the tail
-     * @throws Violation.Terminal       when a file lies on the way
+     * @throws Violation                with {@link Reason.Place.Occupied} when
+     *                                  something exists at the tail
+     * @throws Violation                with {@link Reason.Place.Beneath} when a
+     *                                  file lies on the way
      * @throws IllegalArgumentException when the tail names this directory
      */
     @Override
@@ -247,12 +254,20 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
       if (tail.isRoot()) {
         throw new IllegalArgumentException("A file is created beneath a directory, not in its place.");
       }
+      Node held;
       try {
-        locate(tail);
-      } catch (Violation.Missing missing) {
-        return this;
+        held = locate(tail);
+      } catch (Violation violation) {
+        if (violation.reason() instanceof Reason.Place.Missing) {
+          return this;
+        }
+        throw violation;
       }
-      throw new Violation.Occupied(address().resolve(tail));
+      Reason.Place.Kind found = switch (held) {
+        case Node.File _ -> Reason.Place.Kind.FILE;
+        case Node.Directory _ -> Reason.Place.Kind.DIRECTORY;
+      };
+      throw new Violation(new Reason.Place.Occupied(address().resolve(tail), Reason.Place.Kind.ABSENT, found));
     }
 
     /**
@@ -265,8 +280,9 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * @return open lease, owned by the caller
      * @throws Violation                when something exists at the tail or a
      *                                  file lies on the way
-     * @throws Refusal                  with {@link Refusal.Held} when the plate
-     *                                  does not wait and the place is leased
+     * @throws Refusal                  with {@link Reason.Place.Held} when the
+     *                                  plate does not wait and the place is
+     *                                  leased
      * @throws IOException              when the lease cannot be taken
      * @throws IllegalArgumentException when the tail names this directory
      */

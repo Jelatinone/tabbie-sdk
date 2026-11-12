@@ -14,6 +14,8 @@ import java.util.stream.Stream;
 
 import cat.tabbie.sdk.meta.attribute.Applies;
 import cat.tabbie.sdk.meta.attribute.Conditions;
+import cat.tabbie.sdk.tree.Reason;
+import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
 /**
@@ -71,7 +73,9 @@ public record Contributor<Subject, Call>(
    *                                  a declaration is malformed, which the
    *                                  processors rule out while the module
    *                                  compiles
-   * @throws IllegalStateException    when the lookup cannot reach the method
+   * @throws Violation                with {@link Reason.Registry.Unreachable}
+   *                                  when the lookup cannot reach the method,
+   *                                  or the action's elements cannot be read
    */
   public static <Call> Contributor<Class<?>, Call> of(
       @NonNull Method method,
@@ -104,8 +108,7 @@ public record Contributor<Subject, Call>(
       Call call = MethodHandleProxies.asInterfaceInstance(signature, lookup.unreflect(method));
       return new Contributor<>(name(method), subject, conditions, closure, key, call);
     } catch (IllegalAccessException exception) {
-      throw new IllegalStateException(String.format("%s cannot be reached through its module's registration.",
-          name(method)), exception);
+      throw new Violation(new Reason.Registry.Unreachable(name(method)), exception);
     }
   }
 
@@ -129,8 +132,8 @@ public record Contributor<Subject, Call>(
     } catch (NoSuchMethodException exception) {
       return Optional.empty();
     } catch (IllegalAccessException | InvocationTargetException exception) {
-      throw new IllegalStateException(String.format("@%s's %s cannot be read.",
-          action.annotationType().getSimpleName(), name), exception);
+      throw new Violation(new Reason.Registry.Unreachable(String.format("@%s's %s",
+          action.annotationType().getSimpleName(), name)), exception);
     }
   }
 

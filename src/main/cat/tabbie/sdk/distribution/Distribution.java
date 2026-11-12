@@ -15,6 +15,8 @@ import cat.tabbie.sdk.target.Environment;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Platform;
 import cat.tabbie.sdk.target.Version;
+import cat.tabbie.sdk.tree.Reason;
+import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
 /**
@@ -95,8 +97,8 @@ public interface Distribution {
      * Copies the distributions and groups, and checks that no two share an
      * identifier.
      *
-     * @throws IllegalArgumentException when two distributions or groups share
-     *                                  an identifier
+     * @throws Violation with {@link Reason.Registry.Duplicate} when two
+     *                   distributions or groups share an identifier
      */
     public Registry {
       distributions = List.copyOf(distributions);
@@ -106,8 +108,7 @@ public interface Distribution {
           .filter(id -> !ids.add(id))
           .findFirst()
           .ifPresent(id -> {
-            throw new IllegalArgumentException(String.format("Two distributions or groups are registered as %s.",
-                id));
+            throw new Violation(new Reason.Registry.Duplicate(id));
           });
     }
 
