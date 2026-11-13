@@ -47,6 +47,17 @@ import lombok.NonNull;
 public interface Artifact extends Release.Payload {
 
   /**
+   * Returns what every content family declares about an artifact, so a
+   * family's own record holds only what is its alone.
+   *
+   * @apiNote The coordinates, name, source, targets, parity and relations
+   *          below are read from these details.
+   * @return checked artifact details
+   */
+  @NonNull
+  Details details();
+
+  /**
    * Stable artifact identity derived from the file coordinates, so equal
    * coordinates always yield the same identity across processes.
    *
@@ -56,13 +67,20 @@ public interface Artifact extends Release.Payload {
     return Identity.create(coordinates().canonical());
   }
 
+  @Override
+  default Coordinate.File coordinates() {
+    return details().coordinates();
+  }
+
   /**
    * Human-readable canonical artifact name
    *
    * @return artifact name
    */
   @NonNull
-  String artifactName();
+  default String artifactName() {
+    return details().artifactName();
+  }
 
   /**
    * Provider-owned description of this artifact's content, captured during
@@ -71,7 +89,9 @@ public interface Artifact extends Release.Payload {
    * @return content source
    */
   @NonNull
-  Describe source();
+  default Describe source() {
+    return details().source();
+  }
 
   /**
    * Declares support for the entire artifact.
@@ -79,7 +99,9 @@ public interface Artifact extends Release.Payload {
    * @return immutable, nonempty supported targets
    */
   @NonNull
-  Set<Label> labels();
+  default Set<Label> labels() {
+    return details().labels();
+  }
 
   /**
    * Declares which multiplayer sides this artifact runs on and what it
@@ -88,7 +110,9 @@ public interface Artifact extends Release.Payload {
    * @return side parity, {@link Parity#UNKNOWN} without evidence
    */
   @NonNull
-  Parity parity();
+  default Parity parity() {
+    return details().parity();
+  }
 
   /**
    * Catalog relationships with other content, at most one per coordinate.
@@ -96,7 +120,9 @@ public interface Artifact extends Release.Payload {
    * @return immutable relations
    */
   @NonNull
-  Set<Relation> relations();
+  default Set<Relation> relations() {
+    return details().relations();
+  }
 
   /**
    * Catalog content that must be installed alongside this artifact. A project
@@ -133,42 +159,57 @@ public interface Artifact extends Release.Payload {
   }
 
   /**
-   * Checks copied constructor parameters before record fields are assigned.
-   * Whether a declared target supports the artifact's family depends on the
-   * installs core has loaded, so it is not checked here: core decides it
-   * while resolving, through {@link Registry#compatibility(Artifact, Label)}.
+   * What every content family declares about an artifact, as its provider
+   * describes it. Whether a declared target supports the artifact's family
+   * depends on the installs core has loaded, so it is not checked here: core
+   * decides it while resolving, through
+   * {@link Registry#compatibility(Artifact, Label)}.
    *
-   * @param coordinates  exact file coordinates
-   * @param artifactName display name
-   * @param labels       declared targets
-   * @param relations    catalog relationships
-   *
-   * @throws IllegalArgumentException when the name is blank, no target is
-   *                                  declared, a relation includes this
-   *                                  artifact, a coordinate has two relations,
-   *                                  or an incompatibility includes another
-   *                                  relation
+   * @param coordinates  exact provider file coordinates
+   * @param artifactName non-blank display name
+   * @param source       provider-owned content description
+   * @param labels       nonempty supported targets
+   * @param parity       multiplayer side parity
+   * @param relations    catalog relationships, one per coordinate
    */
-  static void validate(
+  record Details(
       @NonNull Coordinate.File coordinates,
       @NonNull String artifactName,
+      @NonNull Describe source,
       @NonNull Set<Label> labels,
+      @NonNull Parity parity,
       @NonNull Set<Relation> relations) {
-    if (artifactName.isBlank() || labels.isEmpty()) {
-      throw new IllegalArgumentException("An artifact needs a non-blank name and supported labels.");
-    }
-    if (relations.stream().anyMatch(relation -> relation.coordinate().includes(coordinates))) {
-      throw new IllegalArgumentException("Relations must not reference this artifact.");
-    }
-    if (relations.stream().map(Relation::coordinate).distinct().count() != relations.size()) {
-      throw new IllegalArgumentException("A coordinate may have only one relation.");
-    }
-    if (relations.stream()
-        .filter(relation -> relation instanceof Relation.Incompatible)
-        .anyMatch(conflict -> relations.stream()
-            .filter(other -> !(other instanceof Relation.Incompatible))
-            .anyMatch(other -> conflict.coordinate().includes(other.coordinate())))) {
-      throw new IllegalArgumentException("An incompatibility must not include another relation.");
+
+    /**
+     * Copies the sets and checks the declarations without reading content.
+     *
+     * @throws IllegalArgumentException when the name is blank, no target is
+     *                                  declared, a relation includes this
+     *                                  artifact, a coordinate has two
+     *                                  relations, or an incompatibility
+     *                                  includes another relation
+     */
+    public Details {
+      labels = Set.copyOf(labels);
+      relations = Set.copyOf(relations);
+      if (artifactName.isBlank() || labels.isEmpty()) {
+        throw new IllegalArgumentException("An artifact needs a non-blank name and supported labels.");
+      }
+      if (relations.stream().anyMatch(relation -> relation.coordinate().includes(coordinates))) {
+        throw new IllegalArgumentException("Relations must not reference this artifact.");
+      }
+      if (relations.stream().map(Relation::coordinate).distinct().count() != relations.size()) {
+        throw new IllegalArgumentException("A coordinate may have only one relation.");
+      }
+      List<Coordinate> compatible = relations.stream()
+          .filter(relation -> !(relation instanceof Relation.Incompatible))
+          .map(Relation::coordinate)
+          .toList();
+      if (relations.stream()
+          .filter(relation -> relation instanceof Relation.Incompatible)
+          .anyMatch(conflict -> compatible.stream().anyMatch(other -> conflict.coordinate().includes(other)))) {
+        throw new IllegalArgumentException("An incompatibility must not include another relation.");
+      }
     }
   }
 
