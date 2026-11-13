@@ -48,12 +48,6 @@ public record Contributor<Subject, Call>(
     @NonNull Call call) {
 
   /**
-   * Checks every part is given.
-   */
-  public Contributor {
-  }
-
-  /**
    * Reads a method contributing an action, as the registry does when it
    * loads a module: the type it acts on, from the action's {@code subject}
    * element or else the type declaring the method; where it acts, from the

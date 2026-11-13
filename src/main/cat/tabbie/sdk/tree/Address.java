@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 import lombok.NonNull;
 
@@ -14,12 +15,24 @@ import lombok.NonNull;
  * on where it is used: an image's address lies beneath the Cat, a source's
  * path beneath its source, and an archive entry's path beneath its archive.
  * Work that needs a path in a particular directory {@link #require(Address)
- * requires} it there. Physical locations, links, and a target filesystem's
- * case and name restrictions are checked by whoever binds the path, not here.
+ * requires} it there.
+ *
+ * <p>
+ * Every component is a portable filename, valid on every platform tabbie
+ * runs on, so a Cat's history replays anywhere. Case is kept as written and
+ * compared exactly; whether names differing only by case may sit side by side
+ * is the tree's to say. Physical locations and links are checked by whoever
+ * binds the path, not here.
  *
  * @param components canonical components, empty for the base itself
  */
 public record Address(@NonNull List<String> components) {
+
+  /**
+   * Windows' device names, which no file may take, whatever follows the first
+   * dot.
+   */
+  private static final Pattern DEVICE_NAME = Pattern.compile("(?i)CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9]");
 
   /**
    * Validates and copies the components.
@@ -70,16 +83,25 @@ public record Address(@NonNull List<String> components) {
   }
 
   /**
-   * Checks a single filename without reading the filesystem. These lexical
-   * checks do not establish whether a target filesystem permits the name.
+   * Checks a single filename is portable, without reading the filesystem: not
+   * blank, not a dot segment, with no control character or character Windows
+   * reserves, not one of Windows' device names ({@code CON}, {@code PRN},
+   * {@code AUX}, {@code NUL}, {@code COM1} to {@code COM9}, {@code LPT1} to
+   * {@code LPT9}, in any case, with or without an extension), and not ending
+   * in a dot or a space. These lexical checks do not establish whether a target
+   * filesystem has room for the name.
    *
    * @param fileName filename to check
-   * @throws IllegalArgumentException when the name is blank or contains a path
+   * @throws IllegalArgumentException when the name is not a portable single
+   *                                  filename
    */
   public static void validateFilename(@NonNull String fileName) {
+    String stem = fileName.contains(".") ? fileName.substring(0, fileName.indexOf('.')) : fileName;
     if (fileName.isBlank() || fileName.equals(".") || fileName.equals("..")
-        || fileName.chars().anyMatch(character -> character < 32 || "<>:\"/\\|?*".indexOf(character) >= 0)) {
-      throw new IllegalArgumentException("Expected a non-blank single filename.");
+        || fileName.chars().anyMatch(character -> character < 32 || "<>:\"/\\|?*".indexOf(character) >= 0)
+        || fileName.endsWith(".") || fileName.endsWith(" ")
+        || DEVICE_NAME.matcher(stem).matches()) {
+      throw new IllegalArgumentException("Expected a portable single filename.");
     }
   }
 
@@ -215,5 +237,15 @@ public record Address(@NonNull List<String> components) {
    */
   public String canonical() {
     return String.join("/", components);
+  }
+
+  /**
+   * Shows this address to a person, such as in a failure's message: its
+   * {@link #canonical() canonical} form, or "the root" for the base itself.
+   *
+   * @return text naming this address
+   */
+  public String shown() {
+    return isRoot() ? "the root" : canonical();
   }
 }

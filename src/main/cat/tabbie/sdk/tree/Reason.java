@@ -5,11 +5,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.model.Rule;
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
 import lombok.NonNull;
-import lombok.experimental.FieldDefaults;
 
 /**
  * Why work failed: what a tree, a plate or the registry would not do. A reason
@@ -49,13 +45,6 @@ public sealed interface Reason {
   }
 
   /**
-   * Shows an address in a message, naming the root itself.
-   */
-  private static String shown(Address address) {
-    return address.isRoot() ? "the root" : address.canonical();
-  }
-
-  /**
    * A place in a tree does not hold or allow what work asks of it.
    */
   sealed interface Place extends Reason {
@@ -69,42 +58,6 @@ public sealed interface Reason {
     Address address();
 
     /**
-     * What a place holds.
-     */
-    @Getter
-    @AllArgsConstructor
-    @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-    enum Kind {
-
-      /**
-       * Nothing.
-       */
-      ABSENT("nothing"),
-
-      /**
-       * A regular file.
-       */
-      FILE("a file"),
-
-      /**
-       * A directory.
-       */
-      DIRECTORY("a directory"),
-
-      /**
-       * Something other than a file or directory, such as a dangling link.
-       */
-      OTHER("something other than a file or directory");
-
-      /**
-       * How a message names what a place holds, such as "a directory".
-       *
-       * @return the phrase
-       */
-      String phrase;
-    }
-
-    /**
      * Nothing is at an address that work requires something at: nothing
      * exists there, or, in a layout, nothing is declared there.
      *
@@ -112,61 +65,53 @@ public sealed interface Reason {
      */
     record Missing(@NonNull Address address) implements Place {
 
-      /**
-       * Checks every component is given.
-       */
-      public Missing {
-      }
-
       @Override
       public String message() {
-        return "Nothing is at %s.".formatted(shown(address));
+        return String.format("Nothing is at %s.", address.shown());
       }
     }
 
     /**
-     * Something other than work requires is in the way: something where a
-     * file is to be created, something other than a file where one is to be
-     * read, replaced or deleted, or something other than a directory above
-     * the work's address.
+     * Something is in the way of the work: something where a file is to be
+     * created, something other than a file where one is to be read, replaced
+     * or deleted, a file above the work's address, or a sibling whose name
+     * differs from the work's only by case. What the work needed there follows
+     * from the work.
      *
-     * @param address  address the work was at
-     * @param at       address that holds it: the work's own, or one above it
-     * @param required what the work requires at that address
-     * @param found    what that address holds
+     * @param address address the work was at
+     * @param at      address of what is in the way: the work's own, one above
+     *                it, or a sibling
+     * @param found   what is in the way
      */
-    record Occupied(
-        @NonNull Address address,
-        @NonNull Address at,
-        @NonNull Kind required,
-        @NonNull Kind found) implements Place {
+    record Occupied(@NonNull Address address, @NonNull Address at, @NonNull State found) implements Place {
 
       /**
-       * Checks that something other than what is required was found.
+       * Checks that something was found.
        *
        * @throws IllegalArgumentException when nothing was found, which is
-       *                                  {@link Missing}, or what was required
+       *                                  {@link Missing}
        */
       public Occupied {
-        if (found == Kind.ABSENT || found == required) {
-          throw new IllegalArgumentException("An occupied place holds something other than is required.");
+        if (found instanceof State.Absent) {
+          throw new IllegalArgumentException("Something is in the way of an occupied place.");
         }
       }
 
       /**
-       * Describes the work's own address holding the wrong kind of thing.
+       * Describes something in the way at the work's own address.
        *
-       * @param address  address the work was at
-       * @param required what the work requires there
-       * @param found    what the address holds
+       * @param address address the work was at
+       * @param found   what is in the way there
        */
-      public Occupied(@NonNull Address address, @NonNull Kind required, @NonNull Kind found) {
-        this(address, address, required, found);
+      public Occupied(@NonNull Address address, @NonNull State found) {
+        this(address, address, found);
       }
 
       @Override
       public String message() {
-        return "Expected %s at %s, found %s.".formatted(required.getPhrase(), shown(at), found.getPhrase());
+        return at.equals(address)
+            ? String.format("Found %s in the way at %s.", found.phrase(), address.shown())
+            : String.format("Found %s at %s, in the way of %s.", found.phrase(), at.shown(), address.shown());
       }
     }
 
@@ -178,15 +123,9 @@ public sealed interface Reason {
      */
     record Beneath(@NonNull Address address, @NonNull String name) implements Place {
 
-      /**
-       * Checks every component is given.
-       */
-      public Beneath {
-      }
-
       @Override
       public String message() {
-        return "Nothing can lie beneath the file %s, such as %s.".formatted(shown(address), name);
+        return String.format("Nothing can lie beneath the file %s, such as %s.", address.shown(), name);
       }
     }
 
@@ -199,15 +138,9 @@ public sealed interface Reason {
      */
     record Denied(@NonNull Address address, @NonNull Rule.Permission permission) implements Place {
 
-      /**
-       * Checks every component is given.
-       */
-      public Denied {
-      }
-
       @Override
       public String message() {
-        return "The layout does not make %s %s.".formatted(shown(address), permission);
+        return String.format("The layout does not make %s %s.", address.shown(), permission);
       }
     }
 
@@ -219,17 +152,11 @@ public sealed interface Reason {
      */
     record Unwritable(@NonNull Address address, @NonNull Address at) implements Place {
 
-      /**
-       * Checks every component is given.
-       */
-      public Unwritable {
-      }
-
       @Override
       public String message() {
         return at.equals(address)
-            ? "The filesystem does not permit writing %s.".formatted(shown(address))
-            : "The filesystem does not permit writing %s in %s.".formatted(shown(address), shown(at));
+            ? String.format("The filesystem does not permit writing %s.", address.shown())
+            : String.format("The filesystem does not permit writing %s in %s.", address.shown(), at.shown());
       }
     }
 
@@ -241,15 +168,9 @@ public sealed interface Reason {
      */
     record Held(@NonNull Address address) implements Place {
 
-      /**
-       * Checks every component is given.
-       */
-      public Held {
-      }
-
       @Override
       public String message() {
-        return "Another lease holds %s.".formatted(shown(address));
+        return String.format("Another lease holds %s.", address.shown());
       }
 
       @Override
@@ -266,15 +187,9 @@ public sealed interface Reason {
      */
     record Outside(@NonNull Address address, @NonNull Address directory) implements Place {
 
-      /**
-       * Checks every component is given.
-       */
-      public Outside {
-      }
-
       @Override
       public String message() {
-        return "%s does not lie in %s.".formatted(shown(address), shown(directory));
+        return String.format("%s does not lie in %s.", address.shown(), directory.shown());
       }
     }
   }
@@ -300,15 +215,9 @@ public sealed interface Reason {
      */
     record Unaccepted(@NonNull Address address, @NonNull Class<?> type) implements Placement {
 
-      /**
-       * Checks every component is given.
-       */
-      public Unaccepted {
-      }
-
       @Override
       public String message() {
-        return "The layout does not accept %s at %s.".formatted(type.getSimpleName(), shown(address));
+        return String.format("The layout does not accept %s at %s.", type.getSimpleName(), address.shown());
       }
     }
 
@@ -320,15 +229,9 @@ public sealed interface Reason {
      */
     record Unplaced(@NonNull Class<?> type) implements Placement {
 
-      /**
-       * Checks every component is given.
-       */
-      public Unplaced {
-      }
-
       @Override
       public String message() {
-        return "The layout declares no directory accepting %s.".formatted(type.getSimpleName());
+        return String.format("The layout declares no directory accepting %s.", type.getSimpleName());
       }
     }
 
@@ -351,10 +254,10 @@ public sealed interface Reason {
 
       @Override
       public String message() {
-        return "The layout declares several directories accepting %s: %s.".formatted(
+        return String.format("The layout declares several directories accepting %s: %s.",
             type.getSimpleName(),
             addresses.stream()
-                .map(Reason::shown)
+                .map(Address::shown)
                 .collect(Collectors.joining(", ")));
       }
     }
@@ -377,15 +280,9 @@ public sealed interface Reason {
      */
     record Unchanged(@NonNull Address address) implements Change {
 
-      /**
-       * Checks every component is given.
-       */
-      public Unchanged {
-      }
-
       @Override
       public String message() {
-        return "A change of %s must change something.".formatted(address.canonical());
+        return String.format("A change of %s must change something.", address.canonical());
       }
     }
 
@@ -395,12 +292,6 @@ public sealed interface Reason {
      * @param address the root's address the change named
      */
     record Root(@NonNull Address address) implements Change {
-
-      /**
-       * Checks every component is given.
-       */
-      public Root {
-      }
 
       @Override
       public String message() {
@@ -416,15 +307,9 @@ public sealed interface Reason {
      */
     record Discontinuous(@NonNull Address address) implements Change {
 
-      /**
-       * Checks every component is given.
-       */
-      public Discontinuous {
-      }
-
       @Override
       public String message() {
-        return "Changes of %s must continue from one another.".formatted(address.canonical());
+        return String.format("Changes of %s must continue from one another.", address.canonical());
       }
     }
 
@@ -437,15 +322,9 @@ public sealed interface Reason {
      */
     record Unrelated(@NonNull Address first, @NonNull Address second) implements Change {
 
-      /**
-       * Checks every component is given.
-       */
-      public Unrelated {
-      }
-
       @Override
       public String message() {
-        return "Only changes of one file compose, not %s and %s.".formatted(first.canonical(), second.canonical());
+        return String.format("Only changes of one file compose, not %s and %s.", first.canonical(), second.canonical());
       }
     }
 
@@ -457,15 +336,9 @@ public sealed interface Reason {
      */
     record Clash(@NonNull Address address) implements Change {
 
-      /**
-       * Checks every component is given.
-       */
-      public Clash {
-      }
-
       @Override
       public String message() {
-        return "A set may change %s only once.".formatted(address.canonical());
+        return String.format("A set may change %s only once.", address.canonical());
       }
     }
 
@@ -478,15 +351,9 @@ public sealed interface Reason {
      */
     record Nested(@NonNull Address directory, @NonNull Address file) implements Change {
 
-      /**
-       * Checks every component is given.
-       */
-      public Nested {
-      }
-
       @Override
       public String message() {
-        return "%s cannot be a file while %s lies beneath it.".formatted(directory.canonical(), file.canonical());
+        return String.format("%s cannot be a file while %s lies beneath it.", directory.canonical(), file.canonical());
       }
     }
   }
@@ -504,15 +371,9 @@ public sealed interface Reason {
      */
     record Duplicate(@NonNull String name) implements Registry {
 
-      /**
-       * Checks every component is given.
-       */
-      public Duplicate {
-      }
-
       @Override
       public String message() {
-        return "%s is registered twice.".formatted(name);
+        return String.format("%s is registered twice.", name);
       }
     }
 
@@ -524,15 +385,9 @@ public sealed interface Reason {
      */
     record Unregistered(@NonNull String name) implements Registry {
 
-      /**
-       * Checks every component is given.
-       */
-      public Unregistered {
-      }
-
       @Override
       public String message() {
-        return "No registrable kind or registration covers %s.".formatted(name);
+        return String.format("No registrable kind or registration covers %s.", name);
       }
     }
 
@@ -544,15 +399,9 @@ public sealed interface Reason {
      */
     record Unreachable(@NonNull String name) implements Registry {
 
-      /**
-       * Checks every component is given.
-       */
-      public Unreachable {
-      }
-
       @Override
       public String message() {
-        return "%s cannot be reached through its module's registration.".formatted(name);
+        return String.format("%s cannot be reached through its module's registration.", name);
       }
     }
 
@@ -578,7 +427,7 @@ public sealed interface Reason {
 
       @Override
       public String message() {
-        return "%s clash, and no preference chooses between them.".formatted(contributors.stream()
+        return String.format("%s clash, and no preference chooses between them.", contributors.stream()
             .sorted()
             .collect(Collectors.joining(", ")));
       }

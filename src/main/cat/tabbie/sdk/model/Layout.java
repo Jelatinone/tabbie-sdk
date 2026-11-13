@@ -7,10 +7,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import cat.tabbie.sdk.form.Form;
+import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.revision.Chunk;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.tree.Address;
 import cat.tabbie.sdk.tree.Reason;
+import cat.tabbie.sdk.tree.State;
 import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
@@ -22,13 +24,39 @@ import lombok.NonNull;
  * placed against it alone and described as images; whatever already exists
  * where an image goes is found when the image is exposed or rehearsed. A
  * layout only grows: adding a declaration or mounting another layout returns
- * a new one.
+ * a new one. A layout is declaration data, not a place in a tree: what is
+ * beneath a root is its {@link cat.tabbie.sdk.tree.Node nodes}.
  */
-public sealed interface Layout extends Shape permits Layout.File, Layout.Directory {
+public sealed interface Layout permits Layout.File, Layout.Directory {
 
-  @Override
+  /**
+   * Returns where this declaration is.
+   *
+   * @return address beneath the model's root, the root address only for the
+   *         directory standing for the root
+   */
+  @NonNull
+  Address address();
+
+  /**
+   * Returns the declared directory directly above this declaration.
+   *
+   * @return parent directory, empty for a model's root or a declaration not
+   *         yet beneath a directory
+   */
   @NonNull
   Optional<Layout.Directory> parent();
+
+  /**
+   * Returns this declaration's name, the last component of its address.
+   *
+   * @return single filename, empty only for the directory standing for the
+   *         root
+   */
+  @NonNull
+  default String name() {
+    return address().fileName().orElse("");
+  }
 
   /**
    * Returns the rules this place is declared with.
@@ -66,13 +94,44 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
     return permissions().contains(permission);
   }
 
-  @Override
+  /**
+   * Locates the declaration at an address relative to this one, following
+   * names one component at a time. It goes to exactly that declaration or
+   * fails; it never settles for another along the way.
+   *
+   * @param tail address relative to this declaration
+   * @return the declaration there, or this one for the root address
+   * @throws Violation with {@link Reason.Place.Missing} when nothing is
+   *                   declared at a step
+   * @throws Violation with {@link Reason.Place.Beneath} when a step leads
+   *                   beneath a file
+   */
   @NonNull
   default Layout locate(@NonNull Address tail) {
-    return (Layout) Shape.super.locate(tail);
+    Layout reached = this;
+    for (String name : tail.components()) {
+      reached = switch (reached) {
+        case Layout.Directory directory -> directory.child(name)
+            .orElseThrow(() -> new Violation(new Reason.Place.Missing(directory.address().resolve(name))));
+        case Layout.File file -> throw new Violation(new Reason.Place.Beneath(file.address(), name));
+      };
+    }
+    return reached;
   }
 
-  @Override
+  /**
+   * Locates the declaration at names beneath this one, as
+   * {@link #locate(Address)} does.
+   *
+   * @param names single-name components, none for this declaration itself
+   * @return the declaration there
+   * @throws Violation                with {@link Reason.Place.Missing} when
+   *                                  nothing is declared at a step
+   * @throws Violation                with {@link Reason.Place.Beneath} when a
+   *                                  step leads beneath a file
+   * @throws IllegalArgumentException when a component is not a single portable
+   *                                  filename
+   */
   @NonNull
   default Layout locate(@NonNull String... names) {
     return locate(Address.of(names));
@@ -89,7 +148,7 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
   record File(
       @NonNull Optional<Layout.Directory> parent,
       @NonNull Address address,
-      @NonNull Set<Rule> rules) implements Layout, Shape.File {
+      @NonNull Set<Rule> rules) implements Layout {
 
     /**
      * Copies the rules, and checks the address and that no rule accepts
@@ -141,7 +200,7 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
       @NonNull Address address,
       @NonNull Set<Rule> rules,
       @NonNull List<Layout.Directory> directories,
-      @NonNull List<Layout.File> files) implements Layout, Shape.Directory {
+      @NonNull List<Layout.File> files) implements Layout {
 
     /**
      * Copies the rules and declarations, and checks where they lie.
@@ -191,7 +250,6 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
      *
      * @return declarations, possibly empty
      */
-    @Override
     public List<Layout> children() {
       Optional<Layout.Directory> self = Optional.of(this);
       return Stream.<Layout>concat(
@@ -203,7 +261,13 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
           .toList();
     }
 
-    @Override
+    /**
+     * Finds the declaration of a name directly beneath this directory.
+     *
+     * @param name single filename
+     * @return the declaration there, or empty when nothing of that name is
+     *         declared here
+     */
     public Optional<Layout> child(@NonNull String name) {
       return children().stream()
           .filter(child -> child.name().equals(name))
@@ -259,7 +323,6 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
      *                                  the place is not creatable
      * @throws IllegalArgumentException when the tail names this directory
      */
-    @Override
     @NonNull
     public Layout.Directory require(@NonNull Address tail) {
       if (tail.isRoot()) {
@@ -277,13 +340,30 @@ public sealed interface Layout extends Shape permits Layout.File, Layout.Directo
         return this;
       }
       declared.filter(Layout.Directory.class::isInstance).ifPresent(directory -> {
-        throw new Violation(
-            new Reason.Place.Occupied(directory.address(), Reason.Place.Kind.ABSENT, Reason.Place.Kind.DIRECTORY));
+        throw new Violation(new Reason.Place.Occupied(directory.address(), new State.Directory()));
       });
       if (!declared.orElse(this).permits(Rule.Permission.CREATABLE)) {
         throw new Violation(new Reason.Place.Denied(address.resolve(tail), Rule.Permission.CREATABLE));
       }
       return this;
+    }
+
+    /**
+     * Describes creating a file from retained content at a tail beneath this
+     * directory, together with any directories missing above it, once
+     * {@link #require(Address)} allows it.
+     *
+     * @param tail  address of the file relative to this directory
+     * @param after retained content
+     * @return image creating the file
+     * @throws Violation                when the file may not be created there,
+     *                                  as {@link #require(Address)} refuses
+     * @throws IllegalArgumentException when the tail names this directory
+     */
+    @NonNull
+    public Image<Image.File> create(@NonNull Address tail, @NonNull Reference.Captured after) {
+      require(tail);
+      return new Image.Installation(new Image.File.Absent(), new Image.File.Present(after), address.resolve(tail));
     }
 
     /**

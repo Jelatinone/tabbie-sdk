@@ -1,7 +1,11 @@
 /**
- * Where content goes in a tree, and why a change to one is refused. An
- * {@link Address} is a canonical relative path, and a {@link World} is a World
- * as a Cat's model holds it: its name and the namespace holding its content.
+ * Places in a tree, and why a change to one is refused. A {@link Shape} is one
+ * place, a file or a directory, whether or not anything is there, and its
+ * {@link State} says what is there now. A {@link Node} is a place beneath a
+ * plate's root, and a file's bytes are read and written through its
+ * {@link Lease leases}. An {@link Address} is a canonical relative path, and a
+ * {@link World} is a World as a Cat's model holds it: its name and the
+ * namespace holding its content.
  *
  * <p>
  * A {@link Violation} is thrown while work describes its changes, when a tree

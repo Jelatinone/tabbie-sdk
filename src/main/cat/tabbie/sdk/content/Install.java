@@ -112,12 +112,6 @@ public @interface Install {
      */
     record Default(@NonNull Artifact.Context content, @NonNull Installer.Install place) implements Context {
 
-      /**
-       * Checks every part is given.
-       */
-      public Default {
-      }
-
       @Override
       public Label label() {
         return content.label();

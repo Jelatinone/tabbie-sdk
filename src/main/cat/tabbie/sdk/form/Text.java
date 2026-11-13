@@ -22,12 +22,6 @@ import lombok.NonNull;
 public record Text(@NonNull Charset charset) implements Form {
 
   /**
-   * Describes text in a charset.
-   */
-  public Text {
-  }
-
-  /**
    * Describes UTF-8 text, as most game files are.
    */
   public Text() {

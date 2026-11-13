@@ -13,13 +13,13 @@ import java.util.stream.Collectors;
 import cat.tabbie.sdk.form.Form;
 import cat.tabbie.sdk.form.Json;
 import cat.tabbie.sdk.form.Unreadable;
-import cat.tabbie.sdk.model.Node;
-import cat.tabbie.sdk.plate.Lease;
 import cat.tabbie.sdk.plate.Plate;
 import cat.tabbie.sdk.plate.Stash;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Lease;
+import cat.tabbie.sdk.tree.Node;
 import cat.tabbie.sdk.tree.Reason;
 import cat.tabbie.sdk.tree.Refusal;
 import cat.tabbie.sdk.tree.Violation;
@@ -35,11 +35,12 @@ import lombok.NonNull;
  *
  * <p>
  * New files are described with
- * {@link cat.tabbie.sdk.model.Shape.Directory#create
- * Shape.Directory#create}: against a model where content is placed by its
- * rules, or against what exists where work deliberately sets the model
- * aside. Changes to files that exist are described against their nodes,
- * with {@link Node.File#replace Node.File#replace}, {@code delete} and
+ * {@link cat.tabbie.sdk.model.Layout.Directory#create Layout.Directory#create}
+ * against a model where content is placed by its rules, or with
+ * {@link Node.Directory#create Node.Directory#create} against what exists
+ * where work deliberately sets the model aside. Changes to files that exist
+ * are described against their nodes, with
+ * {@link Node.File#replace Node.File#replace}, {@code delete} and
  * {@code configure}.
  *
  * <p>
@@ -347,66 +348,13 @@ public sealed interface Image<State extends Image.Alteration> {
 
     @Override
     public Scrutiny<File> expose(@NonNull Plate plate) throws IOException {
-      try {
-        Optional<Node> held = held(plate);
-        if (held.isEmpty()) {
-          return created(plate);
+      Node.File node = plate.root().file(address);
+      try (Lease.Write file = node.write()) {
+        cat.tabbie.sdk.tree.State held = node.state();
+        if (!(held instanceof cat.tabbie.sdk.tree.State.Absent || held instanceof cat.tabbie.sdk.tree.State.File)) {
+          return new Scrutiny.Fail<>(null, new Refusal(new Reason.Place.Occupied(address, held)));
         }
-        return switch (held.get()) {
-          case Node.File file -> changed(file, plate);
-          case Node.Directory _ -> new Scrutiny.Fail<>(null, new Refusal(
-              new Reason.Place.Occupied(address, Reason.Place.Kind.FILE, Reason.Place.Kind.DIRECTORY)));
-        };
-      } catch (Violation violation) {
-        // A path beneath a file, or a change the tree does not permit, has no
-        // file state to report
-        return new Scrutiny.Fail<>(null, violation);
-      } catch (Refusal refusal) {
-        // A path no file can occupy, or one that may not be written, has no
-        // file state to report; a refusal that may pass is tried again instead
-        if (refusal.reason().retryable()) {
-          throw refusal;
-        }
-        return new Scrutiny.Fail<>(null, refusal);
-      }
-    }
-
-    /**
-     * Locates the node the plate's tree holds at this image's file, or empty
-     * when it holds nothing there.
-     */
-    private Optional<Node> held(Plate plate) {
-      try {
-        return Optional.of(plate.root().locate(address));
-      } catch (Violation violation) {
-        if (violation.reason() instanceof Reason.Place.Missing) {
-          return Optional.empty();
-        }
-        throw violation;
-      }
-    }
-
-    /**
-     * Creates this image's file where the tree holds nothing, when nothing is
-     * what it expects there.
-     */
-    private Scrutiny<File> created(Plate plate) throws IOException {
-      File found = new File.Absent();
-      if (!before.same(found) || !(after instanceof File.Present(Reference.Captured content))) {
-        return new Scrutiny.Fail<>(found);
-      }
-      try (Lease.Claim file = plate.root().claim(address)) {
-        file.create(plate.retained(content));
-      }
-      return new Scrutiny.Pass<>(after);
-    }
-
-    /**
-     * Brings a file that exists from its before state to its after state.
-     */
-    private Scrutiny<File> changed(Node.File node, Plate plate) throws IOException {
-      try (Lease.Mutual file = node.mutual()) {
-        File found = File.of(file);
+        File found = held instanceof cat.tabbie.sdk.tree.State.File ? File.of(file) : new File.Absent();
         if (!before.same(found)) {
           return new Scrutiny.Fail<>(found);
         }
@@ -415,6 +363,16 @@ public sealed interface Image<State extends Image.Alteration> {
           case File.Present(Reference.Captured content) -> file.replace(plate.retained(content));
         }
         return new Scrutiny.Pass<>(after);
+      } catch (Violation violation) {
+        // A change the tree does not permit has no file state to report
+        return new Scrutiny.Fail<>(null, violation);
+      } catch (Refusal refusal) {
+        // A path no file can occupy, or one that may not be written, has no
+        // file state to report; a refusal that may pass is tried again instead
+        if (refusal.reason().retryable()) {
+          throw refusal;
+        }
+        return new Scrutiny.Fail<>(null, refusal);
       }
     }
 
@@ -582,42 +540,28 @@ public sealed interface Image<State extends Image.Alteration> {
 
     @Override
     public Scrutiny<Text> expose(@NonNull Plate plate) throws IOException {
-      try {
-        return switch (plate.root().locate(address)) {
-          case Node.File file -> configured(file);
-          case Node.Directory _ -> new Scrutiny.Fail<>(null, new Refusal(
-              new Reason.Place.Occupied(address, Reason.Place.Kind.FILE, Reason.Place.Kind.DIRECTORY)));
-        };
-      } catch (Unreadable unreadable) {
-        // The file cannot be read in this configuration's view
-        return new Scrutiny.Fail<>(null, unreadable);
-      } catch (Violation violation) {
-        // The tree holds nothing here, the path lies beneath a file, or the
-        // tree does not permit the change
-        return new Scrutiny.Fail<>(null, violation);
-      } catch (Refusal refusal) {
-        // The file is gone, is not a file, or may not be written; a refusal
-        // that may pass is tried again instead
-        if (refusal.reason().retryable()) {
-          throw refusal;
-        }
-        return new Scrutiny.Fail<>(null, refusal);
-      }
-    }
-
-    /**
-     * Applies the chunks to a file the tree holds, when its view still
-     * matches their before fragments.
-     */
-    private Scrutiny<Text> configured(Node.File node) throws IOException {
-      try (Lease.Mutual file = node.mutual()) {
-        String text = file.read(view);
+      try (Lease.Write file = plate.root().file(address).write()) {
+        Describe current = file.read();
+        String text = view.decode(current);
         if (!Chunk.matches(chunks, text)) {
           return new Scrutiny.Fail<>(new Text(Chunk.fragmentsOf(text)));
         }
         String changed = Chunk.apply(chunks, text);
-        file.update(view, _ -> changed);
+        file.replace(view.encode(current, changed));
         return new Scrutiny.Pass<>(new Text(Chunk.fragmentsOf(changed)));
+      } catch (Unreadable unreadable) {
+        // The file cannot be read in this configuration's view
+        return new Scrutiny.Fail<>(null, unreadable);
+      } catch (Violation violation) {
+        // The tree does not permit the change
+        return new Scrutiny.Fail<>(null, violation);
+      } catch (Refusal refusal) {
+        // Nothing is here, something other than a file is, or the file may
+        // not be written; a refusal that may pass is tried again instead
+        if (refusal.reason().retryable()) {
+          throw refusal;
+        }
+        return new Scrutiny.Fail<>(null, refusal);
       }
     }
 

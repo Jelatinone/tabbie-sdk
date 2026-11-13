@@ -213,12 +213,6 @@ public record Coverage<Subject, Call>(
         @NonNull Contributor<Subject, Call> later,
         @NonNull String target) implements Conflict<Subject, Call> {
 
-      /**
-       * Checks every part is given.
-       */
-      public Overlap {
-      }
-
       @Override
       public String message() {
         return String.format("Two %s contributions, %s and %s, both apply to %s; no two may apply to one target.",

@@ -4,13 +4,13 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.OptionalLong;
 
-import cat.tabbie.sdk.model.Node;
 import cat.tabbie.sdk.platform.Command;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Observer;
 import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.platform.Toolchain;
 import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Node;
 import lombok.NonNull;
 
 /**
@@ -25,7 +25,7 @@ import lombok.NonNull;
  * <p>
  * Work reaches files only through the {@link Node nodes} of the plate's
  * {@link #root() root} and {@link #scratch() scratch} trees and the
- * {@link Lease leases} they grant. The plate implements every node as a view
+ * {@link cat.tabbie.sdk.tree.Lease leases} they grant. The plate implements every node as a view
  * of its own files, so its trees show each change as it is carried out.
  * Nodes hold no rules: the plate is given the model work was placed against,
  * with core's own layer on top, and checks its rules when it carries a

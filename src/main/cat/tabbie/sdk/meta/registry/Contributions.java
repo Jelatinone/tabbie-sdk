@@ -259,12 +259,6 @@ public record Contributions<Call>(
   public record Contributed<Call>(@NonNull Module module, @NonNull Contributor<Class<?>, Call> contributor) {
 
     /**
-     * Checks every part is given.
-     */
-    public Contributed {
-    }
-
-    /**
      * Names where the contributor comes from, as core shows it.
      *
      * @return the module's name, or {@code the class path} for a module on
@@ -308,12 +302,6 @@ public record Contributions<Call>(
       @NonNull Contributed<?> chosen,
       @NonNull Contributed<?> replaced,
       @NonNull Reason reason) {
-
-    /**
-     * Checks every part is given.
-     */
-    public Replacement {
-    }
 
     /**
      * Describes the replacement as a complete sentence, as core shows it.

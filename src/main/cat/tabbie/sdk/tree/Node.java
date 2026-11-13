@@ -1,25 +1,19 @@
-package cat.tabbie.sdk.model;
+package cat.tabbie.sdk.tree;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
-import cat.tabbie.sdk.plate.Lease;
 import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.revision.Chunk;
 import cat.tabbie.sdk.revision.Image;
-import cat.tabbie.sdk.tree.Address;
-import cat.tabbie.sdk.tree.Reason;
-import cat.tabbie.sdk.tree.Refusal;
-import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
 /**
- * What really exists beneath a root on a plate: a file or a directory at its
- * own {@link Address}. A place where nothing exists has no node. Nodes hold
- * no rules; the plate checks the model it was given when it carries a change
- * out.
+ * A place beneath a root on a plate: a file or a directory at its own
+ * {@link Address}, whether or not anything exists there. Nodes hold no rules;
+ * the plate checks the model it was given when it carries a change out.
  *
  * <p>
  * A {@link cat.tabbie.sdk.plate.Plate Plate} implements the nodes of its
@@ -28,9 +22,9 @@ import lombok.NonNull;
  * itself depending only on the plate it runs on. Changes to what exists are
  * described from nodes as images, and carried out only through the
  * {@link Lease leases} nodes grant. A plate implements only each node's
- * {@link #address()}, {@link #parent()} and {@link #path()}, a directory's
- * {@link Directory#children() children} and
- * {@link Directory#claim(Address) claims}, and a file's leases; everything else
+ * {@link #address()}, {@link #parent()}, {@link #path()} and {@link #state()},
+ * a directory's {@link Directory#children() children} and the places it
+ * {@link Directory#file(Address) names}, and a file's leases; everything else
  * here follows from those. Plates' nodes are safe for concurrent use.
  */
 public sealed interface Node extends Shape permits Node.File, Node.Directory {
@@ -70,22 +64,10 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
     return reached;
   }
 
-  @Override
-  @NonNull
-  default Node locate(@NonNull Address tail) {
-    return (Node) Shape.super.locate(tail);
-  }
-
-  @Override
-  @NonNull
-  default Node locate(@NonNull String... names) {
-    return locate(Address.of(names));
-  }
-
   /**
-   * A file that exists. It is read and written through its own leases, and
-   * describes changes to itself as images, which are carried out only when
-   * they are exposed.
+   * A file, possibly absent. It is read and written through its own leases,
+   * and describes changes to itself as images, which are carried out only
+   * when they are exposed.
    */
   non-sealed interface File extends Node, Shape.File {
 
@@ -101,7 +83,8 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
     Lease.Read read() throws IOException;
 
     /**
-     * Leases this file for writing.
+     * Leases this file for writing, and for reading what it writes. The file
+     * may be absent: replacing it creates it.
      *
      * @return open lease, owned by the caller
      * @throws Refusal     with {@link Reason.Place.Held} when the plate does
@@ -110,18 +93,6 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      */
     @NonNull
     Lease.Write write() throws IOException;
-
-    /**
-     * Leases this file for reading and writing, for work that checks a file
-     * before it changes it.
-     *
-     * @return open lease, owned by the caller
-     * @throws Refusal     with {@link Reason.Place.Held} when the plate does
-     *                     not wait and the file is leased
-     * @throws IOException when the lease cannot be taken
-     */
-    @NonNull
-    Lease.Mutual mutual() throws IOException;
 
     /**
      * Describes replacing this file's whole content.
@@ -211,8 +182,8 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
   }
 
   /**
-   * A directory that exists, holding the nodes that exist directly beneath
-   * it.
+   * A directory, possibly absent, holding the nodes that exist directly
+   * beneath it.
    */
   non-sealed interface Directory extends Node, Shape.Directory {
 
@@ -221,72 +192,93 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * lists them the first time something goes beneath the directory, and
      * keeps the listing current as its own leases change it.
      *
-     * @return uniquely named nodes, in the order the tree holds them, possibly
-     *         empty
+     * @return uniquely named nodes, in the order the tree holds them, empty
+     *         when this directory is absent
+     * @throws IOException when the directory cannot be listed
      */
     @Override
     @NonNull
-    List<Node> children();
+    List<Node> children() throws IOException;
 
     @Override
     @NonNull
-    default Optional<Node> child(@NonNull String name) {
+    default Optional<Node> child(@NonNull String name) throws IOException {
       return children().stream()
           .filter(child -> child.name().equals(name))
           .findFirst();
     }
 
+    @Override
+    @NonNull
+    Node.File file(@NonNull Address tail);
+
+    @Override
+    @NonNull
+    default Node.File file(@NonNull String... names) {
+      return file(Address.of(names));
+    }
+
+    @Override
+    @NonNull
+    Node.Directory directory(@NonNull Address tail);
+
+    @Override
+    @NonNull
+    default Node.Directory directory(@NonNull String... names) {
+      return directory(Address.of(names));
+    }
+
     /**
      * Requires nothing to exist at a tail beneath this directory, where a
-     * file is to be created.
+     * file is to be created, and only directories on the way to it.
      *
      * @param tail address of the file relative to this directory
      * @return this directory
      * @throws Violation                with {@link Reason.Place.Occupied} when
-     *                                  something exists at the tail
-     * @throws Violation                with {@link Reason.Place.Beneath} when a
-     *                                  file lies on the way
+     *                                  something exists at the tail, or
+     *                                  something other than a directory lies on
+     *                                  the way
+     * @throws IOException              when a place on the way cannot be
+     *                                  inspected
      * @throws IllegalArgumentException when the tail names this directory
      */
-    @Override
     @NonNull
-    default Node.Directory require(@NonNull Address tail) {
+    default Node.Directory require(@NonNull Address tail) throws IOException {
       if (tail.isRoot()) {
         throw new IllegalArgumentException("A file is created beneath a directory, not in its place.");
       }
-      Node held;
-      try {
-        held = locate(tail);
-      } catch (Violation violation) {
-        if (violation.reason() instanceof Reason.Place.Missing) {
+      List<String> names = tail.components();
+      for (int depth = 1; depth <= names.size(); depth++) {
+        Address step = Address.root().resolve(names.subList(0, depth));
+        State found = directory(step).state();
+        if (found instanceof State.Absent) {
           return this;
         }
-        throw violation;
+        if (depth == names.size() || !(found instanceof State.Directory)) {
+          throw new Violation(new Reason.Place.Occupied(address().resolve(tail), address().resolve(step), found));
+        }
       }
-      Reason.Place.Kind found = switch (held) {
-        case Node.File _ -> Reason.Place.Kind.FILE;
-        case Node.Directory _ -> Reason.Place.Kind.DIRECTORY;
-      };
-      throw new Violation(new Reason.Place.Occupied(address().resolve(tail), Reason.Place.Kind.ABSENT, found));
+      return this;
     }
 
     /**
-     * Leases the place at a tail beneath this directory for creating a file
-     * there. The plate refuses while anything exists there, as
-     * {@link #require(Address)} would, and checks under the lease, so no
-     * other work can create something there first.
+     * Describes creating a file from retained content at a tail beneath this
+     * directory, together with any directories missing above it, once
+     * {@link #require(Address)} allows it.
      *
-     * @param tail address of the file relative to this directory
-     * @return open lease, owned by the caller
-     * @throws Violation                when something exists at the tail or a
-     *                                  file lies on the way
-     * @throws Refusal                  with {@link Reason.Place.Held} when the
-     *                                  plate does not wait and the place is
-     *                                  leased
-     * @throws IOException              when the lease cannot be taken
+     * @param tail  address of the file relative to this directory
+     * @param after retained content
+     * @return image creating the file
+     * @throws Violation                when the file may not be created there,
+     *                                  as {@link #require(Address)} refuses
+     * @throws IOException              when a place on the way cannot be
+     *                                  inspected
      * @throws IllegalArgumentException when the tail names this directory
      */
     @NonNull
-    Lease.Claim claim(@NonNull Address tail) throws IOException;
+    default Image<Image.File> create(@NonNull Address tail, @NonNull Reference.Captured after) throws IOException {
+      require(tail);
+      return new Image.Installation(new Image.File.Absent(), new Image.File.Present(after), address().resolve(tail));
+    }
   }
 }

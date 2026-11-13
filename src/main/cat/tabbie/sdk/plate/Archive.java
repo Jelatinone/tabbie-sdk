@@ -18,7 +18,6 @@ import java.util.zip.ZipFile;
 import cat.tabbie.sdk.content.Capture.Entry;
 import cat.tabbie.sdk.content.Capture.Rejection;
 import cat.tabbie.sdk.model.Layout;
-import cat.tabbie.sdk.model.Node;
 import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Observer;
 import cat.tabbie.sdk.platform.Reference;
@@ -26,6 +25,8 @@ import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.revision.Intermediate;
 import cat.tabbie.sdk.revision.Scrutiny;
 import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Lease;
+import cat.tabbie.sdk.tree.Node;
 import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
@@ -462,9 +463,11 @@ public record Archive(int entries, long archiveBytes, long expandedBytes) {
    */
   private Node.File copy(Describe archive, Plate plate) throws IOException {
     Address name = Address.of("tabbie-archive-%s.zip".formatted(UUID.randomUUID()));
-    try (Lease.Claim scratch = plate.scratch().claim(name)) {
-      return scratch.create(bounded(archive, plate));
+    Node.File copied = plate.scratch().file(name);
+    try (Lease.Write scratch = copied.write()) {
+      scratch.replace(bounded(archive, plate));
     }
+    return copied;
   }
 
   /**

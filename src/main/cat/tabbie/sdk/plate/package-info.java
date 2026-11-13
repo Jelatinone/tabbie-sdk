@@ -5,10 +5,10 @@
  * {@link cat.tabbie.sdk.content.Installer install} or an
  * {@link cat.tabbie.sdk.revision.Image Image}: it leases the files beneath its
  * root, captures content into its {@link Stash}, and supplies scratch space and
- * an observer. Its tree is made of {@link cat.tabbie.sdk.model.Node nodes},
- * views of what exists on the plate. A {@link Lease} holds one file for
- * reading, writing, or both, or one place for creating a file, until it
- * closes, and a {@link cat.tabbie.sdk.tree.Refusal Refusal} says why a plate
+ * an observer. Its tree is made of {@link cat.tabbie.sdk.tree.Node nodes},
+ * views of the places beneath it. A {@link cat.tabbie.sdk.tree.Lease Lease}
+ * holds one file, whether or not it exists, for reading or for writing until
+ * it closes, and a {@link cat.tabbie.sdk.tree.Refusal Refusal} says why a plate
  * would not carry out an operation the tree allows. {@link Archive} bounds and unpacks ZIP content
  * into the plate's stash.
  *
