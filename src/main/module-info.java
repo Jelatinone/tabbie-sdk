@@ -6,9 +6,8 @@
  * its descriptions belongs to the consumer.
  *
  * <p>
- * Every package is exported to every module but {@code meta.processor} and
- * two only core uses, which are exported to core alone: {@code plate}, which
- * carries work out, and the root package, which holds the registry. A module
+ * Every package is exported to every module but {@code meta.processor}, and
+ * the root package, which holds the registry and is exported to core alone. A module
  * declares what it contributes with the {@code meta} actions and attributes,
  * and puts the SDK on its processor path to have those declarations checked,
  * and its registration generated, while it compiles, as the SDK's own are.
@@ -17,14 +16,12 @@
  *
  * <p>
  * Lombok is a compile-time dependency only; consumers need no Lombok at
- * compile time or at run time. Jackson is part of the SDK's API: the JSON
- * form reads documents into Jackson's tree and binds them to values, so
- * consumers compile and run against it.
+ * compile time or at run time. The SDK depends on nothing else: formats such
+ * as JSON live in the modules that read them.
  */
 module cat.tabbie.sdk {
   requires static java.compiler;
   requires static lombok;
-  requires transitive tools.jackson.databind;
 
   exports cat.tabbie.sdk to cat.tabbie.core;
   exports cat.tabbie.sdk.catalog;
@@ -35,7 +32,6 @@ module cat.tabbie.sdk {
   exports cat.tabbie.sdk.meta.attribute;
   exports cat.tabbie.sdk.meta.registry;
   exports cat.tabbie.sdk.model;
-  exports cat.tabbie.sdk.plate to cat.tabbie.core;
   exports cat.tabbie.sdk.platform;
   exports cat.tabbie.sdk.revision;
   exports cat.tabbie.sdk.target;

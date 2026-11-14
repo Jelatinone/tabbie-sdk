@@ -17,16 +17,20 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import cat.tabbie.sdk.catalog.Product;
 import cat.tabbie.sdk.content.Artifact;
-import cat.tabbie.sdk.content.Install;
 import cat.tabbie.sdk.distribution.Distribution;
 import cat.tabbie.sdk.meta.action.Action;
+import cat.tabbie.sdk.meta.action.Closure;
 import cat.tabbie.sdk.meta.action.Contributor;
+import cat.tabbie.sdk.meta.action.Install;
 import cat.tabbie.sdk.meta.registry.Contribution;
 import cat.tabbie.sdk.meta.registry.Contributions;
 import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.meta.registry.Registrable;
 import cat.tabbie.sdk.meta.registry.Registration;
+import cat.tabbie.sdk.target.Label;
+import cat.tabbie.sdk.target.Platform;
 import cat.tabbie.sdk.tree.Reason;
 import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
@@ -45,7 +49,8 @@ import lombok.NonNull;
  * {@link Contributions} describes. The registry gathers every action's
  * {@link #replacements() replacements}, so core can show which module changes
  * what, and {@link #clashes() clashes}, so core can ask the user which
- * contributor to prefer.
+ * contributor to prefer, and {@link #check(Product.Build) checks} a release
+ * gives every contributor declaring where it acts a place to act.
  *
  * @param registrations registrations, in the order they were found
  * @param distributions every registered distribution and group of them
@@ -160,6 +165,109 @@ public record Registry(
       @NonNull Class<? extends Annotation> action,
       @NonNull Class<Call> signature) {
     return contributions(actions, distributions, action, signature);
+  }
+
+  /**
+   * Chooses the contributor of an action for a subject at a target, as core
+   * does before calling it: among the contributors whose conditions apply to
+   * the target, the one that wins by precedence, or by the user's preference
+   * among those precedence cannot decide between. It serves every action
+   * alike, such as {@code choose(Install.class, Install.Signature.class,
+   * artifact.getClass(), label, platform, preferred)}.
+   *
+   * @param <Call>    the action's signature
+   * @param action    the action's annotation
+   * @param signature the signature its {@link Action} names
+   * @param subject   the type the contributor acts on, or a subtype of it
+   * @param label     the target's label
+   * @param platform  the target's platform
+   * @param preferred {@link Contributions.Contributed#identity() identities}
+   *                  of the contributors the user prefers
+   * @return the chosen contributor, ready to call
+   * @throws IllegalArgumentException when the annotation is not an action of
+   *                                  that signature, or no contributor of it
+   *                                  applies to the subject at the target
+   * @throws Violation                with {@link Reason.Registry.Clash} when
+   *                                  contributors clash at the target and the
+   *                                  user prefers none of them
+   */
+  public <Call> Contributor<Class<?>, Call> choose(
+      @NonNull Class<? extends Annotation> action,
+      @NonNull Class<Call> signature,
+      @NonNull Class<?> subject,
+      @NonNull Label label,
+      @NonNull Platform platform,
+      @NonNull Set<String> preferred) {
+    return switch (contributions(action, signature).choose(subject, distributions.target(label, platform),
+        preferred)) {
+      case Contribution.Concur<Call>(var chosen) when chosen.isEmpty() ->
+          throw new IllegalArgumentException(String.format("No @%s contributor for %s applies to %s.",
+              action.getSimpleName(), subject.getName(), label.canonical()));
+      case Contribution.Concur<Call>(var chosen) -> chosen.getFirst().contributor();
+      case Contribution.Clash<Call> clash -> throw new Violation(new Reason.Registry.Clash(
+          clash.contributors().stream()
+              .map(Contributions.Contributed::identity)
+              .collect(Collectors.toSet())));
+    };
+  }
+
+  /**
+   * Chooses the contributor of an action for a subject at a target, as
+   * {@link #choose(Class, Class, Class, Label, Platform, Set)} does, when the
+   * user prefers none.
+   *
+   * @param <Call>    the action's signature
+   * @param action    the action's annotation
+   * @param signature the signature its {@link Action} names
+   * @param subject   the type the contributor acts on, or a subtype of it
+   * @param label     the target's label
+   * @param platform  the target's platform
+   * @return the chosen contributor, ready to call
+   * @throws IllegalArgumentException as the full form throws
+   * @throws Violation                as the full form throws
+   */
+  public <Call> Contributor<Class<?>, Call> choose(
+      @NonNull Class<? extends Annotation> action,
+      @NonNull Class<Call> signature,
+      @NonNull Class<?> subject,
+      @NonNull Label label,
+      @NonNull Platform platform) {
+    return choose(action, signature, subject, label, platform, Set.of());
+  }
+
+  /**
+   * Checks a release's layout gives every contributor applying to the release
+   * a place to act, for every action that
+   * {@link Closure#declaredBy(Class) declares where it acts}: the layout
+   * accepts what the contributor's closure
+   * {@link Closure#accepted(Class) needs} in exactly one directory, its
+   * subject at the root or namespaces beneath it. A contributor applies to the
+   * release when one of its regions applies to the release's distribution and
+   * environment, and to the version of one of its labels, on some platform.
+   * The layout may accept more, for content placed anyway.
+   *
+   * @param build release to check
+   * @throws IllegalArgumentException when what an applying contributor's
+   *                                  closure needs has no accepting directory,
+   *                                  or several
+   */
+  public void check(@NonNull Product.Build build) {
+    Set<String> names = distributions.names(build.distribution());
+    actions.entrySet().stream()
+        .filter(action -> Closure.declaredBy(action.getKey()))
+        .forEach(action -> action.getValue().contributions().stream()
+            .map(Contributions.Contributed::contributor)
+            .filter(contributor -> contributor.conditions().regions().stream()
+                .anyMatch(region -> region.appliesTo(names) && region.appliesTo(build.environment())
+                    && build.labels().stream().anyMatch(label -> region.versions().appliesTo(label.version()))))
+            .filter(contributor -> build.layout().find(contributor.closure().accepted(contributor.subject()))
+                .directories().size() != 1)
+            .findFirst()
+            .ifPresent(contributor -> {
+              throw new IllegalArgumentException(String.format("%s has @%s act on %s, so its layout accepts %s in "
+                  + "exactly one directory.", build.coordinates().canonical(), action.getKey().getSimpleName(),
+                  contributor.subject().getName(), contributor.closure().accepted(contributor.subject()).getName()));
+            }));
   }
 
   /**

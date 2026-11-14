@@ -8,17 +8,16 @@ import java.util.Set;
 
 import cat.tabbie.sdk.catalog.Identity;
 import cat.tabbie.sdk.catalog.Release;
-import cat.tabbie.sdk.content.Installer;
-import cat.tabbie.sdk.content.Work;
+import cat.tabbie.sdk.meta.action.Action;
 import cat.tabbie.sdk.model.Layout;
 import cat.tabbie.sdk.platform.Command;
-import cat.tabbie.sdk.platform.Describe;
 import cat.tabbie.sdk.platform.Toolchain;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Platform;
 import cat.tabbie.sdk.tree.Address;
 import cat.tabbie.sdk.tree.Reason;
+import cat.tabbie.sdk.tree.Shape;
 import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
@@ -35,7 +34,7 @@ import lombok.NonNull;
  * Implementations are records whose compact constructors copy their
  * collections and call {@link #validate(String, Set)}.
  */
-public sealed interface Distributable extends Release.Payload, Installer<Work> {
+public sealed interface Distributable extends Release.Payload {
 
   /**
    * Stable distributable identity derived from the file coordinates, so equal
@@ -56,12 +55,13 @@ public sealed interface Distributable extends Release.Payload, Installer<Work> {
   String distributableName();
 
   /**
-   * Provider-owned description of this distributable's primary content.
+   * Returns this distributable's primary content, as its provider declares
+   * it.
    *
-   * @return content source
+   * @return the content's file
    */
   @NonNull
-  Describe source();
+  Shape.File source();
 
   /**
    * Returns the targets this distributable supports as a whole.
@@ -95,21 +95,20 @@ public sealed interface Distributable extends Release.Payload, Installer<Work> {
   }
 
   /**
-   * Places the source as one file, named after it, in the directory of the
-   * work's model that accepts this distributable's type, where
-   * {@link #location} finds it in the Cat's model. Whoever installs chooses
-   * the distributable that {@link #supports} the target while resolving;
-   * installing does not ask again.
+   * Places the source as one file, named after it, at the context's head: the
+   * directory that accepts this distributable's type, where {@link #location}
+   * finds it in the Cat's model. Whoever installs chooses the distributable
+   * that {@link #supports} the target while resolving; installing does not ask
+   * again.
    *
-   * @param work selected target, the model, and the capture of the work it is
-   *             installed in
-   * @return validated immutable images
-   * @throws IOException when the content cannot be captured
-   * @throws Violation   when the model does not allow the file
+   * @param context its head, the directory accepting this distributable's
+   *                type
+   * @return images placing it
+   * @throws IOException when the source cannot be described
    */
-  @Override
-  default Set<Image<?>> install(@NonNull Work work) throws IOException {
-    return new Installer.Install(work, getClass()).file(source());
+  @NonNull
+  default Set<Image<?>> install(@NonNull Action.Context context) throws IOException {
+    return context.head().receive(source());
   }
 
   /**
@@ -127,7 +126,7 @@ public sealed interface Distributable extends Release.Payload, Installer<Work> {
    */
   @NonNull
   default Address location(@NonNull Layout.Directory model) {
-    return model.find(getClass()).unique().address().resolve(source().fileName());
+    return model.find(getClass()).unique().address().resolve(source().name());
   }
 
   /**

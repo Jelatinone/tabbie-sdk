@@ -76,8 +76,6 @@ lombok {
 }
 
 dependencies {
-  api('tools.jackson.core:jackson-databind:3.2.3')
-
   annotationProcessor(sourceSets.processor.output)
 
   testImplementation(platform('org.junit:junit-bom:5.10.2'))

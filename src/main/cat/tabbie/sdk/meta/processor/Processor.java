@@ -391,7 +391,7 @@ public abstract sealed class Processor extends AbstractProcessor
    * a type includes.
    *
    * @param type a type
-   * @return its name, such as {@code Set<World>}
+   * @return its name, such as {@code Set<Namespace>}
    */
   protected static String name(@NonNull TypeMirror type) {
     return switch (type) {

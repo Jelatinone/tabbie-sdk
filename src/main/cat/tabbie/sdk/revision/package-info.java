@@ -1,19 +1,19 @@
 /**
- * Descriptions of change and the deferred work that produces them. An
- * {@link Image} describes one change to a file's existence and content, or to
- * selected lines of a text file (as {@link Chunk}s). Images compose and reduce,
- * and each has a preimage that exchanges its before and after states, all
+ * Descriptions of change, and the deferred work that carries them out. An
+ * {@link Image} describes one change to a file beneath a root: its existence,
+ * or its content by a {@link Revision}, a {@link Revision.Swap swap} of the
+ * whole content or a {@link Revision.Diff diff} of positioned {@link Hunk}s.
+ * Images compose and reduce, and each has a preimage that undoes it, all
  * without touching a filesystem. An {@link Intermediate} is unevaluated work
- * that performs its effects only when collapsed on a
- * {@link cat.tabbie.sdk.plate.Plate Plate}.
+ * that performs its effects only when collapsed on a {@link Plate}.
  *
  * <p>
  * Exposing an image carries its change out on a plate, after checking that its
- * file is in the before state; steps reach their files and the stash through
- * the same plate. Both report a {@link Scrutiny}: a pass, or a failure when a
- * check ran and refused. Whether that work rehearses or acts depends only on
- * the plate: a rehearsal's plate lays an overlay over its root, and an acting
- * plate reaches the root itself.
+ * file still holds what the image was described from; steps reach their files
+ * through the same plate. Both report a {@link Scrutiny}: a pass, or a failure
+ * with the reason a check gave. Whether that work rehearses or acts depends
+ * only on the plate: a rehearsal's plate lays an overlay over its root, and an
+ * acting plate reaches the root itself.
  *
  * <p>
  * Revision history describes files, not the machine. What a Cat needs from

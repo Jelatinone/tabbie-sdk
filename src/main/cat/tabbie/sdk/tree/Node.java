@@ -1,13 +1,15 @@
 package cat.tabbie.sdk.tree;
 
 import java.io.IOException;
-import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
-import cat.tabbie.sdk.platform.Reference;
-import cat.tabbie.sdk.revision.Chunk;
+import cat.tabbie.sdk.revision.Hunk;
 import cat.tabbie.sdk.revision.Image;
+import cat.tabbie.sdk.revision.Revision;
 import lombok.NonNull;
 
 /**
@@ -16,33 +18,23 @@ import lombok.NonNull;
  * the plate checks the model it was given when it carries a change out.
  *
  * <p>
- * A {@link cat.tabbie.sdk.plate.Plate Plate} implements the nodes of its
+ * A {@link cat.tabbie.sdk.revision.Plate Plate} implements the nodes of its
  * tree as views of its own files, so a change carried out on the plate shows
  * in its tree at once, and the same work sees a rehearsal's overlay or the Cat
- * itself depending only on the plate it runs on. Changes to what exists are
- * described from nodes as images, and carried out only through the
- * {@link Lease leases} nodes grant. A plate implements only each node's
- * {@link #address()}, {@link #parent()}, {@link #path()} and {@link #state()},
- * a directory's {@link Directory#children() children} and the places it
- * {@link Directory#file(Address) names}, and a file's leases; everything else
- * here follows from those. Plates' nodes are safe for concurrent use.
+ * itself depending only on the plate it runs on. Changes are described from
+ * nodes as images, and carried out only through the {@link Lease leases}
+ * nodes grant. A plate implements only each node's {@link #address()},
+ * {@link #parent()} and {@link #state()}, a directory's
+ * {@link Directory#children() children} and the places it
+ * {@link Directory#file(Address) names}, and a file's
+ * {@link Shape.File#describe() description} and leases; everything else here
+ * follows from those. Plates' nodes are safe for concurrent use.
  */
 public sealed interface Node extends Shape permits Node.File, Node.Directory {
 
   @Override
   @NonNull
   Optional<Node.Directory> parent();
-
-  /**
-   * Returns this node's physical path, only for handing it to something
-   * outside the tree, such as a command an outside process runs or a ZIP
-   * reader. Work reads and writes files through leases, never through this
-   * path: while rehearsing, it names the real file rather than the overlay.
-   *
-   * @return physical path
-   */
-  @NonNull
-  Path path();
 
   /**
    * Returns the directory standing for the root of this node's tree, by
@@ -72,81 +64,15 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
   non-sealed interface File extends Node, Shape.File {
 
     /**
-     * Leases this file for reading.
+     * Describes changing this file by a revision.
      *
-     * @return open lease, owned by the caller
-     * @throws Refusal     with {@link Reason.Place.Held} when the plate does
-     *                     not wait and the file is leased for writing
-     * @throws IOException when the lease cannot be taken
-     */
-    @NonNull
-    Lease.Read read() throws IOException;
-
-    /**
-     * Leases this file for writing, and for reading what it writes. The file
-     * may be absent: replacing it creates it.
-     *
-     * @return open lease, owned by the caller
-     * @throws Refusal     with {@link Reason.Place.Held} when the plate does
-     *                     not wait and the file is leased
-     * @throws IOException when the lease cannot be taken
-     */
-    @NonNull
-    Lease.Write write() throws IOException;
-
-    /**
-     * Describes replacing this file's whole content.
-     *
-     * @param before retained content before
-     * @param after  retained content after
-     * @return image replacing the file
-     * @throws Violation with {@link Reason.Change.Unchanged} when both contents
-     *                   are the same
-     */
-    @NonNull
-    default Image<Image.File> replace(@NonNull Reference.Captured before, @NonNull Reference.Captured after) {
-      return new Image.Installation(new Image.File.Present(before), new Image.File.Present(after), address());
-    }
-
-    /**
-     * Describes deleting this file, whose complete content matches the
-     * reference.
-     *
-     * @param before retained content before
-     * @return image deleting the file
-     */
-    @NonNull
-    default Image<Image.File> delete(@NonNull Reference.Captured before) {
-      return new Image.Installation(new Image.File.Present(before), new Image.File.Absent(), address());
-    }
-
-    /**
-     * Describes changes to this file's text between explicit fragment states,
-     * which pair up into chunks.
-     *
-     * @param before text before
-     * @param after  text after
+     * @param <Side>   what each side of the revision is
+     * @param revision how its content changes
      * @return image configuring the file
-     * @throws Violation with {@link Reason.Change.Unchanged} when no fragment
-     *                   changes
      */
     @NonNull
-    default Image<Image.Text> configure(@NonNull Image.Text before, @NonNull Image.Text after) {
-      return new Image.Configuration(before, after, address());
-    }
-
-    /**
-     * Describes changes to this file's text, each chunk contributing a
-     * fragment on each side.
-     *
-     * @param chunks changed chunks
-     * @return image configuring the file
-     * @throws Violation with {@link Reason.Change.Unchanged} when no chunk
-     *                   edits its text
-     */
-    @NonNull
-    default Image<Image.Text> configure(@NonNull List<Chunk> chunks) {
-      return new Image.Configuration(chunks, address());
+    default <Side extends Image.Alteration> Image<Side> configure(@NonNull Revision<Side> revision) {
+      return new Image.Configuration<>(address(), revision);
     }
 
     /**
@@ -161,7 +87,7 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      */
     @NonNull
     default Image<Image.Text> configure(@NonNull String before, @NonNull String after) {
-      return configure(Chunk.diff(before, after));
+      return configure(before, after, 3);
     }
 
     /**
@@ -177,7 +103,48 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      */
     @NonNull
     default Image<Image.Text> configure(@NonNull String before, @NonNull String after, int contextLines) {
-      return configure(Chunk.diff(before, after, contextLines));
+      if (before.equals(after)) {
+        throw new Violation(new Reason.Change.Unchanged(address()));
+      }
+      return configure(new Revision.Diff(Hunk.diff(before, after, contextLines)));
+    }
+
+    /**
+     * Describes replacing this file's whole content with another file's. The
+     * file's bytes are read now and held in memory, so the image's preimage
+     * restores them whatever happens to the file meanwhile.
+     *
+     * @param after the file whose bytes this file takes
+     * @return image swapping the content
+     * @throws Violation   with {@link Reason.Change.Unchanged} when both hold
+     *                     the same bytes
+     * @throws Refusal     as reading this file refuses, such as when nothing
+     *                     is here
+     * @throws IOException when either file cannot be read
+     */
+    @NonNull
+    default Image<Image.File.Present> replace(@NonNull Shape.File after) throws IOException {
+      Image.File.Present before = new Image.File.Present(Source.of(name(), bytes()).describe());
+      Image.File.Present replaced = new Image.File.Present(after.describe());
+      if (before.same(replaced)) {
+        throw new Violation(new Reason.Change.Unchanged(address()));
+      }
+      return configure(new Revision.Swap(before, replaced));
+    }
+
+    /**
+     * Describes deleting this file. Its bytes are read now and held in memory,
+     * so the image's preimage restores them.
+     *
+     * @return image deleting the file
+     * @throws Refusal     as reading this file refuses, such as when nothing
+     *                     is here
+     * @throws IOException when the file cannot be read
+     */
+    @NonNull
+    default Image<Image.File> delete() throws IOException {
+      return new Image.Installation(new Image.File.Present(Source.of(name(), bytes()).describe()),
+          new Image.File.Absent(), address());
     }
   }
 
@@ -229,56 +196,72 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
     }
 
     /**
-     * Requires nothing to exist at a tail beneath this directory, where a
-     * file is to be created, and only directories on the way to it.
+     * Describes copying a shape into this directory, from any tree: a file
+     * lands under its own name, and a directory's contents land beneath this
+     * one, merging with what is described here. Each file's image is made from
+     * its {@link Shape.File#describe() description}, and its bytes move only
+     * when the image is exposed.
      *
-     * @param tail address of the file relative to this directory
-     * @return this directory
-     * @throws Violation                with {@link Reason.Place.Occupied} when
-     *                                  something exists at the tail, or
-     *                                  something other than a directory lies on
-     *                                  the way
-     * @throws IOException              when a place on the way cannot be
-     *                                  inspected
-     * @throws IllegalArgumentException when the tail names this directory
+     * @param shape the file or directory to copy
+     * @return images creating each file, one per file
+     * @throws Refusal     as describing or listing the shape refuses
+     * @throws IOException when the shape cannot be read
      */
     @NonNull
-    default Node.Directory require(@NonNull Address tail) throws IOException {
-      if (tail.isRoot()) {
-        throw new IllegalArgumentException("A file is created beneath a directory, not in its place.");
-      }
-      List<String> names = tail.components();
-      for (int depth = 1; depth <= names.size(); depth++) {
-        Address step = Address.root().resolve(names.subList(0, depth));
-        State found = directory(step).state();
-        if (found instanceof State.Absent) {
-          return this;
-        }
-        if (depth == names.size() || !(found instanceof State.Directory)) {
-          throw new Violation(new Reason.Place.Occupied(address().resolve(tail), address().resolve(step), found));
-        }
-      }
-      return this;
+    default Set<Image<?>> receive(@NonNull Shape shape) throws IOException {
+      return receive(List.of(shape));
     }
 
     /**
-     * Describes creating a file from retained content at a tail beneath this
-     * directory, together with any directories missing above it, once
-     * {@link #require(Address)} allows it.
+     * Describes copying a shape into this directory under another name: a file
+     * lands under that name, and a directory's contents land beneath the
+     * directory of that name.
      *
-     * @param tail  address of the file relative to this directory
-     * @param after retained content
-     * @return image creating the file
-     * @throws Violation                when the file may not be created there,
-     *                                  as {@link #require(Address)} refuses
-     * @throws IOException              when a place on the way cannot be
-     *                                  inspected
-     * @throws IllegalArgumentException when the tail names this directory
+     * @param shape the file or directory to copy
+     * @param name  single filename it takes here
+     * @return images creating each file, one per file
+     * @throws Refusal                  as describing or listing the shape
+     *                                  refuses
+     * @throws IOException              when the shape cannot be read
+     * @throws IllegalArgumentException when the name is not a portable single
+     *                                  filename
      */
     @NonNull
-    default Image<Image.File> create(@NonNull Address tail, @NonNull Reference.Captured after) throws IOException {
-      require(tail);
-      return new Image.Installation(new Image.File.Absent(), new Image.File.Present(after), address().resolve(tail));
+    default Set<Image<?>> receive(@NonNull Shape shape, @NonNull String name) throws IOException {
+      return switch (shape) {
+        case Shape.File file -> Set.of(new Image.Installation(new Image.File.Absent(),
+            new Image.File.Present(file.describe()), address().resolve(name)));
+        case Shape.Directory directory -> directory(name).receive(directory);
+      };
+    }
+
+    /**
+     * Describes copying layers into this directory, each as
+     * {@link #receive(Shape)} does, where a later layer's file replaces an
+     * earlier layer's at the same place.
+     *
+     * @param layers files and directories to copy, earliest first
+     * @return images creating each file, one per place
+     * @throws Refusal     as describing or listing a layer refuses
+     * @throws IOException when a layer cannot be read
+     */
+    @NonNull
+    default Set<Image<?>> receive(@NonNull List<? extends Shape> layers) throws IOException {
+      Map<Address, Image<?>> placed = new LinkedHashMap<>();
+      for (Shape layer : layers) {
+        Set<Image<?>> images = switch (layer) {
+          case Shape.File file -> receive(file, file.name());
+          case Shape.Directory directory -> {
+            Map<Address, Image<?>> beneath = new LinkedHashMap<>();
+            for (Shape child : directory.children()) {
+              receive(child, child.name()).forEach(image -> beneath.put(image.address(), image));
+            }
+            yield Set.copyOf(beneath.values());
+          }
+        };
+        images.forEach(image -> placed.put(image.address(), image));
+      }
+      return Set.copyOf(placed.values());
     }
   }
 }

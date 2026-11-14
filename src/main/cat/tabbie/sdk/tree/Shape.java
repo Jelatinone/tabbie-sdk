@@ -1,19 +1,24 @@
 package cat.tabbie.sdk.tree;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import cat.tabbie.sdk.form.Form;
 import lombok.NonNull;
 
 /**
  * One place in a tree: a {@link File file} or a {@link Directory directory} at
  * its own {@link Address}, beneath the directory standing for the root. A
  * shape names a place whether or not anything is there; its
- * {@link #state() state} says what is there now. What backs a shape is its
- * kind's: a {@link Node} is what is beneath a root on a plate.
+ * {@link #state() state} says what is there now. A shape is anonymous: it has
+ * no format until something {@link #as(Form.Factory) interprets} it. What
+ * backs a shape is its kind's: a {@link Node} is what is beneath a root on a
+ * plate, an {@link Entry} a place inside an archive, and a {@link Source} what
+ * its maker declares.
  */
-public sealed interface Shape permits Shape.File, Shape.Directory, Node {
+public sealed interface Shape permits Shape.File, Shape.Directory, Node, Entry, Source {
 
   /**
    * Returns where this place is.
@@ -55,15 +60,84 @@ public sealed interface Shape permits Shape.File, Shape.Directory, Node {
   State state() throws IOException;
 
   /**
-   * A file, possibly absent. Nothing lies beneath a file.
+   * Interprets this place in a form, the one hop from a place to its format,
+   * such as {@code source.as(Zip::of)}. The factory reads only what it needs
+   * to know the place is in its format.
+   *
+   * @param <Interpreted> the form's type
+   * @param factory       makes the form from this place
+   * @return the form, bound to this place
+   * @throws Refusal     with a {@link Reason.Content} when the place is not in
+   *                     the form, or is but cannot be read
+   * @throws IOException when the place cannot be read
    */
-  sealed interface File extends Shape permits Node.File {
+  @NonNull
+  default <Interpreted extends Form> Interpreted as(@NonNull Form.Factory<Interpreted> factory) throws IOException {
+    return factory.of(this);
+  }
+
+  /**
+   * A file, possibly absent. Nothing lies beneath a file. Its bytes are read
+   * and written through its {@link Lease leases}.
+   */
+  sealed interface File extends Shape permits Node.File, Entry.File, Source.File {
+
+    /**
+     * Describes the file's bytes without reading them.
+     *
+     * @return what is known about the bytes, bound to this file
+     * @throws Refusal     with {@link Reason.Place.Missing} when nothing is
+     *                     here, or {@link Reason.Place.Occupied} when
+     *                     something other than a file is here or above
+     * @throws IOException when the file cannot be inspected
+     */
+    @NonNull
+    Describe describe() throws IOException;
+
+    /**
+     * Leases this file for reading.
+     *
+     * @return open lease, owned by the caller
+     * @throws Refusal     with {@link Reason.Place.Held} when the tree does
+     *                     not wait and the file is leased for writing
+     * @throws IOException when the lease cannot be taken
+     */
+    @NonNull
+    Lease.Read read() throws IOException;
+
+    /**
+     * Leases this file for writing, and for reading what it writes. The file
+     * may be absent: replacing it creates it.
+     *
+     * @return open lease, owned by the caller
+     * @throws Refusal     with {@link Reason.Place.Held} when the tree does
+     *                     not wait and the file is leased, or
+     *                     {@link Reason.Place.Denied} when its tree is
+     *                     read-only, as a source and an archive are
+     * @throws IOException when the lease cannot be taken
+     */
+    @NonNull
+    Lease.Write write() throws IOException;
+
+    /**
+     * Reads the whole file, for content small enough to hold in memory.
+     *
+     * @return the file's bytes
+     * @throws IOException as {@link #read()} and {@link Lease.Read#bytes()}
+     *                     throw
+     */
+    @NonNull
+    default byte[] bytes() throws IOException {
+      try (Lease.Read lease = read()) {
+        return lease.bytes();
+      }
+    }
   }
 
   /**
    * A directory, possibly absent, holding the places beneath it.
    */
-  sealed interface Directory extends Shape permits Node.Directory {
+  sealed interface Directory extends Shape permits Node.Directory, Entry.Directory {
 
     /**
      * Lists what exists directly beneath this directory.
@@ -87,6 +161,29 @@ public sealed interface Shape permits Shape.File, Shape.Directory, Node {
       return children().stream()
           .filter(child -> child.name().equals(name))
           .findFirst();
+    }
+
+    /**
+     * Finds every file of a name that exists beneath this directory, at any
+     * depth, such as the manifests an archive holds.
+     *
+     * @param name single filename, matched exactly
+     * @return the files found, each directory's before its subdirectories',
+     *         possibly none
+     * @throws IOException when a directory cannot be listed
+     */
+    @NonNull
+    default List<Shape.File> find(@NonNull String name) throws IOException {
+      List<Shape.File> found = new ArrayList<>();
+      for (Shape child : children()) {
+        switch (child) {
+          case Shape.File file when file.name().equals(name) -> found.add(file);
+          case Shape.File _ -> {
+          }
+          case Shape.Directory directory -> found.addAll(directory.find(name));
+        }
+      }
+      return List.copyOf(found);
     }
 
     /**

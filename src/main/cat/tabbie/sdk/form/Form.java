@@ -1,64 +1,78 @@
 package cat.tabbie.sdk.form;
 
 import java.io.IOException;
-import java.util.Optional;
 
-import cat.tabbie.sdk.platform.Describe;
+import cat.tabbie.sdk.tree.Reason;
+import cat.tabbie.sdk.tree.Refusal;
+import cat.tabbie.sdk.tree.Shape;
+import lombok.AccessLevel;
 import lombok.NonNull;
+import lombok.experimental.FieldDefaults;
 
 /**
- * A form a file's content is read and written in, other than bytes: plain
- * text in a charset, or JSON. Its content is text a configuration edits,
- * either the file's own text or a view the form keeps well formed, written
- * back into the file as it was, so whatever is edited through it, what it
- * writes reads back again. Forms are views over any lease, so plates
- * implement none of them, and they read any {@link Describe}, such as an
- * entry of an archive, alike.
+ * One shape read in a format, such as a file read as JSON or an archive read
+ * as the entries it holds. A form is made from its shape by a {@link Factory},
+ * through {@link Shape#as(Factory)}, and stays bound to it: chaining is the
+ * norm, as in {@code source.as(Zip::of).file("manifest.json").as(Json::of)}.
+ * Making a form reads only what it needs to know the shape is in its format,
+ * and refuses with a {@link Refusal} whose {@link Reason.Content} names the
+ * shape and the form: {@link Reason.Content.Unreadable} when the shape is not
+ * in the format, {@link Reason.Content.Malformed} when it is but is broken,
+ * and {@link Reason.Content.Unsupported} when it uses what the form does not
+ * read.
  *
  * <p>
- * A form is plain data: a configuration records the form it edits its file
- * in, so history recorded once replays anywhere. Another format, such as the
- * YAML or TOML some configuration files use, becomes a form of its own once
- * some content needs it.
+ * A form reads a value from its shape, or, for an archive, is itself a
+ * directory of {@link cat.tabbie.sdk.tree.Entry entries}. Forms are classes,
+ * so typed forms extend general ones, as a pack's manifest extends JSON. Every
+ * format lives in {@code extensions} but {@link Text}, the line view a
+ * {@link cat.tabbie.sdk.revision.Revision.Diff Diff} reads through.
  */
-public sealed interface Form permits Text, Json {
+@FieldDefaults(level = AccessLevel.PROTECTED, makeFinal = true)
+public abstract class Form {
 
   /**
-   * Reads content in this form.
-   *
-   * @param content bytes to read
-   * @return content in this form, as text a configuration edits
-   * @throws Unreadable  when the bytes are not content of this form
-   * @throws IOException when the bytes cannot be read
+   * The shape this form reads.
    */
-  @NonNull
-  String decode(@NonNull Describe content) throws IOException;
+  Shape shape;
 
   /**
-   * Writes content in this form back into a file as it was, as the bytes the
-   * file then holds, known by the same name.
+   * Binds a form to the shape it reads.
    *
-   * @param current the file as it was, which the content was read from
-   * @param content content in this form
-   * @return reusable description of the bytes
-   * @throws Unreadable               when the file as it was is not of this
-   *                                  form
-   * @throws IOException              when the file as it was cannot be read
-   * @throws IllegalArgumentException when the content cannot be written in
-   *                                  this form
+   * @param shape the shape read in this form
    */
-  @NonNull
-  Describe encode(@NonNull Describe current, @NonNull String content) throws IOException;
+  protected Form(@NonNull Shape shape) {
+    this.shape = shape;
+  }
 
   /**
-   * Returns an empty document of this form: what a file of this form holds
-   * when nothing is in it yet, and so what one may be created from.
+   * Returns the shape this form reads.
    *
-   * @param fileName single filename the document is known by
-   * @return the empty document, or empty when this form has none
-   * @throws IllegalArgumentException when the filename is not a single
-   *                                  filename
+   * @return the shape
    */
   @NonNull
-  Optional<Describe> empty(@NonNull String fileName);
+  public Shape shape() {
+    return shape;
+  }
+
+  /**
+   * Makes a form from a shape, such as {@code Json::of}.
+   *
+   * @param <Interpreted> the form's type
+   */
+  @FunctionalInterface
+  public interface Factory<Interpreted extends Form> {
+
+    /**
+     * Reads a shape in this factory's form.
+     *
+     * @param shape the shape to read
+     * @return the form, bound to the shape
+     * @throws Refusal     with a {@link Reason.Content} when the shape is not
+     *                     in the form, or is but cannot be read
+     * @throws IOException when the shape cannot be read
+     */
+    @NonNull
+    Interpreted of(@NonNull Shape shape) throws IOException;
+  }
 }

@@ -11,12 +11,11 @@
  * {@link cat.tabbie.sdk.tree.Violation Violation}.
  *
  * <p>
- * A {@link cat.tabbie.sdk.tree.World World} is a World as a model holds it:
- * the name a Cat selects it by, and the directory of its namespace. A layout
- * is declaration data, not a tree: the places beneath a plate's root are its
- * {@link cat.tabbie.sdk.tree.Node nodes}, which hold no rules. Each
- * distribution release declares a layout,
- * and core builds an install's model from it, with its own layer and the
- * Worlds the install applies to mounted in it.
+ * A layout is declaration data, not a tree: the places beneath a plate's
+ * root are its {@link cat.tabbie.sdk.tree.Node nodes}, which hold no rules.
+ * Each distribution release declares a layout, and core builds an install's
+ * model from it, with its own layer and the layout of every
+ * {@link cat.tabbie.sdk.tree.Namespace namespace} the install applies to
+ * mounted in it.
  */
 package cat.tabbie.sdk.model;

@@ -7,9 +7,12 @@
  * {@link Contributor}, and the contributors of one action to one subject, by
  * one key, are checked together as a {@link Coverage}. An action's
  * {@link Cardinality} says how many of its contributors act for one subject at
- * one target. The
- * {@link cat.tabbie.sdk.meta.attribute attributes} on an action's method, or
- * on a type enclosing it, say which targets it applies to.
+ * one target. The {@link cat.tabbie.sdk.meta.attribute attributes} on an
+ * action's method, or on a type enclosing it, say which targets it applies to,
+ * and the {@link cat.tabbie.sdk.Registry registry} chooses one for a subject
+ * at a target. Every action's context extends {@link Action.Context}, which
+ * gives the head it starts from. {@link Install} is the action installing
+ * content, with the context core gives each install.
  *
  * <p>
  * The processors check a module's actions while the module compiles, so a

@@ -8,114 +8,109 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import cat.tabbie.sdk.form.Form;
-import cat.tabbie.sdk.form.Json;
-import cat.tabbie.sdk.form.Unreadable;
-import cat.tabbie.sdk.plate.Plate;
-import cat.tabbie.sdk.plate.Stash;
-import cat.tabbie.sdk.platform.Describe;
-import cat.tabbie.sdk.platform.Reference;
 import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Describe;
 import cat.tabbie.sdk.tree.Lease;
 import cat.tabbie.sdk.tree.Node;
 import cat.tabbie.sdk.tree.Reason;
 import cat.tabbie.sdk.tree.Refusal;
+import cat.tabbie.sdk.tree.Shape;
+import cat.tabbie.sdk.tree.Source;
+import cat.tabbie.sdk.tree.State;
 import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
 /**
- * An immutable description of a change to one file: its existence and
- * complete content, or selected lines of its text. Describing an image
- * performs no I/O, and images track no filesystem metadata. The preimage
- * exchanges before and after states. Exposing an image carries its change out
- * on a {@link Plate}, after checking that its file is in the before state; a
- * replacement does not authorize overwriting content it did not expect.
+ * One reversible change to one file beneath a root: its existence, as an
+ * {@link Installation installation} from {@link File.Absent absent} to
+ * {@link File.Present present} or back, or its content, as a
+ * {@link Configuration configuration} by a {@link Revision}. Each image has a
+ * side before and a side after, typed by its kind, and its preimage exchanges
+ * them. Describing an image performs no I/O beyond what describing its shapes
+ * reads. Images are made on nodes, with
+ * {@link Node.Directory#receive(Shape) receive},
+ * {@link Node.File#configure(Revision) configure} and
+ * {@link Node.File#delete() delete}.
  *
  * <p>
- * New files are described with
- * {@link cat.tabbie.sdk.model.Layout.Directory#create Layout.Directory#create}
- * against a model where content is placed by its rules, or with
- * {@link Node.Directory#create Node.Directory#create} against what exists
- * where work deliberately sets the model aside. Changes to files that exist
- * are described against their nodes, with
- * {@link Node.File#replace Node.File#replace}, {@code delete} and
- * {@code configure}.
+ * An image is a {@link Intermediate.Step step}: exposing it on a
+ * {@link Plate} carries its change out through the plate's leases, after
+ * checking its file still holds its side before, and passes with its side
+ * after. It fails with {@link Reason.Place.Changed} when the file holds
+ * something else, changing nothing. Bytes are named by
+ * {@link Describe descriptions}, and an image reads them through the shapes
+ * they are bound to when it is exposed.
  *
  * <p>
  * An image is always well formed: it changes something, and its file lies
  * beneath its root. Describing a change that is not throws a
- * {@link Violation} whose {@link Reason.Change} says why, so no image needs
- * checking for a change that does nothing.
+ * {@link Violation} whose {@link Reason.Change} says why.
  *
- * <p>
- * Images name content by {@link Reference.Captured reference}, never by its
- * bytes: the bytes live in the stash of the plate an image is exposed on.
- * Images describe files, not the machine they run on. What a Cat needs from
- * its machine, such as a system package, is data in its lockfile, which images
- * edit like any other text file.
- *
- * @param <State> underlying existence or content state
+ * @param <Side> what each side of the image is
  */
-public sealed interface Image<State extends Image.Alteration> {
+public sealed interface Image<Side extends Image.Alteration> extends Intermediate.Step<Side>
+    permits Image.Installation, Image.Configuration {
 
   /**
-   * Exposes this image on a plate: checks that its file is in the before
-   * state, then brings it to the after state through the plate. A file that
-   * no longer matches fails rather than throws, and is left unchanged;
-   * {@link Scrutiny.Fail} lists what fails each kind of image. The same image
-   * exposes alike on a rehearsal's plate and on an acting one.
+   * Returns the changed file.
    *
-   * @param plate plate the change is carried out on
-   * @return pass carrying the state the file reached, or failure carrying the
-   *         state found or what refused the change
-   * @throws IOException when the file cannot be read or the change fails
-   *                     part-way
-   */
-  Scrutiny<State> expose(@NonNull Plate plate) throws IOException;
-
-  /**
-   * File this image changes.
-   *
-   * @return changed file, beneath the root of the plate it is exposed on
+   * @return file beneath the root
    */
   @NonNull
   Address address();
 
   /**
-   * Expected existence or content before the change.
+   * Returns what the image changes from.
    *
-   * @return expected state before
+   * @return the side before
    */
   @NonNull
-  State before();
+  Side before();
 
   /**
-   * Described existence or content after the change.
+   * Returns what the image changes to.
    *
-   * @return described state after
+   * @return the side after
    */
   @NonNull
-  State after();
+  Side after();
 
   /**
-   * Image with its before and after states exchanged.
+   * Returns the image that undoes this one, exchanging its sides.
    *
-   * @return image reversed
+   * @return the preimage
    */
   @NonNull
-  Image<State> preimage();
+  Image<Side> preimage();
 
   /**
-   * Checks that images can be exposed in any order, and so in parallel: every
-   * file appears once, and no changed file lies beneath another.
+   * Carries this change out on a plate, when the file still holds this
+   * image's side before.
    *
-   * @param images generated images
-   * @throws Violation with {@link Reason.Change.Clash} when two images change
-   *                   the same file
-   * @throws Violation with {@link Reason.Change.Nested} when a changed file
-   *                   lies beneath another
+   * @param plate the plate whose root the file lies beneath
+   * @return a pass with this image's side after, or a failure with why
+   *         nothing changed
+   * @throws IOException when the file cannot be inspected or changed, or a
+   *                     refusal may pass when tried again
+   */
+  Scrutiny<Side> expose(@NonNull Plate plate) throws IOException;
+
+  @Override
+  default Scrutiny<Side> collapse(@NonNull Plate plate) throws IOException {
+    return expose(plate);
+  }
+
+  /**
+   * Checks that images may be exposed together in any order: each file is
+   * changed once, and no changed file lies beneath another.
+   *
+   * @param images images exposed together
+   * @throws Violation with {@link Reason.Change.Clash} when a file is changed
+   *                   twice, or {@link Reason.Change.Nested} when a changed
+   *                   file lies beneath another
    */
   static void validate(@NonNull Collection<? extends Image<?>> images) {
     Map<Address, Image<?>> files = new LinkedHashMap<>();
@@ -134,210 +129,224 @@ public sealed interface Image<State extends Image.Alteration> {
   }
 
   /**
-   * Describes the change that undoes a set. The preimages of a valid set are
-   * valid: they change the same files.
+   * Returns the preimages of images exposed together.
    *
-   * @param images applied images
-   * @return immutable set of preimages
+   * @param images images exposed together
+   * @return their preimages
    */
   static Set<Image<?>> preimage(@NonNull Collection<? extends Image<?>> images) {
-    return images.stream().map(Image::preimage).collect(Collectors.toUnmodifiableSet());
+    return images.stream()
+        .map(Image::preimage)
+        .collect(Collectors.toUnmodifiableSet());
   }
 
   /**
-   * Composes two changes of one file applied one after the other. A change
-   * followed by its exact preimage cancels. Whole files compose into one change
-   * from the first's before state to the second's after state. Text changes
-   * compose through {@link Chunk#compose(List, List)}: separate regions are
-   * kept, and overlapping regions are combined where both describe the same
-   * intermediate lines.
+   * Composes two images of one file, applied one after the other, into one
+   * image from the first's side before to the second's side after. Content is
+   * read through the descriptions the images name, and combined content is
+   * held in memory. Only how the two meet is checked here; each image is
+   * checked when it is made.
    *
-   * <p>
-   * An installation and a configuration of the same file fold into one
-   * installation, which is the only composition that reads content: an
-   * installation followed by a configuration installs the content with the
-   * chunks applied, and a configuration followed by an installation or
-   * deletion starts from the second's before content with the chunks inverted.
-   * The stash supplies the retained text and keeps the folded content.
-   * Whole-file states continue from one another when they are
-   * {@link Alteration#same the same}.
-   *
-   * @param first  earlier change
-   * @param second later change, whose before state must continue from the
-   *               first's after state
-   * @param stash  stash holding the files' content, read only when folding
-   * @return combined change, or empty when the pair has no net effect
-   * @throws Violation   with {@link Reason.Change.Unrelated} when the changes
-   *                     are of different files
-   * @throws Violation   with {@link Reason.Change.Discontinuous} when the
-   *                     second does not continue from the first
-   * @throws IOException when folded content cannot be read or captured
+   * @param first  the earlier image
+   * @param second the later image
+   * @return the composed image, or empty when the two cancel out
+   * @throws Violation   with {@link Reason.Change.Unrelated} when they change
+   *                     different files, or {@link Reason.Change.Discontinuous}
+   *                     when the second does not continue from the first
+   * @throws IOException when content cannot be read
    */
-  static Optional<Image<?>> compose(@NonNull Image<?> first, @NonNull Image<?> second, @NonNull Stash stash)
-      throws IOException {
-    if (!first.address().equals(second.address())) {
-      throw new Violation(new Reason.Change.Unrelated(first.address(), second.address()));
+  static Optional<Image<?>> compose(@NonNull Image<?> first, @NonNull Image<?> second) throws IOException {
+    Address address = first.address();
+    if (!address.equals(second.address())) {
+      throw new Violation(new Reason.Change.Unrelated(address, second.address()));
     }
+    Supplier<Violation> discontinuous = () -> new Violation(new Reason.Change.Discontinuous(address));
     return switch (first) {
       case Installation earlier -> switch (second) {
-        case Installation later -> earlier.compose(later);
-        case Configuration later -> earlier.fold(later, stash);
+        case Installation later -> {
+          if (!earlier.after().same(later.before())) {
+            throw discontinuous.get();
+          }
+          yield between(address, earlier.before(), later.after());
+        }
+        case Configuration<?> later -> {
+          if (!(earlier.after() instanceof File.Present(Describe installed))) {
+            throw discontinuous.get();
+          }
+          Shape.File revised = later.revision().revise(installed.shape()).orElseThrow(discontinuous);
+          yield between(address, earlier.before(), new File.Present(revised.describe()));
+        }
       };
-      case Configuration earlier -> switch (second) {
-        case Installation later -> earlier.fold(later, stash);
-        case Configuration later -> earlier.compose(later);
+      case Configuration<?> earlier -> switch (second) {
+        case Installation later -> {
+          if (!(later.before() instanceof File.Present(Describe configured))) {
+            throw discontinuous.get();
+          }
+          Shape.File prior = earlier.revision().invert().revise(configured.shape()).orElseThrow(discontinuous);
+          yield between(address, new File.Present(prior.describe()), later.after());
+        }
+        case Configuration<?> later -> {
+          try {
+            yield earlier.revision().compose(later.revision())
+                .<Image<?>>map(composed -> new Configuration<>(address, composed));
+          } catch (IllegalArgumentException exception) {
+            throw new Violation(new Reason.Change.Discontinuous(address), exception);
+          }
+        }
       };
     };
   }
 
   /**
-   * Folds sequentially applied sets into the minimal set with the same net
-   * effect, which can be exposed in parallel. Files whose changes cancel out
-   * disappear.
+   * Reduces changes made one after another to the net change from the first
+   * one's sides before, composing images of the same file in order.
    *
-   * @param changes sets in application order, each individually valid
-   * @param stash   stash holding the files' content, read only when an
-   *                installation and a configuration of one file fold
-   * @return immutable valid net change
-   * @throws Violation   when a set is invalid, its changes are discontinuous,
-   *                     or the net change is order dependent, such as a file
-   *                     replaced by a directory of the same name
-   * @throws IOException when folded content cannot be read or captured
+   * @param changes sets of images, each exposed together, earliest first
+   * @return the net images
+   * @throws Violation   as {@link #validate(Collection)} and
+   *                     {@link #compose(Image, Image)} throw
+   * @throws IOException when content cannot be read
    */
-  static Set<Image<?>> reduce(@NonNull List<? extends Collection<? extends Image<?>>> changes,
-      @NonNull Stash stash) throws IOException {
+  static Set<Image<?>> reduce(@NonNull List<? extends Collection<? extends Image<?>>> changes) throws IOException {
     changes.forEach(Image::validate);
-    Folding folding = new Folding();
+    Map<Address, Image<?>> net = new LinkedHashMap<>();
+    Map<Address, File> settled = new HashMap<>();
     for (Collection<? extends Image<?>> change : changes) {
       for (Image<?> image : change) {
-        folding.fold(image, stash);
+        Address address = image.address();
+        Image<?> previous = net.remove(address);
+        if (previous == null) {
+          File file = settled.remove(address);
+          if (file != null && image instanceof Installation installation && !file.same(installation.before())) {
+            throw new Violation(new Reason.Change.Discontinuous(address));
+          }
+          net.put(address, image);
+          continue;
+        }
+        Optional<Image<?>> composed = compose(previous, image);
+        if (composed.isPresent()) {
+          net.put(address, composed.get());
+        } else if (previous instanceof Installation installation) {
+          settled.put(address, installation.before());
+        }
       }
     }
-    validate(folding.net().values());
-    return Set.copyOf(folding.net().values());
+    validate(net.values());
+    return Set.copyOf(net.values());
   }
 
   /**
-   * Describes the underlying state a change expects or produces: a file's
-   * existence and content, or selected lines of a text file.
+   * Describes the change between two sides of a file's existence, unless
+   * there is none: an installation when one side is absent, and a swap when
+   * the file is present on both.
    */
-  sealed interface Alteration {
+  private static Optional<Image<?>> between(Address address, File before, File after) {
+    if (before.same(after)) {
+      return Optional.empty();
+    }
+    if (before instanceof File.Present present && after instanceof File.Present revised) {
+      return Optional.of(new Configuration<>(address, new Revision.Swap(present, revised)));
+    }
+    return Optional.of(new Installation(before, after, address));
+  }
+
+  /**
+   * One side of an image: what its file is before or after the change.
+   */
+  sealed interface Alteration permits File, Text {
 
     /**
-     * Whether this state is the same as another. Whole-file states are the
-     * same when their content's digest and size match, whatever name it was
-     * retained under; other states are the same when they are equal.
+     * Whether another side holds the same.
      *
-     * @param other state to compare
-     * @return whether both describe the same state
+     * @param other the other side
+     * @return true when nothing known tells them apart
      */
-    default boolean same(@NonNull Alteration other) {
+    boolean same(@NonNull Alteration other);
+  }
+
+  /**
+   * A file's existence: absent, or present with its content.
+   */
+  sealed interface File extends Alteration permits File.Absent, File.Present {
+
+    /**
+     * Nothing is at the file's place.
+     */
+    record Absent() implements File {
+
+      @Override
+      public boolean same(@NonNull Alteration other) {
+        return other instanceof Absent;
+      }
+    }
+
+    /**
+     * The file is present, holding the content its description names.
+     *
+     * @param content what is known about the file's bytes, bound to where they
+     *                are read
+     */
+    record Present(@NonNull Describe content) implements File {
+
+      @Override
+      public boolean same(@NonNull Alteration other) {
+        return other instanceof Present present && content.agrees(present.content());
+      }
+    }
+  }
+
+  /**
+   * The lines of a text file a diff touches, each region a fragment.
+   *
+   * @param fragments fragments in file order
+   */
+  record Text(@NonNull List<Hunk.Fragment> fragments) implements Alteration {
+
+    /**
+     * Copies the fragments and checks their order.
+     *
+     * @throws IllegalArgumentException when the fragments overlap or follow an
+     *                                  unterminated line
+     */
+    public Text {
+      fragments = List.copyOf(fragments);
+      Hunk.validateFragments(fragments);
+    }
+
+    @Override
+    public boolean same(@NonNull Alteration other) {
       return equals(other);
     }
   }
 
   /**
-   * Complete file-content expectations, distinguished from absence.
-   */
-  sealed interface File extends Alteration {
-
-    /**
-     * Returns the state of the file a lease holds.
-     *
-     * @param lease lease on the file
-     * @return the file's content, or absence when nothing is at its path
-     * @throws Refusal     with {@link Reason.Place.Occupied} when something
-     *                     other than a file is at the path
-     * @throws IOException when the file cannot be read
-     */
-    static File of(@NonNull Lease.Read lease) throws IOException {
-      try {
-        return new Present(lease.read().identify());
-      } catch (Refusal refusal) {
-        if (refusal.reason() instanceof Reason.Place.Missing) {
-          return new Absent();
-        }
-        throw refusal;
-      }
-    }
-
-    /**
-     * Assertion that no file exists at the image path.
-     */
-    record Absent() implements File {
-    }
-
-    /**
-     * Assertion of complete retained file content, including zero bytes.
-     *
-     * @param reference named, verified captured content
-     */
-    record Present(@NonNull Reference.Captured reference) implements File {
-
-      @Override
-      public boolean same(@NonNull Alteration other) {
-        return other instanceof Present(Reference.Captured content)
-            && reference.sha256().equals(content.sha256())
-            && reference.size() == content.size();
-      }
-    }
-  }
-
-  /**
-   * Selected ordered ranges of an existing text file, rather than a
-   * complete-file snapshot. An empty fragment list asserts existence without
-   * asserting any particular content.
+   * A file's existence: created where nothing was, or deleted.
    *
-   * @param fragments immutable copied ranges, possibly empty
+   * @param before  absent when the file is created, or the file deleted
+   * @param after   the file created, or absent when it is deleted
+   * @param address the file, beneath the root
    */
-  record Text(@NonNull List<Chunk.Fragment> fragments) implements Alteration {
+  record Installation(@NonNull File before, @NonNull File after, @NonNull Address address) implements Image<File> {
 
     /**
-     * Copies and validates fragment order and line termination.
+     * Checks the address, and that the image creates or deletes the file.
      *
-     * @throws IllegalArgumentException when fragments overlap or have invalid
-     *                                  termination
-     */
-    public Text {
-      fragments = List.copyOf(fragments);
-      Chunk.validateFragments(fragments);
-    }
-  }
-
-  /**
-   * Creates, deletes, or replaces a whole file. Both sides may be present, but
-   * they may not be the same, so both sides are never absent.
-   *
-   * <p>
-   * Exposing it takes a mutual lease on the file and digests it without
-   * retaining it. When the file's absence, or its digest and size, match the
-   * before state, it deletes the file or places the after content, reopened
-   * from the plate's stash and verified as it is written, and passes with the
-   * after state. A path no file can occupy, or one that may not be written,
-   * fails with the plate's refusal.
-   *
-   * @param before  complete content or absence expected before the change
-   * @param after   complete content or absence described after the change
-   * @param address changed file, beneath the plate's root
-   */
-  record Installation(
-      @NonNull File before, @NonNull File after, @NonNull Address address)
-      implements Image<Image.File> {
-
-    /**
-     * Rejects the root itself as a file, and a change that changes nothing.
-     *
-     * @throws Violation with {@link Reason.Change.Root} when the address is the
-     *                   root itself
-     * @throws Violation with {@link Reason.Change.Unchanged} when both states
-     *                   are the same, including both absent
+     * @throws Violation                with {@link Reason.Change.Root} when the
+     *                                  address is the root itself, or
+     *                                  {@link Reason.Change.Unchanged} when both
+     *                                  sides are absent
+     * @throws IllegalArgumentException when the file is present on both sides,
+     *                                  whose change is a configuration
      */
     public Installation {
       if (address.isRoot()) {
         throw new Violation(new Reason.Change.Root(address));
       }
-      if (before.same(after)) {
+      if (before instanceof File.Absent && after instanceof File.Absent) {
         throw new Violation(new Reason.Change.Unchanged(address));
+      }
+      if (before instanceof File.Present && after instanceof File.Present) {
+        throw new IllegalArgumentException("A change of a present file's content is a configuration.");
       }
     }
 
@@ -350,369 +359,94 @@ public sealed interface Image<State extends Image.Alteration> {
     public Scrutiny<File> expose(@NonNull Plate plate) throws IOException {
       Node.File node = plate.root().file(address);
       try (Lease.Write file = node.write()) {
-        cat.tabbie.sdk.tree.State held = node.state();
-        if (!(held instanceof cat.tabbie.sdk.tree.State.Absent || held instanceof cat.tabbie.sdk.tree.State.File)) {
-          return new Scrutiny.Fail<>(null, new Refusal(new Reason.Place.Occupied(address, held)));
+        State held = node.state();
+        boolean expected = switch (held) {
+          case State.Absent _ -> before instanceof File.Absent;
+          case State.File(Describe found) -> before.same(new File.Present(found));
+          case State.Directory _,State.Other _ -> false;
+        };
+        if (!expected) {
+          return new Scrutiny.Fail<>(new Reason.Place.Changed(address, held));
         }
-        File found = held instanceof cat.tabbie.sdk.tree.State.File ? File.of(file) : new File.Absent();
-        if (!before.same(found)) {
-          return new Scrutiny.Fail<>(found);
-        }
-        switch (after) {
-          case File.Absent _ -> file.delete();
-          case File.Present(Reference.Captured content) -> file.replace(plate.retained(content));
+        if (after instanceof File.Present(Describe content)) {
+          file.replace(content.shape());
+        } else {
+          file.delete();
         }
         return new Scrutiny.Pass<>(after);
       } catch (Violation violation) {
-        // A change the tree does not permit has no file state to report
-        return new Scrutiny.Fail<>(null, violation);
+        return new Scrutiny.Fail<>(violation.reason());
       } catch (Refusal refusal) {
-        // A path no file can occupy, or one that may not be written, has no
-        // file state to report; a refusal that may pass is tried again instead
+        // A refusal that may pass is tried again instead
         if (refusal.reason().retryable()) {
           throw refusal;
         }
-        return new Scrutiny.Fail<>(null, refusal);
+        return new Scrutiny.Fail<>(refusal.reason());
       }
-    }
-
-    /**
-     * Describes the change between two states of a file, unless there is none.
-     *
-     * @param before  state before
-     * @param after   state after
-     * @param address changed file, beneath the plate's root
-     * @return the installation, or empty when the states are the same
-     */
-    static Optional<Image<?>> between(@NonNull File before, @NonNull File after, @NonNull Address address) {
-      return before.same(after)
-          ? Optional.empty()
-          : Optional.of(new Installation(before, after, address));
-    }
-
-    /**
-     * Composes a later installation of the same file into one change.
-     *
-     * @param later later installation, whose before state must be the same as
-     *              this one's after state
-     * @return combined installation, or empty when the later one undoes this
-     * @throws Violation with {@link Reason.Change.Discontinuous} when the
-     *                   states do not continue
-     */
-    Optional<Image<?>> compose(@NonNull Installation later) {
-      if (!after.same(later.before())) {
-        throw new Violation(new Reason.Change.Discontinuous(address));
-      }
-      return between(before, later.after(), address);
-    }
-
-    /**
-     * Folds a later configuration of the installed file into one installation
-     * of the configured content, read from and captured into a stash.
-     *
-     * @param later configuration of the installed file
-     * @param stash stash holding the installed content
-     * @return folded installation, or empty when it changes nothing
-     * @throws Violation   with {@link Reason.Change.Discontinuous} when this
-     *                     installation leaves no file, or the chunks do not
-     *                     match its text in the configuration's view
-     * @throws IOException when the content cannot be read or captured
-     */
-    Optional<Image<?>> fold(@NonNull Configuration later, @NonNull Stash stash) throws IOException {
-      if (!(after instanceof File.Present(Reference.Captured installed))) {
-        throw new Violation(new Reason.Change.Discontinuous(address));
-      }
-      Describe current = stash.retained(installed);
-      Reference.Captured content = stash.capture(later.view().encode(current, later.revised(current)));
-      return between(before, new File.Present(content), address);
     }
   }
 
   /**
-   * Changes selected ranges of an existing file's text, stored as
-   * corresponding chunks, at least one of which edits the text. The text is
-   * the file as the configuration's view reads it: its own text, or a view a
-   * lease keeps well formed, such as {@link Json one element
-   * of a JSON array per line}. Chunks are anchored at lines, or, to change a
-   * file other content shares without reading it, at the end of the text or
-   * by their own lines, as {@link Chunk.Anchor} describes. A configuration
-   * never creates or deletes a file; an installation does, such as the
-   * {@link #sure(Stash) sure} of a file it applies to empty.
+   * A change to the content of a file that exists, by a revision, whose sides
+   * are the image's.
    *
-   * <p>
-   * Exposing it takes a mutual lease on the file and reads it in its view.
-   * When each chunk's before fragment matches the view where the chunk is
-   * anchored, exact endings included, it writes the file with the chunks
-   * applied, back through the view, and passes with the view's complete new
-   * text; lines outside every chunk are not compared. A failure carries the
-   * view's complete current text, or what refused the change: the plate's
-   * refusal when the file is gone or cannot be written, the tree's violation,
-   * or the file not being readable in the view.
-   *
-   * @param chunks  text changes, in the view
-   * @param address changed file, beneath the plate's root
-   * @param view    form the file is read and written in for these chunks
+   * @param <Side>   what each side of the revision is
+   * @param address  the file, beneath the root
+   * @param revision how its content changes
    */
-  record Configuration(
-      @NonNull List<Chunk> chunks, @NonNull Address address, @NonNull Form view)
-      implements Image<Image.Text> {
+  record Configuration<Side extends Alteration>(@NonNull Address address, @NonNull Revision<Side> revision)
+      implements Image<Side> {
 
     /**
-     * Copies and validates the chunks, and rejects the root itself as a file
-     * and chunks that change nothing.
+     * Checks the address.
      *
-     * @throws IllegalArgumentException when the chunks are out of order,
-     *                                  overlap, or mix anchors
-     * @throws Violation                with {@link Reason.Change.Root} when the
-     *                                  address is the root itself
-     * @throws Violation                with {@link Reason.Change.Unchanged}
-     *                                  when no chunk edits its text
+     * @throws Violation with {@link Reason.Change.Root} when the address is the
+     *                   root itself
      */
     public Configuration {
-      chunks = List.copyOf(chunks);
-      Chunk.validateChunks(chunks);
       if (address.isRoot()) {
         throw new Violation(new Reason.Change.Root(address));
       }
-      if (chunks.stream().noneMatch(Chunk::edits)) {
-        throw new Violation(new Reason.Change.Unchanged(address));
-      }
-    }
-
-    /**
-     * Describes changes to a file's own text.
-     *
-     * @param chunks  text changes
-     * @param address changed file, beneath the plate's root
-     * @throws IllegalArgumentException when the chunks are out of order,
-     *                                  overlap, or mix anchors
-     * @throws Violation                with {@link Reason.Change.Root} when the
-     *                                  address is the root itself
-     * @throws Violation                with {@link Reason.Change.Unchanged}
-     *                                  when no chunk edits its text
-     */
-    public Configuration(@NonNull List<Chunk> chunks, @NonNull Address address) {
-      this(chunks, address, new cat.tabbie.sdk.form.Text());
-    }
-
-    /**
-     * Describes the change between two fragment states of a file's own text.
-     *
-     * @param before  text before
-     * @param after   text after
-     * @param address changed file, beneath the plate's root
-     * @throws Violation with {@link Reason.Change.Root} when the address is the
-     *                   root itself
-     * @throws Violation with {@link Reason.Change.Unchanged} when no fragment
-     *                   changes
-     */
-    public Configuration(
-        @NonNull Text before, @NonNull Text after, @NonNull Address address) {
-
-      this(Chunk.between(before.fragments(), after.fragments()), address);
     }
 
     @Override
-    public Text before() {
-      return new Text(
-          chunks.stream()
-              .map(Chunk::before)
-              .toList());
+    public Side before() {
+      return revision.before();
     }
 
     @Override
-    public Text after() {
-      return new Text(
-          chunks.stream()
-              .map(Chunk::after)
-              .toList());
+    public Side after() {
+      return revision.after();
     }
 
     @Override
-    public Configuration preimage() {
-      return new Configuration(
-          chunks.stream()
-              .map(Chunk::invert)
-              .toList(),
-          address,
-          view);
+    public Configuration<Side> preimage() {
+      return new Configuration<>(address, revision.invert());
     }
 
     @Override
-    public Scrutiny<Text> expose(@NonNull Plate plate) throws IOException {
-      try (Lease.Write file = plate.root().file(address).write()) {
-        Describe current = file.read();
-        String text = view.decode(current);
-        if (!Chunk.matches(chunks, text)) {
-          return new Scrutiny.Fail<>(new Text(Chunk.fragmentsOf(text)));
+    public Scrutiny<Side> expose(@NonNull Plate plate) throws IOException {
+      Node.File node = plate.root().file(address);
+      try (Lease.Write file = node.write()) {
+        State held = node.state();
+        if (!(held instanceof State.File)) {
+          return new Scrutiny.Fail<>(new Reason.Place.Changed(address, held));
         }
-        String changed = Chunk.apply(chunks, text);
-        file.replace(view.encode(current, changed));
-        return new Scrutiny.Pass<>(new Text(Chunk.fragmentsOf(changed)));
-      } catch (Unreadable unreadable) {
-        // The file cannot be read in this configuration's view
-        return new Scrutiny.Fail<>(null, unreadable);
+        Optional<Shape.File> revised = revision.revise(Source.of(node.name(), file.bytes()));
+        if (revised.isEmpty()) {
+          return new Scrutiny.Fail<>(new Reason.Place.Changed(address, held));
+        }
+        file.replace(revised.get());
+        return new Scrutiny.Pass<>(revision.after());
       } catch (Violation violation) {
-        // The tree does not permit the change
-        return new Scrutiny.Fail<>(null, violation);
+        return new Scrutiny.Fail<>(violation.reason());
       } catch (Refusal refusal) {
-        // Nothing is here, something other than a file is, or the file may
-        // not be written; a refusal that may pass is tried again instead
+        // A refusal that may pass is tried again instead
         if (refusal.reason().retryable()) {
           throw refusal;
         }
-        return new Scrutiny.Fail<>(null, refusal);
+        return new Scrutiny.Fail<>(refusal.reason());
       }
     }
-
-    /**
-     * Describes creating this configuration's file from its view's empty
-     * document, when the chunks apply to that document, as chunks that only
-     * append do. An operation adds it when the file is absent, so a change
-     * described without reading the file still has a file to apply to. The
-     * operation owns the file's existence; content that configures the file
-     * owns only its change, so removing that content later leaves the file in
-     * place, however empty.
-     *
-     * @param stash stash to capture the empty document into
-     * @return installation creating the file, or empty when the view has no
-     *         empty document or the chunks do not apply to it
-     * @throws IOException when the document cannot be captured
-     */
-    public Optional<Installation> sure(@NonNull Stash stash) throws IOException {
-      Optional<Describe> empty = view.empty(address.fileName().orElseThrow());
-      if (empty.isEmpty() || !Chunk.matches(chunks, view.decode(empty.get()))) {
-        return Optional.empty();
-      }
-      Reference.Captured content = stash.capture(empty.get());
-      return Optional.of(new Installation(new File.Absent(), new File.Present(content), address));
-    }
-
-    /**
-     * Describes chunks of a file's view as a change, unless none of them
-     * edits.
-     *
-     * @param chunks  text changes
-     * @param address changed file, beneath the plate's root
-     * @param view    form the file is read and written in
-     * @return the configuration, or empty when no chunk edits its text
-     */
-    static Optional<Image<?>> between(@NonNull List<Chunk> chunks, @NonNull Address address,
-        @NonNull Form view) {
-      return chunks.stream().anyMatch(Chunk::edits)
-          ? Optional.of(new Configuration(chunks, address, view))
-          : Optional.empty();
-    }
-
-    /**
-     * Applies this configuration's chunks to a file's complete content, read
-     * in its view, as folding a later change of the file does.
-     *
-     * @param content complete content the chunks must match in the view
-     * @return complete resulting text of the view
-     * @throws Violation   with {@link Reason.Change.Discontinuous} when the
-     *                     content cannot be read in the view, or the chunks do
-     *                     not match it
-     * @throws IOException when the content cannot be read
-     */
-    String revised(@NonNull Describe content) throws IOException {
-      String text;
-      try {
-        text = view.decode(content);
-      } catch (Unreadable unreadable) {
-        throw new Violation(new Reason.Change.Discontinuous(address), unreadable);
-      }
-      if (!Chunk.matches(chunks, text)) {
-        throw new Violation(new Reason.Change.Discontinuous(address));
-      }
-      return Chunk.apply(chunks, text);
-    }
-
-    /**
-     * Composes a later configuration of the same file into one change.
-     *
-     * @param later later configuration
-     * @return combined configuration, or empty when the pair has no net effect
-     * @throws Violation with {@link Reason.Change.Discontinuous} when the two
-     *                   read the file in different views, or overlapping
-     *                   regions disagree about the text between them
-     */
-    Optional<Image<?>> compose(@NonNull Configuration later) {
-      if (!view.equals(later.view())) {
-        throw new Violation(new Reason.Change.Discontinuous(address));
-      }
-      List<Chunk> composed;
-      try {
-        composed = Chunk.compose(chunks, later.chunks());
-      } catch (IllegalArgumentException exception) {
-        throw new Violation(new Reason.Change.Discontinuous(address), exception);
-      }
-      return between(composed, address, view);
-    }
-
-    /**
-     * Folds a later installation or deletion of the configured file into one
-     * installation from the content before this configuration, read from and
-     * captured into a stash.
-     *
-     * @param later installation replacing or deleting the configured file
-     * @param stash stash holding the configured content
-     * @return folded installation, or empty when it changes nothing
-     * @throws Violation   with {@link Reason.Change.Discontinuous} when the
-     *                     later installation expects no file, or the chunks do
-     *                     not match its before content in the view
-     * @throws IOException when the content cannot be read or captured
-     */
-    Optional<Image<?>> fold(@NonNull Installation later, @NonNull Stash stash) throws IOException {
-      if (!(later.before() instanceof File.Present(Reference.Captured configured))) {
-        throw new Violation(new Reason.Change.Discontinuous(address));
-      }
-      Describe current = stash.retained(configured);
-      Reference.Captured content = stash.capture(view.encode(current, preimage().revised(current)));
-      return Installation.between(new File.Present(content), later.after(), address);
-    }
-  }
-}
-
-/**
- * Mutable state of one {@link Image#reduce(List, Stash) reduction}.
- *
- * @param net     net change by file
- * @param settled state a file returned to when its changes cancelled: a later
- *                installation of it must continue from that state
- */
-record Folding(Map<Address, Image<?>> net, Map<Address, Image.Alteration> settled) {
-
-  /**
-   * Starts an empty reduction.
-   */
-  Folding() {
-    this(new LinkedHashMap<>(), new HashMap<>());
-  }
-
-  /**
-   * Folds one more change into the net change.
-   *
-   * @param image later change
-   * @param stash stash holding the files' content, for folding
-   * @throws Violation   with {@link Reason.Change.Discontinuous} when the
-   *                     change does not continue from the state its file is in
-   * @throws IOException when folded content cannot be read or captured
-   */
-  void fold(Image<?> image, Stash stash) throws IOException {
-    Address address = image.address();
-    Image<?> previous = net.remove(address);
-    if (previous == null) {
-      Image.Alteration state = settled.remove(address);
-      if (state instanceof Image.File file && image instanceof Image.Installation installation
-          && !file.same(installation.before())) {
-        throw new Violation(new Reason.Change.Discontinuous(address));
-      }
-      net.put(address, image);
-      return;
-    }
-    Image.compose(previous, image, stash).ifPresentOrElse(
-        composed -> net.put(address, composed),
-        () -> settled.put(address, previous.before()));
   }
 }

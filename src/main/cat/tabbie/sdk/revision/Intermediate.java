@@ -6,8 +6,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 
-import cat.tabbie.sdk.plate.Plate;
 import cat.tabbie.sdk.revision.Intermediate.Step.Effect;
+import cat.tabbie.sdk.tree.Reason;
 import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
@@ -175,14 +175,14 @@ public sealed interface Intermediate<Result> {
     public Scrutiny<T> collapse(@NonNull Plate plate) throws IOException {
       return switch (source.collapse(plate)) {
         case Scrutiny.Pass<S> pass -> new Scrutiny.Pass<>(mapper.apply(pass.result()));
-        case Scrutiny.Fail<S> fail -> new Scrutiny.Fail<>(null, fail.failure());
+        case Scrutiny.Fail<S> fail -> new Scrutiny.Fail<>(fail.reason());
       };
     }
   }
 
   /**
    * Dependent work whose next intermediate is built from the source's passing
-   * result; a failure passes through with its cause, without building it.
+   * result; a failure passes through with its reason, without building it.
    *
    * @param <S>    input type
    * @param <T>    result type
@@ -197,14 +197,14 @@ public sealed interface Intermediate<Result> {
       return switch (source.collapse(plate)) {
         case Scrutiny.Pass<S> pass -> mapper.apply(pass.result()).collapse(plate);
         // Dependent work cannot be built without the source's result
-        case Scrutiny.Fail<S> fail -> new Scrutiny.Fail<>(null, fail.failure());
+        case Scrutiny.Fail<S> fail -> new Scrutiny.Fail<>(fail.reason());
       };
     }
   }
 
   /**
    * Ordered intermediates producing an immutable list. Collapsing stops at the
-   * first element that fails, and fails with its cause.
+   * first element that fails, and fails with its reason.
    *
    * @param <T>      element type
    * @param elements ordered intermediates
@@ -226,7 +226,7 @@ public sealed interface Intermediate<Result> {
         switch (element.collapse(plate)) {
           case Scrutiny.Pass<? extends T> pass -> results.add(pass.result());
           case Scrutiny.Fail<? extends T> fail -> {
-            return new Scrutiny.Fail<>(null, fail.failure());
+            return new Scrutiny.Fail<>(fail.reason());
           }
         }
       }
@@ -260,14 +260,14 @@ public sealed interface Intermediate<Result> {
     @Override
     public Scrutiny<T> collapse(@NonNull Plate plate) throws IOException {
       IOException failure = null;
-      boolean failed = false;
+      Reason refused = null;
       for (Intermediate<? extends T> alternative : alternatives) {
         try {
           switch (alternative.collapse(plate)) {
             case Scrutiny.Pass<? extends T> pass -> {
               return new Scrutiny.Pass<>(pass.result());
             }
-            case Scrutiny.Fail<? extends T> _ -> failed = true;
+            case Scrutiny.Fail<? extends T> fail -> refused = fail.reason();
           }
         } catch (IOException attempt) {
           if (failure == null) {
@@ -277,8 +277,8 @@ public sealed interface Intermediate<Result> {
           }
         }
       }
-      if (failed) {
-        return new Scrutiny.Fail<>();
+      if (refused != null) {
+        return new Scrutiny.Fail<>(refused);
       }
       // Every alternative threw
       throw failure;
@@ -329,7 +329,7 @@ public sealed interface Intermediate<Result> {
         try {
           return new Scrutiny.Pass<>(action.run(plate));
         } catch (Violation violation) {
-          return new Scrutiny.Fail<>(null, violation);
+          return new Scrutiny.Fail<>(violation.reason());
         }
       }
     }

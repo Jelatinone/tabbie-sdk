@@ -6,10 +6,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import cat.tabbie.sdk.form.Form;
-import cat.tabbie.sdk.platform.Reference;
-import cat.tabbie.sdk.revision.Chunk;
-import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.tree.Address;
 import cat.tabbie.sdk.tree.Reason;
 import cat.tabbie.sdk.tree.State;
@@ -26,7 +22,13 @@ import lombok.NonNull;
  * layout only grows: adding a declaration or mounting another layout returns
  * a new one. A layout is declaration data, not a place in a tree: what is
  * beneath a root is its {@link cat.tabbie.sdk.tree.Node nodes}.
+ *
+ * @deprecated Layouts leave the SDK in pass 2.3, when {@code @Base},
+ *             {@code @Place} and {@code @Mount} declare where content goes
+ *             and core composes them into each node's permissions and
+ *             accepting places.
  */
+@Deprecated
 public sealed interface Layout permits Layout.File, Layout.Directory {
 
   /**
@@ -349,72 +351,6 @@ public sealed interface Layout permits Layout.File, Layout.Directory {
     }
 
     /**
-     * Describes creating a file from retained content at a tail beneath this
-     * directory, together with any directories missing above it, once
-     * {@link #require(Address)} allows it.
-     *
-     * @param tail  address of the file relative to this directory
-     * @param after retained content
-     * @return image creating the file
-     * @throws Violation                when the file may not be created there,
-     *                                  as {@link #require(Address)} refuses
-     * @throws IllegalArgumentException when the tail names this directory
-     */
-    @NonNull
-    public Image<Image.File> create(@NonNull Address tail, @NonNull Reference.Captured after) {
-      require(tail);
-      return new Image.Installation(new Image.File.Absent(), new Image.File.Present(after), address.resolve(tail));
-    }
-
-    /**
-     * Describes configuring a file at a tail beneath this directory that need
-     * not exist yet, such as appending an entry to a list several contents
-     * share. Nothing here reads the file, so the chunks are anchored at the
-     * end or by content, never at lines. The model must allow creating the
-     * file there, as {@link #require(Address)} checks, and editing it, as the
-     * deepest declaration on the way grants. Whether the file exists, and what
-     * it holds, is found when the image is exposed; a missing file is first
-     * created from the view's empty document, as
-     * {@link Image.Configuration#sure(cat.tabbie.sdk.plate.Stash)}
-     * describes.
-     *
-     * @param tail   address of the file relative to this directory
-     * @param view   form the file is read and written in
-     * @param chunks changes to the file's content in that form
-     * @return image configuring the file
-     * @throws Violation                when the model does not allow creating
-     *                                  the file there
-     * @throws Violation                with {@link Reason.Place.Denied} when
-     *                                  the place is not editable
-     * @throws Violation                with {@link Reason.Change.Unchanged}
-     *                                  when no chunk edits the content
-     * @throws IllegalArgumentException when the tail names this directory, or a
-     *                                  chunk is anchored at lines
-     */
-    @NonNull
-    public Image<Image.Text> configure(@NonNull Address tail, @NonNull Form view,
-        @NonNull List<Chunk> chunks) {
-      if (chunks.stream().anyMatch(chunk -> chunk.anchor() == Chunk.Anchor.FIXED)) {
-        throw new IllegalArgumentException("A model configures a file by its content, never at lines it cannot see.");
-      }
-      require(tail);
-      Layout place = this;
-      for (String name : tail.components()) {
-        Optional<Layout> next = place instanceof Layout.Directory directory
-            ? directory.child(name)
-            : Optional.empty();
-        if (next.isEmpty()) {
-          break;
-        }
-        place = next.get();
-      }
-      if (!place.permits(Rule.Permission.EDITABLE)) {
-        throw new Violation(new Reason.Place.Denied(address.resolve(tail), Rule.Permission.EDITABLE));
-      }
-      return new Image.Configuration(chunks, address.resolve(tail), view);
-    }
-
-    /**
      * Declares a directory directly beneath this one.
      *
      * @param name  name of the directory
@@ -447,8 +383,8 @@ public sealed interface Layout permits Layout.File, Layout.Directory {
 
     /**
      * Mounts another layout at an address beneath this directory, declaring
-     * its root and everything beneath it there, as core mounts a World's
-     * layout on the World's main directory. Directories on the way that are
+     * its root and everything beneath it there, as core mounts a namespace's
+     * layout on the namespace's head. Directories on the way that are
      * not declared yet are declared without rules. Mounting only adds, so
      * nothing may be declared at the address yet.
      *

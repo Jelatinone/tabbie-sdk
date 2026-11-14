@@ -10,7 +10,7 @@ import cat.tabbie.sdk.model.Layout;
 import cat.tabbie.sdk.platform.Package;
 import cat.tabbie.sdk.target.Environment;
 import cat.tabbie.sdk.target.Label;
-import cat.tabbie.sdk.tree.World;
+import cat.tabbie.sdk.tree.Namespace;
 import lombok.NonNull;
 
 /**
@@ -120,13 +120,12 @@ public interface Product {
    * another release mounts that release's layout instead.
    *
    * <p>
-   * A layout cannot name a Cat's Worlds, since they are named by the Cat and
-   * there may be many. It declares the directory that accepts
-   * {@link World Worlds} instead, where core mounts each World's namespace.
-   * Whether the layout places everything the distribution supports depends on
-   * the installs core has loaded, so an
-   * {@link cat.tabbie.sdk.content.Artifact.Registry}
-   * {@link cat.tabbie.sdk.content.Artifact.Registry#check checks} it.
+   * A layout cannot name a Cat's namespaces, such as its Worlds, since they
+   * are named by the Cat and there may be many. It declares the directory
+   * that accepts {@link Namespace namespaces} instead, where core mounts each
+   * namespace's own layout. Whether the layout places everything the
+   * distribution supports depends on the contributors core has loaded, so the
+   * {@link cat.tabbie.sdk.Registry#check(Product.Build) registry checks} it.
    *
    * @param coordinates   exact release coordinates
    * @param releaseName   non-blank display name

@@ -6,6 +6,9 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+import cat.tabbie.sdk.tree.Node;
+import lombok.NonNull;
+
 /**
  * Marks an annotation as an action: something a module contributes that the
  * SDK chooses by target, placed on the method that provides it. Most actions
@@ -23,11 +26,13 @@ import java.lang.annotation.Target;
  * <li>It declares {@code Class<?>[] subject() default {}}, the type a static
  * contribution acts on. An action whose contributions may act in different
  * places also declares {@code Closure value() default Closure.ROOT}, where
- * each acts; one that declares none always acts in the root. Annotations
- * inherit nothing, so each action declares these itself.</li>
+ * each acts, and the registry checks every release's layout gives each a
+ * place to act there; one that declares none always acts in the root.
+ * Annotations inherit nothing, so each action declares these itself.</li>
  * <li>Each contribution has the action's signature: an instance method takes
- * the action's context, acting on the type declaring it; a static method takes
- * the type it acts on, then the context. Methods can then not be overloaded,
+ * the action's context, a {@link Context} with the action's own parts added,
+ * acting on the type declaring it; a static method takes the type it acts on,
+ * then the context. Methods can then not be overloaded,
  * so they are named apart: {@code <action><Qualifier><Closure>}, followed for
  * versioned contributions by their bounds, such as {@code installRoot},
  * {@code installListedRoot} or {@code installRoot_1_20_5to26_3}.</li>
@@ -78,4 +83,23 @@ public @interface Action {
    * @return element name, or empty when contributors are keyed by nothing
    */
   String key() default "";
+
+  /**
+   * Where an action starts: its head, the node it describes its changes from,
+   * such as the directory accepting the content it installs. A head is a
+   * starting point, not a jail; walking up is allowed, and the plate's rules
+   * decide what may change. Actions read anything and change nothing: they
+   * return images, and core carries them out. Each action's context extends
+   * this one with only its own parts, and core implements every context.
+   */
+  interface Context {
+
+    /**
+     * Returns the node the action starts from.
+     *
+     * @return the head
+     */
+    @NonNull
+    Node.Directory head();
+  }
 }

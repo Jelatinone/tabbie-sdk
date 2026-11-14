@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import cat.tabbie.sdk.form.Form;
 import cat.tabbie.sdk.model.Rule;
 import lombok.NonNull;
 
@@ -18,7 +19,8 @@ import lombok.NonNull;
  * <p>
  * Reasons are grouped by what they are about: a {@link Place place} in a tree,
  * the {@link Placement placement} of content, a {@link Change change} that
- * cannot be described, and the {@link Registry registry} of contributions.
+ * cannot be described, a shape's {@link Content content}, and the
+ * {@link Registry registry} of contributions.
  * Every reason states what went wrong as a sentence, and whether the same work
  * may succeed when it is tried again.
  */
@@ -93,7 +95,7 @@ public sealed interface Reason {
        */
       public Occupied {
         if (found instanceof State.Absent) {
-          throw new IllegalArgumentException("Something is in the way of an occupied place.");
+          throw new IllegalArgumentException("An occupied place holds something.");
         }
       }
 
@@ -190,6 +192,21 @@ public sealed interface Reason {
       @Override
       public String message() {
         return String.format("%s does not lie in %s.", address.shown(), directory.shown());
+      }
+    }
+
+    /**
+     * An image found its place in another state than it was described from,
+     * such as a file someone else edited since, so it changed nothing.
+     *
+     * @param address address of the image
+     * @param found   the state the place was in
+     */
+    record Changed(@NonNull Address address, @NonNull State found) implements Place {
+
+      @Override
+      public String message() {
+        return String.format("%s changed since it was described: it holds %s.", address.shown(), found.phrase());
       }
     }
   }
@@ -354,6 +371,124 @@ public sealed interface Reason {
       @Override
       public String message() {
         return String.format("%s cannot be a file while %s lies beneath it.", directory.canonical(), file.canonical());
+      }
+    }
+  }
+
+  /**
+   * A shape's content is not what work reads it as: not in a form, broken, of
+   * a version the form does not read, unsafe, too large, or not the bytes it
+   * declares. Each names the shape it is about.
+   */
+  sealed interface Content extends Reason {
+
+    /**
+     * Returns the shape whose content failed.
+     *
+     * @return the shape
+     */
+    @NonNull
+    Shape shape();
+
+    /**
+     * The shape is not in a form at all, such as bytes that are not JSON read
+     * as JSON.
+     *
+     * @param shape the shape read
+     * @param form  the form it was read as
+     */
+    record Unreadable(@NonNull Shape shape, @NonNull Class<? extends Form> form) implements Content {
+
+      @Override
+      public String message() {
+        return String.format("%s cannot be read as %s.", shape.address().shown(), form.getSimpleName());
+      }
+    }
+
+    /**
+     * The shape is in a form, but broken: it lacks or contradicts what the form
+     * requires.
+     *
+     * @param shape  the shape read
+     * @param form   the form it was read as
+     * @param detail what the form requires, as a sentence
+     */
+    record Malformed(@NonNull Shape shape, @NonNull Class<? extends Form> form, @NonNull String detail)
+        implements Content {
+
+      @Override
+      public String message() {
+        return String.format("%s is not a valid %s: %s", shape.address().shown(), form.getSimpleName(), detail);
+      }
+    }
+
+    /**
+     * The shape is in a form, but uses a version or feature the work cannot
+     * read.
+     *
+     * @param shape  the shape read
+     * @param form   the form it was read as
+     * @param detail what is not supported, as a sentence
+     */
+    record Unsupported(@NonNull Shape shape, @NonNull Class<? extends Form> form, @NonNull String detail)
+        implements Content {
+
+      @Override
+      public String message() {
+        return String.format("%s uses what %s does not support here: %s", shape.address().shown(),
+            form.getSimpleName(), detail);
+      }
+    }
+
+    /**
+     * An archive holds a path that is not safe to place, such as one leading
+     * outside the archive or a name that is not portable.
+     *
+     * @param shape the archive
+     * @param path  the path as the archive writes it
+     */
+    record Unsafe(@NonNull Shape shape, @NonNull String path) implements Content {
+
+      @Override
+      public String message() {
+        return String.format("%s holds an unsafe path, %s.", shape.address().shown(), path);
+      }
+    }
+
+    /**
+     * The shape's content exceeds a limit, such as an archive's entry count.
+     *
+     * @param shape the shape read
+     * @param limit the limit exceeded, as a sentence
+     */
+    record Exceeded(@NonNull Shape shape, @NonNull String limit) implements Content {
+
+      @Override
+      public String message() {
+        return String.format("%s exceeds a limit: %s", shape.address().shown(), limit);
+      }
+    }
+
+    /**
+     * The bytes read from a file do not match what is declared of them: their
+     * size, or a digest both know. It may pass when the bytes are read again,
+     * such as from another origin.
+     *
+     * @param shape    the file read
+     * @param expected what is declared of its bytes
+     * @param found    what the bytes read are
+     */
+    record Mismatch(@NonNull Shape shape, @NonNull Describe expected, @NonNull Describe found) implements Content {
+
+      @Override
+      public String message() {
+        return String.format("The bytes read from %s do not match what is declared of them.",
+            shape.address().shown());
+      }
+
+      @Override
+      public boolean retryable() {
+        return true;
       }
     }
   }

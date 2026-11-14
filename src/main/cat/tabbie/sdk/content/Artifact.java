@@ -1,46 +1,32 @@
 package cat.tabbie.sdk.content;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import cat.tabbie.sdk.catalog.Addon;
 import cat.tabbie.sdk.catalog.Coordinate;
 import cat.tabbie.sdk.catalog.Identity;
-import cat.tabbie.sdk.catalog.Product;
 import cat.tabbie.sdk.catalog.Release;
 import cat.tabbie.sdk.distribution.Distribution;
-import cat.tabbie.sdk.meta.action.Closure;
-import cat.tabbie.sdk.meta.action.Contributor;
-import cat.tabbie.sdk.meta.attribute.Region;
-import cat.tabbie.sdk.meta.registry.Contribution;
+import cat.tabbie.sdk.meta.action.Install;
 import cat.tabbie.sdk.meta.registry.Contributions;
 import cat.tabbie.sdk.meta.registry.Registrable;
-import cat.tabbie.sdk.model.Layout;
-import cat.tabbie.sdk.platform.Describe;
-import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.target.Compatibility;
 import cat.tabbie.sdk.target.Environment;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Parity;
-import cat.tabbie.sdk.target.Platform;
-import cat.tabbie.sdk.tree.Reason;
-import cat.tabbie.sdk.tree.Violation;
-import cat.tabbie.sdk.tree.World;
+import cat.tabbie.sdk.tree.Shape;
 import lombok.NonNull;
 
 /**
  * Provider-described content. How it is placed is contributed for its family
- * by {@link cat.tabbie.sdk.content.Install} methods, which capture bytes
- * from the artifact's source through the {@link Capture} of the work it is
- * installed in and describe changes without writing to the Cat's files; a
- * {@link Registry} chooses the install that applies to a target, and what a
- * distribution supports follows from them. Sources remain
- * caller-owned. File coordinates identify the exact provider-scoped payload;
- * relations name catalog coordinates at any level, matched by
+ * by {@link cat.tabbie.sdk.meta.action.Install} methods, which receive the
+ * artifact's source at their head and describe changes without writing to the
+ * Cat's files; a {@link Registry} chooses the install that applies to a
+ * target, and what a distribution supports follows from them. File
+ * coordinates identify the exact provider-scoped payload; relations name
+ * catalog coordinates at any level, matched by
  * {@link Coordinate#includes(Coordinate)}.
  */
 @Registrable(Registrable.Kind.TYPES)
@@ -83,13 +69,12 @@ public interface Artifact extends Release.Payload {
   }
 
   /**
-   * Provider-owned description of this artifact's content, captured during
-   * installation.
+   * Returns this artifact's content, as its provider declares it.
    *
-   * @return content source
+   * @return the content's file
    */
   @NonNull
-  default Describe source() {
+  default Shape.File source() {
     return details().source();
   }
 
@@ -167,7 +152,7 @@ public interface Artifact extends Release.Payload {
    *
    * @param coordinates  exact provider file coordinates
    * @param artifactName non-blank display name
-   * @param source       provider-owned content description
+   * @param source       the content's file, as its provider declares it
    * @param labels       nonempty supported targets
    * @param parity       multiplayer side parity
    * @param relations    catalog relationships, one per coordinate
@@ -175,7 +160,7 @@ public interface Artifact extends Release.Payload {
   record Details(
       @NonNull Coordinate.File coordinates,
       @NonNull String artifactName,
-      @NonNull Describe source,
+      @NonNull Shape.File source,
       @NonNull Set<Label> labels,
       @NonNull Parity parity,
       @NonNull Set<Relation> relations) {
@@ -263,71 +248,6 @@ public interface Artifact extends Release.Payload {
   }
 
   /**
-   * The work content is placed in, and the Worlds its content applies to.
-   * Where content goes is not the context's to say: an artifact finds the
-   * directory of the model accepting its type, or, when its content belongs to
-   * a World, the directory of each of the Worlds accepting it.
-   */
-  interface Context extends Work {
-
-    /**
-     * Returns the Worlds that content belonging to a World is installed into,
-     * such as those whose Collar uses it, each held by the model. A
-     * client's selected saves and a server's Worlds are alike a set of Worlds.
-     *
-     * @return immutable Worlds, empty when none applies
-     */
-    @NonNull
-    Set<World> worlds();
-
-    /**
-     * Content's context in some work, answering the work's parts from it.
-     *
-     * @param work   the work content is placed in
-     * @param worlds Worlds of the work's model that content belonging to a
-     *               World applies to
-     */
-    record Default(@NonNull Work work, @NonNull Set<World> worlds) implements Context {
-
-      /**
-       * Copies the Worlds.
-       */
-      public Default {
-        worlds = Set.copyOf(worlds);
-      }
-
-      /**
-       * Creates a context that applies to no World.
-       *
-       * @param work the work content is placed in
-       */
-      public Default(@NonNull Work work) {
-        this(work, Set.of());
-      }
-
-      @Override
-      public Label label() {
-        return work.label();
-      }
-
-      @Override
-      public Platform platform() {
-        return work.platform();
-      }
-
-      @Override
-      public Layout.Directory model() {
-        return work.model();
-      }
-
-      @Override
-      public Capture capture() {
-        return work.capture();
-      }
-    }
-  }
-
-  /**
    * Every content family the loaded modules register, and the installs they
    * contribute, against the distributions targets are named in. What a
    * distribution supports is derived from the installs: a family is supported
@@ -365,8 +285,13 @@ public interface Artifact extends Release.Payload {
         @NonNull Distribution distribution,
         @NonNull Environment environment,
         @NonNull Class<? extends Artifact> family) {
-      return applying(distribution, environment, _ -> true)
-          .anyMatch(install -> family.isAssignableFrom(install.subject()) || install.subject().isAssignableFrom(family));
+      Set<String> names = distributions.names(distribution);
+      return installs.contributions().stream()
+          .map(Contributions.Contributed::contributor)
+          .filter(install -> install.conditions().regions().stream()
+              .anyMatch(region -> region.appliesTo(names) && region.appliesTo(environment)))
+          .anyMatch(install -> family.isAssignableFrom(install.subject())
+              || install.subject().isAssignableFrom(family));
     }
 
     /**
@@ -408,116 +333,6 @@ public interface Artifact extends Release.Payload {
           && assessments.stream().allMatch(result -> result == Compatibility.SUPPORTED)
               ? Compatibility.SUPPORTED
               : Compatibility.UNKNOWN;
-    }
-
-    /**
-     * Installs an artifact on a target with no preference, as
-     * {@link #install(Artifact, Context, Set)} does.
-     *
-     * @param artifact artifact to install
-     * @param context  the work and Worlds the install draws on
-     * @return validated immutable images
-     * @throws IOException              as the install throws
-     * @throws IllegalArgumentException when no install of the artifact applies
-     *                                  to the target
-     * @throws IllegalStateException    when installs clash at the target
-     */
-    public Set<Image<?>> install(@NonNull Artifact artifact, @NonNull Context context) throws IOException {
-      return install(artifact, context, Set.of());
-    }
-
-    /**
-     * Installs an artifact on a target, through the install that wins by
-     * precedence, or by the user's preference among those precedence cannot
-     * decide between, acting where its closure says, and checks the images it
-     * describes.
-     *
-     * @param artifact  artifact to install
-     * @param context   the work and Worlds the install draws on
-     * @param preferred {@link Contributions.Contributed#identity() identities}
-     *                  of the installs the user prefers
-     * @return validated immutable images
-     * @throws IOException              as the install throws
-     * @throws IllegalArgumentException when no install of the artifact applies
-     *                                  to the target, which core rules out
-     *                                  while resolving
-     * @throws Violation                with {@link Reason.Registry.Clash} when
-     *                                  installs clash at the target and the
-     *                                  user prefers none of them, which core
-     *                                  asks about first
-     */
-    public Set<Image<?>> install(
-        @NonNull Artifact artifact,
-        @NonNull Context context,
-        @NonNull Set<String> preferred) throws IOException {
-      Label label = context.label();
-      Contributor<Class<?>, Install.Signature> install = switch (installs.choose(artifact.getClass(),
-          distributions.target(label, context.platform()), preferred)) {
-        case Contribution.Concur<Install.Signature>(var chosen) when chosen.isEmpty() ->
-            throw new IllegalArgumentException(String.format("No install of %s applies to %s.",
-                artifact.getClass().getName(), label.canonical()));
-        case Contribution.Concur<Install.Signature>(var chosen) -> chosen.getFirst().contributor();
-        case Contribution.Clash<Install.Signature> clash -> throw new Violation(new Reason.Registry.Clash(
-            clash.contributors().stream()
-                .map(Contributions.Contributed::identity)
-                .collect(Collectors.toSet())));
-      };
-      Set<Image<?>> images = install.call().install(artifact, Install.Context.of(artifact, context,
-          install.closure()));
-      Image.validate(images);
-      return Set.copyOf(images);
-    }
-
-    /**
-     * Checks a release's layout places what every install applying to the
-     * release places, where the install's closure says it acts: an install
-     * acting at the root needs its subject accepted in exactly one directory,
-     * and one acting in namespaces needs Worlds accepted in exactly one, where
-     * core mounts each World's namespace. An install applies to the release
-     * when one of its regions applies to its distribution and environment,
-     * and to the version of one of its labels, on some platform. The layout
-     * may accept more, for content installed anyway.
-     *
-     * @param build release to check
-     * @throws IllegalArgumentException when an applying install's subject, or
-     *                                  Worlds, have no accepting directory or
-     *                                  several
-     */
-    public void check(@NonNull Product.Build build) {
-      List<Contributor<Class<?>, Install.Signature>> applying = applying(build.distribution(), build.environment(),
-          region -> build.labels().stream().anyMatch(label -> region.versions().appliesTo(label.version())))
-          .toList();
-      applying.stream()
-          .filter(install -> install.closure() == Closure.ROOT)
-          .filter(install -> build.layout().find(install.subject()).directories().size() != 1)
-          .findFirst()
-          .ifPresent(install -> {
-            throw new IllegalArgumentException(String.format("%s installs %s at its root, so its layout accepts it "
-                + "in exactly one directory.", build.coordinates().canonical(), install.subject().getName()));
-          });
-      applying.stream()
-          .filter(install -> install.closure() == Closure.NAMESPACES)
-          .filter(install -> build.layout().find(World.class).directories().size() != 1)
-          .findFirst()
-          .ifPresent(install -> {
-            throw new IllegalArgumentException(String.format("%s installs %s in Worlds, so its layout accepts "
-                + "Worlds in exactly one directory.", build.coordinates().canonical(), install.subject().getName()));
-          });
-    }
-
-    /**
-     * Installs with a region applying to a distribution in an environment,
-     * on any platform, at versions the region's own test accepts.
-     */
-    private Stream<Contributor<Class<?>, Install.Signature>> applying(
-        Distribution distribution,
-        Environment environment,
-        Predicate<Region> versions) {
-      Set<String> names = distributions.names(distribution);
-      return installs.contributions().stream()
-          .map(Contributions.Contributed::contributor)
-          .filter(install -> install.conditions().regions().stream()
-              .anyMatch(region -> region.appliesTo(names) && region.appliesTo(environment) && versions.test(region)));
     }
   }
 }

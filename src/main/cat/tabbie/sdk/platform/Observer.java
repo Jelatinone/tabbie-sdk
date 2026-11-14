@@ -1,101 +1,111 @@
 package cat.tabbie.sdk.platform;
 
 import java.util.Locale;
+import java.util.OptionalLong;
 
+import cat.tabbie.sdk.tree.Reason;
 import lombok.NonNull;
 
 /**
- * Callbacks reporting the progress and outcome of one observed operation, such
- * as a content capture. Every callback defaults to doing nothing, so observers
- * override only what they need. Callbacks run on the operation's thread and
- * must not throw.
- *
- * <p>
- * An operation that takes an observer directly reports its own shapes to it.
- * Intermediate steps report to their context's observer instead, which accepts
- * any {@link Renderable} report, since every step in the work shares it.
- *
- * @param <Observe>  verified outcome type
- * @param <Transfer> progress report type
+ * The one sink for what happens while work is carried out: the progress of a
+ * transfer or an extraction, and failures. Steps report through the observer
+ * their plate gives them, and the shapes core builds for that plate report
+ * their reads to it. The command line passes one that prints each event.
  */
-public interface Observer<Observe, Transfer> {
+@FunctionalInterface
+public interface Observer {
 
   /**
-   * Observer that discards every notification.
+   * An observer that ignores every event.
    */
-  @SuppressWarnings("rawtypes")
-  Observer NONE = new Observer<>() {
+  Observer NONE = event -> {
   };
 
   /**
-   * Returns the observer that discards every notification, typed for the
-   * caller.
+   * Receives one event.
    *
-   * @param <Observe>  verified outcome type
-   * @param <Transfer> progress report type
-   * @return shared discarding observer
+   * @param event what happened
    */
-  @SuppressWarnings("unchecked")
-  static <Observe, Transfer> Observer<Observe, Transfer> none() {
-    return (Observer<Observe, Transfer>) NONE;
-  }
+  void observe(@NonNull Event event);
 
   /**
-   * Observes in-progress transfer statistics.
-   *
-   * @param transfer transfer state
+   * Something that happened, which renders itself for a person.
    */
-  default void transfer(Transfer transfer) {
-  }
-
-  /**
-   * Observes a failed operation, such as a capture whose verification failed.
-   * The failure is still thrown to the caller.
-   *
-   * @param failure failure ending the operation
-   */
-  default void failed(Exception failure) {
-  }
-
-  /**
-   * Observes a completed and verified operation.
-   *
-   * @param observe verified outcome
-   */
-  default void verified(Observe observe) {
-  }
-
-  /**
-   * A report any observer can show without knowing its shape. An observer
-   * that knows a reporter's own record type may match on it for the full
-   * shape. Reports carry no timing; whoever runs the work times its steps.
-   */
-  interface Renderable {
+  sealed interface Event permits Progress, Failure {
 
     /**
-     * Renders this report as one line.
+     * Renders the event as one line for a person.
      *
-     * @return human-readable report
+     * @return the rendered line
      */
     @NonNull
     String render();
   }
 
   /**
-   * Unit a report counts its progress in, such as the bytes of a transfer or
-   * the entries of an archive.
+   * How far work on a subject has come, counted in a unit.
+   *
+   * @param subject   what the work is on, such as a file's address
+   * @param completed how much is done
+   * @param total     how much there is, or empty when it is not known
+   * @param unit      what is counted
    */
-  enum Operand {
+  record Progress(
+      @NonNull String subject,
+      long completed,
+      @NonNull OptionalLong total,
+      @NonNull Unit unit) implements Event {
 
     /**
-     * Bytes, in the largest binary unit that keeps the count at least one,
-     * such as {@code 3.2 MiB}.
+     * Checks the counts.
+     *
+     * @throws IllegalArgumentException when a count is negative
+     */
+    public Progress {
+      if (completed < 0 || total.isPresent() && total.getAsLong() < 0) {
+        throw new IllegalArgumentException("Progress counts are not negative.");
+      }
+    }
+
+    @Override
+    public String render() {
+      String done = unit.render(completed);
+      if (total.isEmpty() || total.getAsLong() == completed) {
+        return String.format("%s  %s", subject, done);
+      }
+      long whole = total.getAsLong();
+      return String.format(Locale.ROOT, "%s  %s of %s (%d%%)", subject, done, unit.render(whole),
+          whole == 0 ? 100 : completed * 100 / whole);
+    }
+  }
+
+  /**
+   * Work on a subject that failed.
+   *
+   * @param subject what the work was on
+   * @param reason  why it failed
+   */
+  record Failure(@NonNull String subject, @NonNull Reason reason) implements Event {
+
+    @Override
+    public String render() {
+      return String.format("%s  %s", subject, reason.message());
+    }
+  }
+
+  /**
+   * What progress counts.
+   */
+  enum Unit {
+
+    /**
+     * Bytes, rendered in binary multiples.
      */
     BYTE {
       @Override
       public String render(long count) {
         if (count < 1024) {
-          return count + " B";
+          return String.format(Locale.ROOT, "%d B", count);
         }
         int exponent = (63 - Long.numberOfLeadingZeros(count)) / 10;
         return String.format(Locale.ROOT, "%.1f %ciB", count / Math.pow(1024, exponent), "KMGTPE".charAt(exponent - 1));
@@ -103,7 +113,7 @@ public interface Observer<Observe, Transfer> {
     },
 
     /**
-     * Central-directory entries, files and directories alike.
+     * Archive entries.
      */
     ENTRY {
       @Override
@@ -123,10 +133,10 @@ public interface Observer<Observe, Transfer> {
     };
 
     /**
-     * Renders a count in this unit.
+     * Renders a count of this unit.
      *
-     * @param count count to render
-     * @return human-readable count
+     * @param count how many
+     * @return the rendered count
      */
     public abstract String render(long count);
   }
