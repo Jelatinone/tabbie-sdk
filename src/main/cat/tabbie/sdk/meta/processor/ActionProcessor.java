@@ -37,13 +37,15 @@ import lombok.experimental.FieldDefaults;
  * different places, where each acts, {@code Closure value()}; without one,
  * every contribution acts in the root. Its {@link Action} names its signature:
  * a functional interface whose one method takes the subject, then the
- * action's context.
+ * action's context, or, for an action acting on types, only its context.
  *
  * <p>
  * Each method carrying an action is public and has its action's signature:
  * an instance method takes the context and acts on the type declaring it,
  * naming no subject; a static one takes the type it acts on, then the
- * context. Either returns what the signature returns, and throws nothing more.
+ * context. A contribution to an action acting on types is static and takes
+ * only the context, acting on the type declaring it or on the subject it
+ * names. Each returns what the signature returns, and throws nothing more.
  * The type it acts on is one the signature takes, and it and the type
  * declaring the method are public, as is every type enclosing them, so the
  * registry reaches the method through the module's lookup. The contributions
@@ -132,10 +134,10 @@ public final class ActionProcessor extends Processor {
         .filter(key -> !elements.containsKey(key))
         .ifPresent(key -> error(action, "@%s is keyed by %s(), so it declares that element.", action.getSimpleName(),
             key));
-    if (signature(action).flatMap(ActionProcessor::method).filter(shape -> shape.getParameters().size() == 2)
-        .isEmpty()) {
+    if (signature(action).flatMap(ActionProcessor::method).filter(ActionProcessor::shaped).isEmpty()) {
       error(action, "@%s is an action, so its signature is a functional interface whose one method takes the "
-          + "subject it acts on, then its context.", action.getSimpleName());
+          + "subject it acts on, then its context, or only its context for an action acting on types.",
+          action.getSimpleName());
     }
   }
 
@@ -146,7 +148,7 @@ public final class ActionProcessor extends Processor {
   private void signed(ExecutableElement method, AnnotationMirror action, TypeElement subject) {
     Optional<ExecutableElement> found = signature((TypeElement) action.getAnnotationType().asElement())
         .flatMap(ActionProcessor::method)
-        .filter(shape -> shape.getParameters().size() == 2);
+        .filter(ActionProcessor::shaped);
     if (found.isEmpty()) {
       // A malformed action is reported where it is declared
       return;
@@ -158,20 +160,26 @@ public final class ActionProcessor extends Processor {
     TypeMirror context = shape.getParameters().getLast().asType();
     TypeElement declaring = (TypeElement) method.getEnclosingElement();
     boolean statical = method.getModifiers().contains(Modifier.STATIC);
+    // An action acting on types has a signature taking only its context
+    boolean typed = shape.getParameters().size() == 1;
     List<? extends VariableElement> parameters = method.getParameters();
-    if (!statical && action.getElementValues().keySet().stream()
+    if (typed && !statical) {
+      error(method, "%s contributes to %s, which acts on types, so it is static and takes only its %s.", name,
+          written, name(context));
+    } else if (!statical && action.getElementValues().keySet().stream()
         .anyMatch(element -> element.getSimpleName().contentEquals("subject"))) {
       error(method, "%s is an instance method, so it acts on the type declaring it and names no subject.", name);
-    } else if (!types.isAssignable(types.erasure(subject.asType()), types.erasure(takes))) {
+    } else if (!typed && !types.isAssignable(types.erasure(subject.asType()), types.erasure(takes))) {
       error(method, "%s acts on %s, but %s acts only on %s.", name, subject.getQualifiedName(), written, name(takes));
     } else if (!exposed(declaring) || !exposed(subject)) {
       error(method, "%s is a contribution, so %s are public: the registry calls it.", name, declaring.equals(subject)
           ? String.format("%s and every type enclosing it", declaring.getQualifiedName())
           : String.format("%s, %s, and every type enclosing them", declaring.getQualifiedName(),
               subject.getQualifiedName()));
-    } else if (!statical && (parameters.size() != 1 || !types.isSameType(parameters.getFirst().asType(), context))) {
+    } else if ((typed || !statical)
+        && (parameters.size() != 1 || !types.isSameType(parameters.getFirst().asType(), context))) {
       error(method, "%s takes its %s, and nothing else.", name, name(context));
-    } else if (statical && (parameters.size() != 2
+    } else if (!typed && statical && (parameters.size() != 2
         || !types.isSameType(types.erasure(parameters.getFirst().asType()), types.erasure(subject.asType()))
         || !types.isSameType(parameters.getLast().asType(), context))) {
       error(method, "%s is static, so it takes the %s it acts on, then its %s, and nothing else.", name,
@@ -187,6 +195,14 @@ public final class ActionProcessor extends Processor {
           .findFirst()
           .ifPresent(thrown -> error(method, "%s throws %s, which %s does not.", name, name(thrown), written));
     }
+  }
+
+  /**
+   * Whether a signature's method has an action's shape: the subject, then the
+   * context, or the context alone for an action acting on types.
+   */
+  private static boolean shaped(ExecutableElement shape) {
+    return shape.getParameters().size() == 1 || shape.getParameters().size() == 2;
   }
 
   /**

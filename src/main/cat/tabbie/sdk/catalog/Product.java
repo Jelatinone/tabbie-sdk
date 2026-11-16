@@ -6,11 +6,9 @@ import java.util.Set;
 
 import cat.tabbie.sdk.distribution.Distributable;
 import cat.tabbie.sdk.distribution.Distribution;
-import cat.tabbie.sdk.model.Layout;
 import cat.tabbie.sdk.platform.Package;
 import cat.tabbie.sdk.target.Environment;
 import cat.tabbie.sdk.target.Label;
-import cat.tabbie.sdk.tree.Namespace;
 import lombok.NonNull;
 
 /**
@@ -110,22 +108,15 @@ public interface Product {
   }
 
   /**
-   * A published release of one distribution: its distributables; the system
-   * packages they require; every target it serves; and the layout of a Cat
-   * running it, as its provider declares it. A release serves one
-   * environment, so a client build and a server build of a distribution are
-   * separate releases, on channels of their own. The release's content is the
-   * same whichever of its targets a Cat selects, so one layout serves them
-   * all. Where content goes can change between releases, so a Cat moving to
-   * another release mounts that release's layout instead.
-   *
-   * <p>
-   * A layout cannot name a Cat's namespaces, such as its Worlds, since they
-   * are named by the Cat and there may be many. It declares the directory
-   * that accepts {@link Namespace namespaces} instead, where core mounts each
-   * namespace's own layout. Whether the layout places everything the
-   * distribution supports depends on the contributors core has loaded, so the
-   * {@link cat.tabbie.sdk.Registry#check(Product.Build) registry checks} it.
+   * A published release of one distribution: its distributables, the system
+   * packages they require, and every target it serves, as its provider
+   * declares them. A release serves one environment, so a client build and a
+   * server build of a distribution are separate releases, on channels of their
+   * own. Where its content goes is not the release's to say: the
+   * {@link cat.tabbie.sdk.meta.action.Place places} applying to its targets
+   * say it, by version, and the
+   * {@link cat.tabbie.sdk.Registry#check(Product.Build) registry checks} they
+   * place everything the release holds and its contributors act on.
    *
    * @param coordinates   exact release coordinates
    * @param releaseName   non-blank display name
@@ -137,8 +128,6 @@ public interface Product {
    * @param distribution  distribution the release is for
    * @param labels        nonempty targets the release serves, such as every
    *                      game version it runs, all of one environment
-   * @param layout        layout of a Cat running this release, declared from
-   *                      the root
    */
   record Build(
       @NonNull Coordinate.Build coordinates,
@@ -148,27 +137,21 @@ public interface Product {
       @NonNull Set<Distributable> content,
       @NonNull Set<Package> packages,
       @NonNull Distribution distribution,
-      @NonNull Set<Label> labels,
-      @NonNull Layout.Directory layout) implements Release<Distributable> {
+      @NonNull Set<Label> labels) implements Release<Distributable> {
 
     /**
      * Copies the distributables, packages and labels, then checks shared
      * release invariants, that every distributable is a distinct file of this
      * release, that the labels are of its distribution and of one environment,
-     * that the distributables serve exactly the labels, and so only its
-     * distribution, that the layout is declared from the root, and that it
-     * accepts each distributable in exactly one directory, where the
-     * distributable installs and {@link Distributable#location} finds it.
+     * and that the distributables serve exactly the labels, and so only its
+     * distribution.
      *
      * @throws IllegalArgumentException when publication invariants are
      *                                  violated, no label is given, a label is
      *                                  of another distribution or environment,
      *                                  a distributable serves a target that is
-     *                                  not a label, a label is served by no
-     *                                  distributable, the layout is not
-     *                                  declared from the root, or a
-     *                                  distributable has no accepting directory
-     *                                  or several
+     *                                  not a label, or a label is served by no
+     *                                  distributable
      */
     public Build {
       content = Set.copyOf(content);
@@ -196,13 +179,6 @@ public interface Product {
       if (served.stream().anyMatch(label -> distributables.stream()
           .noneMatch(distributable -> distributable.labels().stream().anyMatch(label::match)))) {
         throw new IllegalArgumentException("Every label of a release must be served by one of its distributables.");
-      }
-      if (!layout.address().isRoot()) {
-        throw new IllegalArgumentException("A layout is declared from the root.");
-      }
-      if (distributables.stream().anyMatch(distributable -> layout.find(distributable.getClass()).directories().size() != 1)) {
-        throw new IllegalArgumentException("Every distributable of a release needs exactly one directory of its layout "
-            + "accepting it.");
       }
     }
 

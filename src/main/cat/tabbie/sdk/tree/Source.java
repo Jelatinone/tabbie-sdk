@@ -3,8 +3,8 @@ package cat.tabbie.sdk.tree;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.Set;
 
-import cat.tabbie.sdk.model.Rule;
 import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
@@ -18,6 +18,16 @@ import lombok.experimental.NonFinal;
  * endpoints, and directories of sources, join in phase 6.
  */
 public sealed interface Source extends Shape permits Source.File {
+
+  /**
+   * Returns what a source allows: reading alone.
+   *
+   * @return {@link Rule.Permission#READABLE}
+   */
+  @Override
+  default Set<Rule.Permission> permissions() {
+    return Set.of(Rule.Permission.READABLE);
+  }
 
   /**
    * Declares bytes held in memory.

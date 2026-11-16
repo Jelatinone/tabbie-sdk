@@ -1,5 +1,6 @@
 package cat.tabbie.sdk.meta.registry;
 
+import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -249,14 +250,32 @@ public record Contributions<Call>(
   }
 
   /**
-   * A contributor the registry read, and the module declaring it, which
-   * decides it over another as wide when it reads the other's module.
+   * A contributor the registry read, the module declaring it, which decides
+   * it over another as wide when it reads the other's module, and the action
+   * as its method carries it, for what only that action declares, such as a
+   * place's permissions.
    *
    * @param <Call>      the action's signature
    * @param module      module declaring the contributor's method
+   * @param action      the action, as the method carries it
    * @param contributor the contributor
    */
-  public record Contributed<Call>(@NonNull Module module, @NonNull Contributor<Class<?>, Call> contributor) {
+  public record Contributed<Call>(
+      @NonNull Module module,
+      @NonNull Annotation action,
+      @NonNull Contributor<Class<?>, Call> contributor) {
+
+    /**
+     * Returns the action as its method carries it, as the annotation it is.
+     *
+     * @param <Marked> the action's annotation
+     * @param type     the action's annotation type
+     * @return the action, such as a {@code Place} to read its permissions
+     * @throws ClassCastException when the action is another
+     */
+    public <Marked extends Annotation> Marked action(@NonNull Class<Marked> type) {
+      return type.cast(action);
+    }
 
     /**
      * Names where the contributor comes from, as core shows it.
@@ -273,7 +292,7 @@ public record Contributions<Call>(
      * it comes from, and the method as written.
      *
      * @return such as
-     *         {@code cat.tabbie.extensions/Mod.installRoot(Install.Context)}
+     *         {@code cat.tabbie.extensions/Mod.install(Install.Context)}
      */
     public String identity() {
       return String.format("%s/%s", origin(), contributor.name());
@@ -282,7 +301,7 @@ public record Contributions<Call>(
     /**
      * Names the contributor and where it comes from, as core shows it.
      *
-     * @return such as {@code Mod.installRoot(Install.Context), from
+     * @return such as {@code Mod.install(Install.Context), from
      *         cat.tabbie.extensions}
      */
     public String describe() {

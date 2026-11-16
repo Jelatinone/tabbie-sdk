@@ -3,6 +3,7 @@ package cat.tabbie.sdk.content;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import cat.tabbie.sdk.catalog.Addon;
 import cat.tabbie.sdk.catalog.Coordinate;
@@ -10,6 +11,7 @@ import cat.tabbie.sdk.catalog.Identity;
 import cat.tabbie.sdk.catalog.Release;
 import cat.tabbie.sdk.distribution.Distribution;
 import cat.tabbie.sdk.meta.action.Install;
+import cat.tabbie.sdk.meta.action.Place;
 import cat.tabbie.sdk.meta.registry.Contributions;
 import cat.tabbie.sdk.meta.registry.Registrable;
 import cat.tabbie.sdk.target.Compatibility;
@@ -146,8 +148,8 @@ public interface Artifact extends Release.Payload {
   /**
    * What every content family declares about an artifact, as its provider
    * describes it. Whether a declared target supports the artifact's family
-   * depends on the installs core has loaded, so it is not checked here: core
-   * decides it while resolving, through
+   * depends on the installs and places core has loaded, so it is not checked
+   * here: core decides it while resolving, through
    * {@link Registry#compatibility(Artifact, Label)}.
    *
    * @param coordinates  exact provider file coordinates
@@ -248,20 +250,23 @@ public interface Artifact extends Release.Payload {
   }
 
   /**
-   * Every content family the loaded modules register, and the installs they
-   * contribute, against the distributions targets are named in. What a
-   * distribution supports is derived from the installs: a family is supported
-   * where one of its installs applies.
+   * Every content family the loaded modules register, and the installs and
+   * places they contribute, against the distributions targets are named in.
+   * What a distribution supports is derived from them: a family is supported
+   * where one of its installs and one of its places apply.
    *
    * @param distributions the distributions targets are named in
    * @param families      every registered content family
    * @param installs      every contributed install, and the precedence
    *                      between them
+   * @param places        every contributed place, and the precedence between
+   *                      them
    */
   record Registry(
       @NonNull Distribution.Registry distributions,
       @NonNull Set<Class<? extends Artifact>> families,
-      @NonNull Contributions<Install.Signature> installs) {
+      @NonNull Contributions<Install.Signature> installs,
+      @NonNull Contributions<Place.Signature> places) {
 
     /**
      * Copies the families.
@@ -272,9 +277,9 @@ public interface Artifact extends Release.Payload {
 
     /**
      * Whether a distribution supports a family in an environment: whether an
-     * install of the family applies to the distribution there, in some
-     * version on some platform. Which install would be chosen does not matter
-     * here, only that one applies.
+     * install and a place of the family both apply to the distribution there,
+     * in some version on some platform. Which would be chosen does not matter
+     * here, only that one of each applies.
      *
      * @param distribution distribution of a target
      * @param environment  environment of the target
@@ -286,19 +291,19 @@ public interface Artifact extends Release.Payload {
         @NonNull Environment environment,
         @NonNull Class<? extends Artifact> family) {
       Set<String> names = distributions.names(distribution);
-      return installs.contributions().stream()
+      return Stream.of(installs, places).allMatch(contributions -> contributions.contributions().stream()
           .map(Contributions.Contributed::contributor)
-          .filter(install -> install.conditions().regions().stream()
+          .filter(contributor -> contributor.conditions().regions().stream()
               .anyMatch(region -> region.appliesTo(names) && region.appliesTo(environment)))
-          .anyMatch(install -> family.isAssignableFrom(install.subject())
-              || install.subject().isAssignableFrom(family));
+          .anyMatch(contributor -> family.isAssignableFrom(contributor.subject())
+              || contributor.subject().isAssignableFrom(family)));
     }
 
     /**
-     * Assesses an artifact against a target: unsupported when no install of
-     * its family applies to the target's distribution there, supported when
-     * the artifact also declares the target, and unknown otherwise. No
-     * compatibility between runtime forks is inferred.
+     * Assesses an artifact against a target: unsupported when the target's
+     * distribution does not {@link #supports support} its family there,
+     * supported when the artifact also declares the target, and unknown
+     * otherwise. No compatibility between runtime forks is inferred.
      *
      * @param artifact artifact to assess
      * @param target   target to assess it against

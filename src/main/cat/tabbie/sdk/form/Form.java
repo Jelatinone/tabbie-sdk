@@ -13,7 +13,8 @@ import lombok.experimental.FieldDefaults;
  * One shape read in a format, such as a file read as JSON or an archive read
  * as the entries it holds. A form is made from its shape by a {@link Factory},
  * through {@link Shape#as(Factory)}, and stays bound to it: chaining is the
- * norm, as in {@code source.as(Zip::of).file("manifest.json").as(Json::of)}.
+ * norm, as in
+ * {@code source.as(Archive::of).file("manifest.json").as(Json::of)}.
  * Making a form reads only what it needs to know the shape is in its format,
  * and refuses with a {@link Refusal} whose {@link Reason.Content} names the
  * shape and the form: {@link Reason.Content.Unreadable} when the shape is not

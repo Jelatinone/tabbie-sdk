@@ -7,7 +7,7 @@ import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
 
 /**
- * Thrown when work describes something a tree, a layout, an image or the
+ * Thrown when work describes something a tree, its rules, an image or the
  * registry does not hold or allow. It is found while work describes its
  * changes, before any of them is carried out, so nothing has changed.
  * {@link #reason()} says why. It is the description-time counterpart of a

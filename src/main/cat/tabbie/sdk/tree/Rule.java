@@ -1,24 +1,27 @@
-package cat.tabbie.sdk.model;
+package cat.tabbie.sdk.tree;
 
 import java.util.Set;
 
 import lombok.NonNull;
 
 /**
- * What a {@link Layout} allows at a place it declares. Rules compose: a
- * declaration holds any set of them, and an operation is allowed only when
- * every rule it needs holds there. Only layouts hold rules: a
- * {@link cat.tabbie.sdk.tree.Node Node} holds none, and a plate checks its
- * model's rules when it carries a change out. A place declared without
+ * What a place allows and accepts. A {@link Node} reports the rules declared
+ * at its place, which core composes from the
+ * {@link cat.tabbie.sdk.meta.action.Base @Base} and
+ * {@link cat.tabbie.sdk.meta.action.Place @Place} contributions applying to a
+ * Cat: the root holds the permissions its base gives, and each placed
+ * directory accepts its subject and holds the permissions its place writes.
+ * Rules compose: a place holds any set of them, and an operation is allowed
+ * only when every permission it needs holds there. A place declaring no
  * permissions, or not declared at all, such as a mod in {@code mods}, follows
- * the permissions of the directory above it, but never takes what that
- * directory accepts.
+ * the permissions of the place above it, but never takes what that place
+ * accepts.
  */
 public sealed interface Rule permits Rule.Permission, Rule.Accepts {
 
   /**
-   * An operation permitted at a declared place, and beneath it wherever
-   * nothing declares other permissions.
+   * An operation permitted at a place, and beneath it wherever nothing
+   * declares other permissions.
    */
   enum Permission implements Rule {
 

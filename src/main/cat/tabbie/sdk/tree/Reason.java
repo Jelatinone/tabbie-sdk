@@ -1,11 +1,11 @@
 package cat.tabbie.sdk.tree;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.form.Form;
-import cat.tabbie.sdk.model.Rule;
 import lombok.NonNull;
 
 /**
@@ -61,7 +61,7 @@ public sealed interface Reason {
 
     /**
      * Nothing is at an address that work requires something at: nothing
-     * exists there, or, in a layout, nothing is declared there.
+     * exists there.
      *
      * @param address the first address on the way that holds nothing
      */
@@ -118,22 +118,8 @@ public sealed interface Reason {
     }
 
     /**
-     * An address leads beneath a file, where nothing can lie.
-     *
-     * @param address address of the file
-     * @param name    the name beneath it
-     */
-    record Beneath(@NonNull Address address, @NonNull String name) implements Place {
-
-      @Override
-      public String message() {
-        return String.format("Nothing can lie beneath the file %s, such as %s.", address.shown(), name);
-      }
-    }
-
-    /**
-     * A permission work needs does not hold at a place, by what the layout
-     * declares there.
+     * A permission work needs does not hold at a place, by the rules that
+     * hold there.
      *
      * @param address    address of the work
      * @param permission permission it needs
@@ -142,7 +128,7 @@ public sealed interface Reason {
 
       @Override
       public String message() {
-        return String.format("The layout does not make %s %s.", address.shown(), permission);
+        return String.format("%s is not %s.", address.shown(), permission.name().toLowerCase(Locale.ROOT));
       }
     }
 
@@ -225,7 +211,7 @@ public sealed interface Reason {
     Class<?> type();
 
     /**
-     * Content is placed where the layout does not accept its type.
+     * Content is placed where no rule accepts its type.
      *
      * @param address address of the placement
      * @param type    type of the content
@@ -234,13 +220,12 @@ public sealed interface Reason {
 
       @Override
       public String message() {
-        return String.format("The layout does not accept %s at %s.", type.getSimpleName(), address.shown());
+        return String.format("Nothing at %s accepts %s.", address.shown(), type.getSimpleName());
       }
     }
 
     /**
-     * No declared directory accepts content of a type, so there is nowhere to
-     * place it.
+     * No place accepts content of a type, so there is nowhere to put it.
      *
      * @param type type of the content
      */
@@ -248,13 +233,13 @@ public sealed interface Reason {
 
       @Override
       public String message() {
-        return String.format("The layout declares no directory accepting %s.", type.getSimpleName());
+        return String.format("No place accepts %s.", type.getSimpleName());
       }
     }
 
     /**
-     * Several declared directories accept content of a type, where the work
-     * placing it required exactly one.
+     * Several places accept content of a type, where the work placing it
+     * required exactly one.
      *
      * @param type      type of the content
      * @param addresses immutable addresses of the accepting directories, in
@@ -271,7 +256,7 @@ public sealed interface Reason {
 
       @Override
       public String message() {
-        return String.format("The layout declares several directories accepting %s: %s.",
+        return String.format("Several places accept %s: %s.",
             type.getSimpleName(),
             addresses.stream()
                 .map(Address::shown)

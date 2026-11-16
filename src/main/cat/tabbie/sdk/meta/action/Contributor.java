@@ -31,7 +31,7 @@ import lombok.NonNull;
  * @param <Call>     how the method is held: its element while compiling, its
  *                   action's signature calling it once loaded
  * @param name       the method as written, with the type declaring it, such as
- *                   {@code Mod.installRoot(Install.Context)}
+ *                   {@code Mod.install(Install.Context)}
  * @param subject    the type it acts on
  * @param conditions the targets it applies to
  * @param closure    where it acts

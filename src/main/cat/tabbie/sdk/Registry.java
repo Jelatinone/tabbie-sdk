@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -21,9 +22,9 @@ import cat.tabbie.sdk.catalog.Product;
 import cat.tabbie.sdk.content.Artifact;
 import cat.tabbie.sdk.distribution.Distribution;
 import cat.tabbie.sdk.meta.action.Action;
-import cat.tabbie.sdk.meta.action.Closure;
 import cat.tabbie.sdk.meta.action.Contributor;
 import cat.tabbie.sdk.meta.action.Install;
+import cat.tabbie.sdk.meta.action.Place;
 import cat.tabbie.sdk.meta.registry.Contribution;
 import cat.tabbie.sdk.meta.registry.Contributions;
 import cat.tabbie.sdk.meta.registry.Registered;
@@ -50,7 +51,7 @@ import lombok.NonNull;
  * {@link #replacements() replacements}, so core can show which module changes
  * what, and {@link #clashes() clashes}, so core can ask the user which
  * contributor to prefer, and {@link #check(Product.Build) checks} a release
- * gives every contributor declaring where it acts a place to act.
+ * places everything its contributors act on.
  *
  * @param registrations registrations, in the order they were found
  * @param distributions every registered distribution and group of them
@@ -121,7 +122,8 @@ public record Registry(
         .<Class<? extends Artifact>>map(family -> family.asSubclass(Artifact.class))
         .collect(Collectors.toCollection(LinkedHashSet::new));
     return new Registry(registrations, vocabulary, actions, new Artifact.Registry(vocabulary, families,
-        contributions(actions, vocabulary, Install.class, Install.Signature.class)));
+        contributions(actions, vocabulary, Install.class, Install.Signature.class),
+        contributions(actions, vocabulary, Place.class, Place.Signature.class)));
   }
 
   /**
@@ -172,8 +174,11 @@ public record Registry(
    * does before calling it: among the contributors whose conditions apply to
    * the target, the one that wins by precedence, or by the user's preference
    * among those precedence cannot decide between. It serves every action
-   * alike, such as {@code choose(Install.class, Install.Signature.class,
-   * artifact.getClass(), label, platform, preferred)}.
+   * alike: core installs an artifact by
+   * {@code choose(Install.class, Install.Signature.class, artifact.getClass(),
+   * label, platform).contributor().call().install(artifact, context)}, and
+   * reads a place's permissions from the chosen contribution's
+   * {@link Contributions.Contributed#action(Class) action}.
    *
    * @param <Call>    the action's signature
    * @param action    the action's annotation
@@ -183,7 +188,7 @@ public record Registry(
    * @param platform  the target's platform
    * @param preferred {@link Contributions.Contributed#identity() identities}
    *                  of the contributors the user prefers
-   * @return the chosen contributor, ready to call
+   * @return the chosen contribution, its contributor ready to call
    * @throws IllegalArgumentException when the annotation is not an action of
    *                                  that signature, or no contributor of it
    *                                  applies to the subject at the target
@@ -191,7 +196,7 @@ public record Registry(
    *                                  contributors clash at the target and the
    *                                  user prefers none of them
    */
-  public <Call> Contributor<Class<?>, Call> choose(
+  public <Call> Contributions.Contributed<Call> choose(
       @NonNull Class<? extends Annotation> action,
       @NonNull Class<Call> signature,
       @NonNull Class<?> subject,
@@ -203,7 +208,7 @@ public record Registry(
       case Contribution.Concur<Call>(var chosen) when chosen.isEmpty() ->
           throw new IllegalArgumentException(String.format("No @%s contributor for %s applies to %s.",
               action.getSimpleName(), subject.getName(), label.canonical()));
-      case Contribution.Concur<Call>(var chosen) -> chosen.getFirst().contributor();
+      case Contribution.Concur<Call>(var chosen) -> chosen.getFirst();
       case Contribution.Clash<Call> clash -> throw new Violation(new Reason.Registry.Clash(
           clash.contributors().stream()
               .map(Contributions.Contributed::identity)
@@ -222,11 +227,11 @@ public record Registry(
    * @param subject   the type the contributor acts on, or a subtype of it
    * @param label     the target's label
    * @param platform  the target's platform
-   * @return the chosen contributor, ready to call
+   * @return the chosen contribution, its contributor ready to call
    * @throws IllegalArgumentException as the full form throws
    * @throws Violation                as the full form throws
    */
-  public <Call> Contributor<Class<?>, Call> choose(
+  public <Call> Contributions.Contributed<Call> choose(
       @NonNull Class<? extends Annotation> action,
       @NonNull Class<Call> signature,
       @NonNull Class<?> subject,
@@ -236,38 +241,53 @@ public record Registry(
   }
 
   /**
-   * Checks a release's layout gives every contributor applying to the release
-   * a place to act, for every action that
-   * {@link Closure#declaredBy(Class) declares where it acts}: the layout
-   * accepts what the contributor's closure
-   * {@link Closure#accepted(Class) needs} in exactly one directory, its
-   * subject at the root or namespaces beneath it. A contributor applies to the
+   * Checks a release places everything its contributors act on: for every
+   * contributor of every action applying to the release, a {@link Place}
+   * applies for its subject and for what its closure
+   * {@link cat.tabbie.sdk.meta.action.Closure#beneath() acts beneath}, and a
+   * place applies for every distributable of the release. A distribution is
+   * the Cat's root itself, so it needs no place. A contributor applies to the
    * release when one of its regions applies to the release's distribution and
-   * environment, and to the version of one of its labels, on some platform.
-   * The layout may accept more, for content placed anyway.
+   * environment, and to the version of one of its labels, on some platform;
+   * a place for a type serves its subtypes too. Which of several applying
+   * places is chosen is precedence's to say, not this check's.
    *
    * @param build release to check
-   * @throws IllegalArgumentException when what an applying contributor's
-   *                                  closure needs has no accepting directory,
-   *                                  or several
+   * @throws IllegalArgumentException when something a contributor acts on, or
+   *                                  a distributable, has no applying place
    */
   public void check(@NonNull Product.Build build) {
     Set<String> names = distributions.names(build.distribution());
-    actions.entrySet().stream()
-        .filter(action -> Closure.declaredBy(action.getKey()))
-        .forEach(action -> action.getValue().contributions().stream()
-            .map(Contributions.Contributed::contributor)
-            .filter(contributor -> contributor.conditions().regions().stream()
-                .anyMatch(region -> region.appliesTo(names) && region.appliesTo(build.environment())
-                    && build.labels().stream().anyMatch(label -> region.versions().appliesTo(label.version()))))
-            .filter(contributor -> build.layout().find(contributor.closure().accepted(contributor.subject()))
-                .directories().size() != 1)
+    Predicate<Contributor<Class<?>, ?>> applying = contributor -> contributor.conditions().regions().stream()
+        .anyMatch(region -> region.appliesTo(names) && region.appliesTo(build.environment())
+            && build.labels().stream().anyMatch(label -> region.versions().appliesTo(label.version())));
+    List<Class<?>> placed = contributions(Place.class, Place.Signature.class).contributions().stream()
+        .map(Contributions.Contributed::contributor)
+        .filter(applying)
+        .<Class<?>>map(Contributor::subject)
+        .toList();
+    Predicate<Class<?>> unplaced = type -> !Distribution.class.isAssignableFrom(type)
+        && placed.stream().noneMatch(place -> place.isAssignableFrom(type));
+    actions.forEach((action, contributions) -> contributions.contributions().stream()
+        .map(Contributions.Contributed::contributor)
+        .filter(applying)
+        .forEach(contributor -> Stream.concat(Stream.of(contributor.subject()),
+                contributor.closure().beneath().stream())
+            .filter(unplaced)
             .findFirst()
-            .ifPresent(contributor -> {
-              throw new IllegalArgumentException(String.format("%s has @%s act on %s, so its layout accepts %s in "
-                  + "exactly one directory.", build.coordinates().canonical(), action.getKey().getSimpleName(),
-                  contributor.subject().getName(), contributor.closure().accepted(contributor.subject()).getName()));
-            }));
+            .ifPresent(type -> {
+              throw new IllegalArgumentException(String.format("%s has @%s act on %s, so a @Place for %s applies to "
+                  + "it.", build.coordinates().canonical(), action.getSimpleName(), contributor.subject().getName(),
+                  type.getName()));
+            })));
+    build.content().stream()
+        .<Class<?>>map(Object::getClass)
+        .filter(unplaced)
+        .findFirst()
+        .ifPresent(type -> {
+          throw new IllegalArgumentException(String.format("%s holds %s, so a @Place for it applies to it.",
+              build.coordinates().canonical(), type.getName()));
+        });
   }
 
   /**
@@ -324,7 +344,7 @@ public record Registry(
       Annotation annotation,
       Action action,
       MethodHandles.Lookup lookup) {
-    return new Contributions.Contributed<>(method.getDeclaringClass().getModule(),
+    return new Contributions.Contributed<>(method.getDeclaringClass().getModule(), annotation,
         Contributor.of(method, annotation, (Class<Object>) action.value(), lookup));
   }
 

@@ -9,16 +9,13 @@ import java.util.Set;
 import cat.tabbie.sdk.catalog.Identity;
 import cat.tabbie.sdk.catalog.Release;
 import cat.tabbie.sdk.meta.action.Action;
-import cat.tabbie.sdk.model.Layout;
 import cat.tabbie.sdk.platform.Command;
 import cat.tabbie.sdk.platform.Toolchain;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Platform;
 import cat.tabbie.sdk.tree.Address;
-import cat.tabbie.sdk.tree.Reason;
 import cat.tabbie.sdk.tree.Shape;
-import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
 /**
@@ -96,10 +93,10 @@ public sealed interface Distributable extends Release.Payload {
 
   /**
    * Places the source as one file, named after it, at the context's head: the
-   * directory that accepts this distributable's type, where {@link #location}
-   * finds it in the Cat's model. Whoever installs chooses the distributable
-   * that {@link #supports} the target while resolving; installing does not ask
-   * again.
+   * directory the {@link cat.tabbie.sdk.meta.action.Place place} for this
+   * distributable's type returns, where a start finds it again. Whoever
+   * installs chooses the distributable that {@link #supports} the target while
+   * resolving; installing does not ask again.
    *
    * @param context its head, the directory accepting this distributable's
    *                type
@@ -109,24 +106,6 @@ public sealed interface Distributable extends Release.Payload {
   @NonNull
   default Set<Image<?>> install(@NonNull Action.Context context) throws IOException {
     return context.head().receive(source());
-  }
-
-  /**
-   * Locates this distributable's file in the model of the Cat it runs in:
-   * beneath the declared directory that accepts its type, named after its
-   * source, as its default install places it. Only declarations accept
-   * content, so the model alone decides it, whatever is on disk.
-   *
-   * @param model model of a Cat, declared from its root
-   * @return address of the file beneath the Cat's root
-   * @throws Violation with {@link Reason.Placement.Unplaced} when no directory
-   *                   accepts the type
-   * @throws Violation with {@link Reason.Placement.Ambiguous} when several
-   *                   directories accept the type
-   */
-  @NonNull
-  default Address location(@NonNull Layout.Directory model) {
-    return model.find(getClass()).unique().address().resolve(source().name());
   }
 
   /**
@@ -169,7 +148,8 @@ public sealed interface Distributable extends Release.Payload {
      * it. Addresses in the arrangement are bound to physical paths by the
      * executor.
      *
-     * @param context selected target, the Cat's model and runtime settings
+     * @param context selected target, the distributable's head and runtime
+     *                settings
      * @return start arrangement
      */
     @NonNull
@@ -180,7 +160,8 @@ public sealed interface Distributable extends Release.Payload {
      * it. The arrangement must suit the one {@link #allocate} returns for the
      * same context; see {@link Deallocate} for valid pairings.
      *
-     * @param context selected target, the Cat's model and runtime settings
+     * @param context selected target, the distributable's head and runtime
+     *                settings
      * @return stop arrangement
      */
     @NonNull
@@ -290,12 +271,14 @@ public sealed interface Distributable extends Release.Payload {
   }
 
   /**
-   * The target an executable distributable is started for, the model of the Cat
-   * it runs in, and the runtime settings it is started with. Describing a
-   * start reads no file, so the context is a value and holds no plate: the
-   * executor binds the arrangement's addresses to paths.
+   * The target an executable distributable is started for, its head, and the
+   * runtime settings it is started with. The head is the directory the
+   * distributable was installed in, so its file is
+   * {@code head().file(source().name())}. Describing a start reads no file:
+   * the executor binds the arrangement's addresses to paths. Core implements
+   * it.
    */
-  interface Context {
+  interface Context extends Action.Context {
 
     /**
      * Returns the explicitly selected target.
@@ -315,16 +298,6 @@ public sealed interface Distributable extends Release.Payload {
     Platform platform();
 
     /**
-     * Returns the model of the Cat the distributable runs in, as its release
-     * declares it, so a start arrangement can {@link Distributable#location
-     * locate} what the release's installs placed without reading the Cat.
-     *
-     * @return model declared from the root
-     */
-    @NonNull
-    Layout.Directory model();
-
-    /**
      * Returns the memory bound the started process is given, interpreted by the
      * distributable's {@link Executable#allocate(Context) allocation}, such as
      * a JVM's maximum heap.
@@ -342,53 +315,5 @@ public sealed interface Distributable extends Release.Payload {
      */
     @NonNull
     Map<String, String> runtimeOptions();
-
-    /**
-     * Immutable context with runtime settings.
-     *
-     * @param label          selected target
-     * @param platform       target platform
-     * @param model          model of the Cat the distributable runs in,
-     *                       declared from the root
-     * @param maximumMemory  positive memory bound in bytes, or empty
-     * @param runtimeOptions runtime options
-     */
-    record Default(
-        @NonNull Label label,
-        @NonNull Platform platform,
-        @NonNull Layout.Directory model,
-        @NonNull Optional<Long> maximumMemory,
-        @NonNull Map<String, String> runtimeOptions) implements Context {
-
-      /**
-       * Copies the runtime options, then checks the model and the memory
-       * bound.
-       *
-       * @throws IllegalArgumentException when the model is not declared from
-       *                                  the root, or the memory bound is not
-       *                                  positive
-       */
-      public Default {
-        runtimeOptions = Map.copyOf(runtimeOptions);
-        if (!model.address().isRoot()) {
-          throw new IllegalArgumentException("A model is declared from the root.");
-        }
-        if (maximumMemory.filter(bytes -> bytes < 1L).isPresent()) {
-          throw new IllegalArgumentException("A memory bound must be positive.");
-        }
-      }
-
-      /**
-       * Creates a context with the program's default memory and no options.
-       *
-       * @param label    selected target
-       * @param platform target platform
-       * @param model    model of the Cat the distributable runs in, declared
-       *                 from the root
-       */
-      public Default(@NonNull Label label, @NonNull Platform platform, @NonNull Layout.Directory model) {
-        this(label, platform, model, Optional.empty(), Map.of());
-      }
-    }
   }
 }

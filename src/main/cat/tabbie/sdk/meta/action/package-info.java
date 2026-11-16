@@ -11,8 +11,11 @@
  * action's method, or on a type enclosing it, say which targets it applies to,
  * and the {@link cat.tabbie.sdk.Registry registry} chooses one for a subject
  * at a target. Every action's context extends {@link Action.Context}, which
- * gives the head it starts from. {@link Install} is the action installing
- * content, with the context core gives each install.
+ * gives the head it starts from. {@link Place} says where what a Cat accepts
+ * goes, {@link Base} gives the Cat's root its permissions, and
+ * {@link Install} installs content where its family is placed. Places and
+ * bases act on types, so their contributions are static and take only their
+ * context.
  *
  * <p>
  * The processors check a module's actions while the module compiles, so a

@@ -15,10 +15,10 @@ import lombok.NonNull;
  * {@link #root() root} and {@link #scratch() scratch} trees and the
  * {@link cat.tabbie.sdk.tree.Lease leases} they grant. The plate implements
  * every node as a view of its own files, so its trees show each change as it
- * is carried out. Nodes hold no rules: the plate is given the model work was
- * placed against, and checks its rules when it carries a change out; scratch
- * space allows everything. How a plate excludes other work while a lease is
- * open is its own choice.
+ * is carried out. The root's nodes report the {@link cat.tabbie.sdk.tree.Rule
+ * rules} core composed for the Cat, and its leases check them again when they
+ * carry a change out; scratch space allows everything. How a plate excludes
+ * other work while a lease is open is its own choice.
  *
  * <p>
  * A plate for acting reaches the real files beneath its root. A plate for

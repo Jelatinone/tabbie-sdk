@@ -6,7 +6,6 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Optional;
 
-import cat.tabbie.sdk.model.Rule;
 import lombok.NonNull;
 
 /**

@@ -17,28 +17,20 @@ import lombok.NonNull;
 /**
  * Installs an artifact: the method describes the images placing it, for the
  * targets its {@link cat.tabbie.sdk.meta.attribute.Applies} declarations
- * name, and acts where its {@link Closure closure}
- * names, in the Cat's root unless it says otherwise. Every install has the
- * one {@link Signature}: an instance method takes its {@link Context} and
- * installs artifacts of the type declaring it; a static method takes the type
- * it installs, named as its {@link #subject()}, then its context, so another
- * module can contribute an install for it. Installs are named for the
- * closure, and told apart by a qualifier when one type has several:
- * {@code installRoot}, {@code installNamespaces},
- * {@code installListedRoot}.
+ * name, at the head core gives it: the directory its family's {@link Place}
+ * returns, at the Cat's root or in each namespace, as that place's closure
+ * says. Every install has the one {@link Signature}: an instance method takes
+ * its {@link Context} and installs artifacts of the type declaring it; a
+ * static method takes the type it installs, named as its {@link #subject()},
+ * then its context, so another module can contribute an install for it.
+ * Installs are told apart by a qualifier when one type has several:
+ * {@code install}, {@code installUnpacked}, {@code installArchived}.
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 @Action(Install.Signature.class)
 public @interface Install {
-
-  /**
-   * Returns where the install acts.
-   *
-   * @return closure, the Cat's root by default
-   */
-  Closure value() default Closure.ROOT;
 
   /**
    * Returns the type of artifact a static install installs.
@@ -67,9 +59,10 @@ public @interface Install {
   /**
    * What an install is given: its head, the directory accepting the artifact
    * at the one place it is called for, and that place's namespace when there
-   * is one. Core calls an install once for each place its closure says: the
-   * Cat's root for {@link Closure#ROOT ROOT}, or every namespace for
-   * {@link Closure#NAMESPACES NAMESPACES}. Core implements it.
+   * is one. Core calls an install once for each place its family's
+   * {@link Place} gives: once at the Cat's root, or in every namespace when
+   * the place's closure is {@link Closure#NAMESPACES NAMESPACES}. Core
+   * implements it.
    */
   interface Context extends Action.Context {
 

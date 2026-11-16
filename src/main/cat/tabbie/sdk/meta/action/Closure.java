@@ -1,31 +1,27 @@
 package cat.tabbie.sdk.meta.action;
 
-import java.lang.annotation.Annotation;
-import java.util.stream.Stream;
+import java.util.Optional;
 
 import cat.tabbie.sdk.tree.Namespace;
-import lombok.NonNull;
 
 /**
  * Where an action acts: the place the registry has a contribution act in,
- * called once. An action whose contributions may act in different places
- * declares one for each, as its annotation's value, and acts in the root
- * unless it says otherwise; an action that declares none always acts in the
- * root. Each closure says what a release's layout must accept for core to
- * find where a contribution acts, and the
+ * called once. An action whose contributions may act in different places,
+ * such as {@link Place}, declares one for each, as its annotation's value,
+ * and acts in the root unless it says otherwise; an action that declares none
+ * always acts in the root. The
  * {@link cat.tabbie.sdk.Registry#check(cat.tabbie.sdk.catalog.Product.Build)
- * registry checks} every release against the actions that declare one.
+ * registry checks} every release places what each closure acts beneath.
  */
 public enum Closure {
 
   /**
-   * In the root of the work's model: the Cat itself, at the directory
-   * accepting the subject.
+   * In the root of the work's model: the Cat itself.
    */
   ROOT {
     @Override
-    public Class<?> accepted(@NonNull Class<?> subject) {
-      return subject;
+    public Optional<Class<?>> beneath() {
+      return Optional.empty();
     }
   },
 
@@ -34,33 +30,17 @@ public enum Closure {
    */
   NAMESPACES {
     @Override
-    public Class<?> accepted(@NonNull Class<?> subject) {
-      return Namespace.class;
+    public Optional<Class<?>> beneath() {
+      return Optional.of(Namespace.class);
     }
   };
 
   /**
-   * Returns what a release's layout accepts in exactly one directory, so core
-   * finds where a contribution acting here acts: at the root, the subject
-   * itself, whose accepting directory is the contribution's head; in
-   * namespaces, {@link Namespace namespaces}, where core mounts each
-   * namespace's own layout.
+   * Returns the type whose places a contribution acting here acts beneath,
+   * which a release must therefore place: nothing at the root, which is
+   * always there, and {@link Namespace namespaces} in namespaces.
    *
-   * @param subject the type the contribution acts on
-   * @return the type the layout accepts in exactly one directory
+   * @return the type acted beneath, or empty at the root
    */
-  public abstract Class<?> accepted(@NonNull Class<?> subject);
-
-  /**
-   * Whether an action declares where it acts, as its annotation's
-   * {@code Closure value()}. Only those actions have a place in a release's
-   * layout to act in; the rest act in the root without one.
-   *
-   * @param action an action's annotation
-   * @return whether the action declares a closure
-   */
-  public static boolean declaredBy(@NonNull Class<? extends Annotation> action) {
-    return Stream.of(action.getDeclaredMethods())
-        .anyMatch(element -> element.getName().equals("value") && element.getReturnType() == Closure.class);
-  }
+  public abstract Optional<Class<?>> beneath();
 }

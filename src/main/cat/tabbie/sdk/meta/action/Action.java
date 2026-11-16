@@ -14,7 +14,7 @@ import lombok.NonNull;
  * SDK chooses by target, placed on the method that provides it. Most actions
  * are verbs whose method carries a behaviour out, such as installing a
  * family's content; some are nouns whose method returns what they name, such
- * as the toolchain a server needs.
+ * as the directory a family's content goes in.
  * {@link cat.tabbie.sdk.meta.attribute.Applies} declarations on the method,
  * and on the types enclosing it, say which targets it applies to; a method
  * with none applies to every target.
@@ -26,16 +26,20 @@ import lombok.NonNull;
  * <li>It declares {@code Class<?>[] subject() default {}}, the type a static
  * contribution acts on. An action whose contributions may act in different
  * places also declares {@code Closure value() default Closure.ROOT}, where
- * each acts, and the registry checks every release's layout gives each a
- * place to act there; one that declares none always acts in the root.
- * Annotations inherit nothing, so each action declares these itself.</li>
+ * each acts, and the registry checks every release places what each acts
+ * beneath; one that declares none always acts in the root. Annotations
+ * inherit nothing, so each action declares these itself.</li>
  * <li>Each contribution has the action's signature: an instance method takes
  * the action's context, a {@link Context} with the action's own parts added,
  * acting on the type declaring it; a static method takes the type it acts on,
- * then the context. Methods can then not be overloaded,
- * so they are named apart: {@code <action><Qualifier><Closure>}, followed for
- * versioned contributions by their bounds, such as {@code installRoot},
- * {@code installListedRoot} or {@code installRoot_1_20_5to26_3}.</li>
+ * then the context. An action acting on types rather than on instances, such
+ * as a place, has a signature taking only its context: its contributions are
+ * static, and act on the type declaring them or on the subject they name.
+ * Methods can then not be overloaded, so they are named apart:
+ * {@code <action><Qualifier>}, followed by their closure for an action that
+ * declares one, and for versioned contributions by their bounds, such as
+ * {@code install}, {@code installUnpacked}, {@code placeNamespaces} or
+ * {@code install_1_20_5to26_3}.</li>
  * <li>Each method carrying it is read into a {@link Contributor}, and the
  * contributors of one action to one subject in a type, by one key, are checked
  * together as a {@link Coverage}: no two apply to one version of a target,

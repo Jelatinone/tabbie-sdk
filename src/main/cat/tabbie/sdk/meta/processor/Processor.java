@@ -376,7 +376,7 @@ public abstract sealed class Processor extends AbstractProcessor
    * types of its parameters, as the registry names it at run time.
    *
    * @param method a method
-   * @return its name, such as {@code Mod.installRoot(Install.Context)}
+   * @return its name, such as {@code Mod.install(Install.Context)}
    */
   protected static String name(@NonNull ExecutableElement method) {
     return String.format("%s.%s(%s)", name((TypeElement) method.getEnclosingElement()), method.getSimpleName(),

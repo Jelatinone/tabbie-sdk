@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.revision.Hunk;
 import cat.tabbie.sdk.revision.Image;
@@ -14,8 +15,12 @@ import lombok.NonNull;
 
 /**
  * A place beneath a root on a plate: a file or a directory at its own
- * {@link Address}, whether or not anything exists there. Nodes hold no rules;
- * the plate checks the model it was given when it carries a change out.
+ * {@link Address}, whether or not anything exists there. A node reports the
+ * {@link Rule rules} declared at its place, which core composes from the
+ * {@link cat.tabbie.sdk.meta.action.Base @Base} and
+ * {@link cat.tabbie.sdk.meta.action.Place @Place} contributions applying to
+ * the Cat: the permissions they give are checked while a change is described
+ * here, and again when a lease carries it out.
  *
  * <p>
  * A {@link cat.tabbie.sdk.revision.Plate Plate} implements the nodes of its
@@ -24,9 +29,10 @@ import lombok.NonNull;
  * itself depending only on the plate it runs on. Changes are described from
  * nodes as images, and carried out only through the {@link Lease leases}
  * nodes grant. A plate implements only each node's {@link #address()},
- * {@link #parent()} and {@link #state()}, a directory's
- * {@link Directory#children() children} and the places it
- * {@link Directory#file(Address) names}, and a file's
+ * {@link #parent()}, {@link #state()} and {@link #rules()}, a directory's
+ * {@link Directory#children() children}, the places it
+ * {@link Directory#file(Address) names} and the declared places it
+ * {@link Directory#find(Class) finds}, and a file's
  * {@link Shape.File#describe() description} and leases; everything else here
  * follows from those. Plates' nodes are safe for concurrent use.
  */
@@ -35,6 +41,54 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
   @Override
   @NonNull
   Optional<Node.Directory> parent();
+
+  /**
+   * Returns the rules declared at this place, as core composed them: the
+   * permissions given here and, for a directory, the types it accepts.
+   *
+   * @return immutable rules, empty where nothing is declared
+   */
+  @NonNull
+  Set<Rule> rules();
+
+  /**
+   * Returns the permissions that hold at this place: those its rules give,
+   * or, when they give none, those of the place above it. Nothing beneath a
+   * place that cannot be read becomes readable, whatever its rules give, and
+   * a root giving none gives nothing.
+   *
+   * @return immutable permissions, possibly empty
+   */
+  @Override
+  @NonNull
+  default Set<Rule.Permission> permissions() {
+    Set<Rule.Permission> above = parent().map(Node::permissions).orElse(Set.of());
+    Set<Rule.Permission> given = rules().stream()
+        .filter(Rule.Permission.class::isInstance)
+        .map(Rule.Permission.class::cast)
+        .collect(Collectors.toUnmodifiableSet());
+    if (given.isEmpty()) {
+      return above;
+    }
+    return parent().isEmpty() || above.contains(Rule.Permission.READABLE)
+        ? given
+        : given.stream()
+            .filter(permission -> permission != Rule.Permission.READABLE)
+            .collect(Collectors.toUnmodifiableSet());
+  }
+
+  /**
+   * Requires a permission to hold at this place, before a change needing it
+   * is described here.
+   *
+   * @param permission permission the change needs
+   * @throws Violation with {@link Reason.Place.Denied} when it does not hold
+   */
+  default void require(@NonNull Rule.Permission permission) {
+    if (!permits(permission)) {
+      throw new Violation(new Reason.Place.Denied(address(), permission));
+    }
+  }
 
   /**
    * Returns the directory standing for the root of this node's tree, by
@@ -69,9 +123,12 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * @param <Side>   what each side of the revision is
      * @param revision how its content changes
      * @return image configuring the file
+     * @throws Violation with {@link Reason.Place.Denied} when the file is not
+     *                   {@link Rule.Permission#EDITABLE editable}
      */
     @NonNull
     default <Side extends Image.Alteration> Image<Side> configure(@NonNull Revision<Side> revision) {
+      require(Rule.Permission.EDITABLE);
       return new Image.Configuration<>(address(), revision);
     }
 
@@ -83,7 +140,8 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * @param after  text after
      * @return image configuring the file
      * @throws Violation with {@link Reason.Change.Unchanged} when the texts are
-     *                   equal
+     *                   equal, or {@link Reason.Place.Denied} when the file is
+     *                   not {@link Rule.Permission#EDITABLE editable}
      */
     @NonNull
     default Image<Image.Text> configure(@NonNull String before, @NonNull String after) {
@@ -99,7 +157,8 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * @param contextLines number of context lines to keep
      * @return image configuring the file
      * @throws Violation with {@link Reason.Change.Unchanged} when the texts are
-     *                   equal
+     *                   equal, or {@link Reason.Place.Denied} when the file is
+     *                   not {@link Rule.Permission#EDITABLE editable}
      */
     @NonNull
     default Image<Image.Text> configure(@NonNull String before, @NonNull String after, int contextLines) {
@@ -116,20 +175,23 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      *
      * @param after the file whose bytes this file takes
      * @return image swapping the content
-     * @throws Violation   with {@link Reason.Change.Unchanged} when both hold
-     *                     the same bytes
+     * @throws Violation   with {@link Reason.Place.Denied} when this file is
+     *                     not {@link Rule.Permission#EDITABLE editable}, or
+     *                     {@link Reason.Change.Unchanged} when both hold the
+     *                     same bytes
      * @throws Refusal     as reading this file refuses, such as when nothing
      *                     is here
      * @throws IOException when either file cannot be read
      */
     @NonNull
     default Image<Image.File.Present> replace(@NonNull Shape.File after) throws IOException {
+      require(Rule.Permission.EDITABLE);
       Image.File.Present before = new Image.File.Present(Source.of(name(), bytes()).describe());
       Image.File.Present replaced = new Image.File.Present(after.describe());
       if (before.same(replaced)) {
         throw new Violation(new Reason.Change.Unchanged(address()));
       }
-      return configure(new Revision.Swap(before, replaced));
+      return new Image.Configuration<>(address(), new Revision.Swap(before, replaced));
     }
 
     /**
@@ -137,12 +199,15 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * so the image's preimage restores them.
      *
      * @return image deleting the file
+     * @throws Violation   with {@link Reason.Place.Denied} when the file is not
+     *                     {@link Rule.Permission#DELETABLE deletable}
      * @throws Refusal     as reading this file refuses, such as when nothing
      *                     is here
      * @throws IOException when the file cannot be read
      */
     @NonNull
     default Image<Image.File> delete() throws IOException {
+      require(Rule.Permission.DELETABLE);
       return new Image.Installation(new Image.File.Present(Source.of(name(), bytes()).describe()),
           new Image.File.Absent(), address());
     }
@@ -196,6 +261,29 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
     }
 
     /**
+     * Whether this directory accepts content of a type.
+     *
+     * @param type type of the content to place
+     * @return true when one of its {@link Rule.Accepts} rules accepts the type
+     */
+    default boolean accepts(@NonNull Class<?> type) {
+      return rules().stream()
+          .anyMatch(rule -> rule instanceof Rule.Accepts accepts && accepts.accepts(type));
+    }
+
+    /**
+     * Finds the declared directories that accept content of a type, this one
+     * and those beneath it, whether or not they exist yet, a directory before
+     * those beneath it. Only core knows which places it declared beneath a
+     * directory, so it implements this.
+     *
+     * @param type type of the content to place
+     * @return the accepting directories, possibly none
+     */
+    @NonNull
+    Accepting find(@NonNull Class<?> type);
+
+    /**
      * Describes copying a shape into this directory, from any tree: a file
      * lands under its own name, and a directory's contents land beneath this
      * one, merging with what is described here. Each file's image is made from
@@ -204,6 +292,9 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      *
      * @param shape the file or directory to copy
      * @return images creating each file, one per file
+     * @throws Violation   with {@link Reason.Place.Denied} where a file would
+     *                     land in a place that is not
+     *                     {@link Rule.Permission#CREATABLE creatable}
      * @throws Refusal     as describing or listing the shape refuses
      * @throws IOException when the shape cannot be read
      */
@@ -220,6 +311,10 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * @param shape the file or directory to copy
      * @param name  single filename it takes here
      * @return images creating each file, one per file
+     * @throws Violation                with {@link Reason.Place.Denied} where a
+     *                                  file would land in a place that is not
+     *                                  {@link Rule.Permission#CREATABLE
+     *                                  creatable}
      * @throws Refusal                  as describing or listing the shape
      *                                  refuses
      * @throws IOException              when the shape cannot be read
@@ -229,8 +324,12 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
     @NonNull
     default Set<Image<?>> receive(@NonNull Shape shape, @NonNull String name) throws IOException {
       return switch (shape) {
-        case Shape.File file -> Set.of(new Image.Installation(new Image.File.Absent(),
-            new Image.File.Present(file.describe()), address().resolve(name)));
+        case Shape.File file -> {
+          Node.File landing = file(name);
+          landing.require(Rule.Permission.CREATABLE);
+          yield Set.of(new Image.Installation(new Image.File.Absent(), new Image.File.Present(file.describe()),
+              landing.address()));
+        }
         case Shape.Directory directory -> directory(name).receive(directory);
       };
     }
@@ -242,6 +341,9 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      *
      * @param layers files and directories to copy, earliest first
      * @return images creating each file, one per place
+     * @throws Violation   with {@link Reason.Place.Denied} where a file would
+     *                     land in a place that is not
+     *                     {@link Rule.Permission#CREATABLE creatable}
      * @throws Refusal     as describing or listing a layer refuses
      * @throws IOException when a layer cannot be read
      */
@@ -262,6 +364,61 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
         images.forEach(image -> placed.put(image.address(), image));
       }
       return Set.copyOf(placed.values());
+    }
+  }
+
+  /**
+   * The declared directories that accept one type of content, as
+   * {@link Directory#find(Class)} found them. Several directories may accept
+   * the same type: work placing the content picks among them, or requires
+   * {@link #unique() exactly one}.
+   *
+   * @param type        type of the content to place
+   * @param directories accepting directories, possibly none
+   */
+  record Accepting(@NonNull Class<?> type, @NonNull List<Node.Directory> directories) {
+
+    /**
+     * Copies the directories, and checks that each accepts the type and is
+     * listed once.
+     *
+     * @throws Violation                with {@link Reason.Placement.Unaccepted}
+     *                                  when a directory does not accept the
+     *                                  type
+     * @throws IllegalArgumentException when a directory is listed twice
+     */
+    public Accepting {
+      directories = List.copyOf(directories);
+      for (Node.Directory directory : directories) {
+        if (!directory.accepts(type)) {
+          throw new Violation(new Reason.Placement.Unaccepted(directory.address(), type));
+        }
+      }
+      if (directories.stream().map(Node::address).distinct().count() != directories.size()) {
+        throw new IllegalArgumentException("An accepting directory is listed only once.");
+      }
+    }
+
+    /**
+     * Requires exactly one accepting directory, for work that places content
+     * the same way wherever the Cat puts it.
+     *
+     * @return the only accepting directory
+     * @throws Violation with {@link Reason.Placement.Unplaced} when no
+     *                   directory accepts the type
+     * @throws Violation with {@link Reason.Placement.Ambiguous} when several do
+     */
+    @NonNull
+    public Node.Directory unique() {
+      if (directories.isEmpty()) {
+        throw new Violation(new Reason.Placement.Unplaced(type));
+      }
+      if (directories.size() > 1) {
+        throw new Violation(new Reason.Placement.Ambiguous(type, directories.stream()
+            .map(Node::address)
+            .toList()));
+      }
+      return directories.getFirst();
     }
   }
 }

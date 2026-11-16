@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import cat.tabbie.sdk.form.Form;
 import lombok.NonNull;
@@ -60,9 +61,28 @@ public sealed interface Shape permits Shape.File, Shape.Directory, Node, Entry, 
   State state() throws IOException;
 
   /**
+   * Returns the permissions that hold at this place: what its leases grant,
+   * and what changes may be described here.
+   *
+   * @return immutable permissions, possibly empty
+   */
+  @NonNull
+  Set<Rule.Permission> permissions();
+
+  /**
+   * Whether a permission holds at this place.
+   *
+   * @param permission permission to check
+   * @return true when it holds
+   */
+  default boolean permits(@NonNull Rule.Permission permission) {
+    return permissions().contains(permission);
+  }
+
+  /**
    * Interprets this place in a form, the one hop from a place to its format,
-   * such as {@code source.as(Zip::of)}. The factory reads only what it needs
-   * to know the place is in its format.
+   * such as {@code source.as(Archive::of)}. The factory reads only what it
+   * needs to know the place is in its format.
    *
    * @param <Interpreted> the form's type
    * @param factory       makes the form from this place

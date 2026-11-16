@@ -21,11 +21,13 @@ import lombok.NonNull;
 
 /**
  * A stateless runtime family describing edition and environments. What
- * content it supports follows from the installs contributed for each content
- * family, which a {@link cat.tabbie.sdk.content.Artifact.Registry}
- * derives, and where content goes is declared by each release's layout, not
- * by the distribution. Version resolution, installation conflicts, filesystem
- * observations, and deployment belong to Core.
+ * content it supports follows from the installs and places contributed for
+ * each content family, which a
+ * {@link cat.tabbie.sdk.content.Artifact.Registry} derives, and where content
+ * goes is declared by those {@link cat.tabbie.sdk.meta.action.Place places},
+ * chosen by target, not by the distribution itself. Version resolution,
+ * installation conflicts, filesystem observations, and deployment belong to
+ * Core.
  *
  * <p>
  * Distributions are enum constants, such as Fabric's {@code java:fabric},

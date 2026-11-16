@@ -3,7 +3,9 @@
  * is a stateless family, such as the vanilla game, a mod loader, or a plugin
  * server: an enum constant a module registers beneath an edition's base,
  * {@link Java} or {@link Bedrock}, and grouped by the abstract types it
- * registers. A {@link Distributable} is one file of a distribution's release.
+ * registers. A {@link Distributable} is one file of a distribution's release,
+ * placed where the {@link cat.tabbie.sdk.meta.action.Place place} for its type
+ * says.
  *
  * <p>
  * Installing a distributable captures only its own content: it never downloads

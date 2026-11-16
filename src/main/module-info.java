@@ -31,7 +31,6 @@ module cat.tabbie.sdk {
   exports cat.tabbie.sdk.meta.action;
   exports cat.tabbie.sdk.meta.attribute;
   exports cat.tabbie.sdk.meta.registry;
-  exports cat.tabbie.sdk.model;
   exports cat.tabbie.sdk.platform;
   exports cat.tabbie.sdk.revision;
   exports cat.tabbie.sdk.target;

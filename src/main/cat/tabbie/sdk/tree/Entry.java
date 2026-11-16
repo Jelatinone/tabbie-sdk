@@ -1,5 +1,7 @@
 package cat.tabbie.sdk.tree;
 
+import java.util.Set;
+
 /**
  * A place inside an archive, made by the archive's {@link cat.tabbie.sdk.form.Form
  * form}: a file stored in it, or a directory its paths imply. Entries are
@@ -8,6 +10,16 @@ package cat.tabbie.sdk.tree;
  * them. An archive is read-only: an entry's write lease is refused.
  */
 public sealed interface Entry extends Shape permits Entry.File, Entry.Directory {
+
+  /**
+   * Returns what an archive allows: reading alone.
+   *
+   * @return {@link Rule.Permission#READABLE}
+   */
+  @Override
+  default Set<Rule.Permission> permissions() {
+    return Set.of(Rule.Permission.READABLE);
+  }
 
   /**
    * A file stored in an archive, possibly absent.
