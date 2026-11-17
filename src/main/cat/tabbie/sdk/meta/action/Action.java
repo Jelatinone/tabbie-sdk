@@ -23,19 +23,19 @@ import lombok.NonNull;
  * Every action has the same shape, so a new action is only an annotation
  * marked with this one, which names its {@link #value() signature}:
  * <ul>
- * <li>It declares {@code Class<?>[] subject() default {}}, the type a static
- * contribution acts on. An action whose contributions may act in different
- * places also declares {@code Closure value() default Closure.ROOT}, where
- * each acts, and the registry checks every release places what each acts
- * beneath; one that declares none always acts in the root. Annotations
- * inherit nothing, so each action declares these itself.</li>
+ * <li>An action whose contributions may act in different places declares
+ * {@code Closure value() default Closure.ROOT}, where each acts, and the
+ * registry checks every release places what each acts beneath; one that
+ * declares none always acts in the root. Annotations inherit nothing, so each
+ * action declares it itself.</li>
  * <li>Each contribution has the action's signature: an instance method takes
  * the action's context, a {@link Context} with the action's own parts added,
  * acting on the type declaring it; a static method takes the type it acts on,
  * then the context. An action acting on types rather than on instances, such
  * as a place, has a signature taking only its context: its contributions are
- * static, and act on the type declaring them or on the subject they name.
- * Methods can then not be overloaded, so they are named apart:
+ * static, and act on the type declaring them or on the one their
+ * {@link cat.tabbie.sdk.meta.attribute.Subject Subject} names. Methods can
+ * then not be overloaded, so they are named apart:
  * {@code <action><Qualifier>}, followed by their closure for an action that
  * declares one, and for versioned contributions by their bounds, such as
  * {@code install}, {@code installUnpacked}, {@code placeNamespaces} or
@@ -47,8 +47,9 @@ import lombok.NonNull;
  * they name is covered. Versions outside those bounds are simply not
  * supported.</li>
  * <li>Its {@link #cardinality() cardinality} says how many of its contributors
- * act for one subject at one target, and its {@link #key() key} which of its
- * elements keeps contributors apart, so that only those sharing a key meet.</li>
+ * act for one subject at one target, and the element it marks {@link Key},
+ * if any, keeps contributors apart, so that only those sharing a key
+ * meet.</li>
  * </ul>
  *
  * <p>
@@ -78,15 +79,6 @@ public @interface Action {
    * @return cardinality, {@link Cardinality#ONE} by default
    */
   Cardinality cardinality() default Cardinality.ONE;
-
-  /**
-   * Returns the name of the action's element whose value keys its
-   * contributors, such as the file an activation edits. Contributors keyed by
-   * different values never meet, so each value has a winner of its own.
-   *
-   * @return element name, or empty when contributors are keyed by nothing
-   */
-  String key() default "";
 
   /**
    * Where an action starts: its head, the node it describes its changes from,

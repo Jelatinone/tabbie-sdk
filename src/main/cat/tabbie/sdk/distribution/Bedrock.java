@@ -5,6 +5,7 @@ import java.util.Set;
 import cat.tabbie.sdk.meta.action.Base;
 import cat.tabbie.sdk.meta.action.Place;
 import cat.tabbie.sdk.meta.attribute.Applies;
+import cat.tabbie.sdk.meta.attribute.Subject;
 import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.target.Environment;
 import cat.tabbie.sdk.target.Version;
@@ -64,7 +65,8 @@ public interface Bedrock extends Distribution {
    * @param context the Cat's root
    * @return the directory accepting namespaces
    */
-  @Place(subject = Namespace.class)
+  @Place
+  @Subject(Namespace.class)
   @Applies(to = "bedrock:base", environments = Environment.CLIENT)
   static Node.Directory placeMinecraftWorldsRoot(@NonNull Place.Context context) {
     return context.head().directory("minecraftWorlds");
@@ -77,7 +79,8 @@ public interface Bedrock extends Distribution {
    * @param context the Cat's root
    * @return the directory accepting namespaces
    */
-  @Place(subject = Namespace.class)
+  @Place
+  @Subject(Namespace.class)
   @Applies(to = "bedrock:base", environments = Environment.SERVER)
   static Node.Directory placeWorldsRoot(@NonNull Place.Context context) {
     return context.head().directory("worlds");
@@ -90,7 +93,8 @@ public interface Bedrock extends Distribution {
    * @param context the Cat's root
    * @return the root, accepting distributables
    */
-  @Place(subject = Distributable.class)
+  @Place
+  @Subject(Distributable.class)
   @Applies(to = "bedrock:base")
   static Node.Directory placeReleaseRoot(@NonNull Place.Context context) {
     return context.head();

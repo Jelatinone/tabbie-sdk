@@ -6,6 +6,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -35,8 +36,8 @@ import lombok.NonNull;
  * @param subject    the type it acts on
  * @param conditions the targets it applies to
  * @param closure    where it acts
- * @param key        the value of its action's {@link Action#key() key}
- *                   element, or empty for an action keyed by nothing
+ * @param key        the value of its action's element marked {@link Key},
+ *                   or empty for an action keyed by nothing
  * @param call       the method
  */
 public record Contributor<Subject, Call>(
@@ -49,48 +50,52 @@ public record Contributor<Subject, Call>(
 
   /**
    * Reads a method contributing an action, as the registry does when it
-   * loads a module: the type it acts on, from the action's {@code subject}
-   * element or else the type declaring the method; where it acts, from the
-   * action's {@code value} element, when it declares one; its key; the
-   * targets it applies to, from its own {@link Applies} declarations within
-   * its type's, within each enclosing type's outwards; and the method, as its
-   * action's signature.
+   * loads a module: the type it acts on, from its
+   * {@link cat.tabbie.sdk.meta.attribute.Subject Subject}, or for a static
+   * method taking more than its context its first parameter, or else the type
+   * declaring it; where it acts, from the action's {@code value} element,
+   * when it declares one; its key; the targets it applies to, from its own
+   * {@link Applies} declarations within its type's, within each enclosing
+   * type's outwards; and the method, as its action's signature, called
+   * through a public lookup.
    *
    * @param <Call>    the action's signature
    * @param method    method carrying the action
    * @param action    the action, as the method carries it
    * @param signature the action's signature
-   * @param lookup    lookup reaching the method, as the module's registration
-   *                  provides it
    * @return the contributor
    * @throws IllegalArgumentException when the annotation is not an action, or
    *                                  a declaration is malformed, which the
    *                                  processors rule out while the module
    *                                  compiles
    * @throws Violation                with {@link Reason.Registry.Unreachable}
-   *                                  when the lookup cannot reach the method,
-   *                                  or the action's elements cannot be read
+   *                                  when the method cannot be called, its
+   *                                  package not exported, or the action's
+   *                                  elements cannot be read
    */
   public static <Call> Contributor<Class<?>, Call> of(
       @NonNull Method method,
       @NonNull Annotation action,
-      @NonNull Class<Call> signature,
-      @NonNull MethodHandles.Lookup lookup) {
-    Action marked = Optional.ofNullable(action.annotationType().getAnnotation(Action.class))
-        .orElseThrow(() -> new IllegalArgumentException(String.format("@%s is not an action.",
-            action.annotationType().getSimpleName())));
-    Class<?> subject = element(action, "subject")
-        .map(Class[].class::cast)
-        .filter(subjects -> subjects.length > 0)
-        .<Class<?>>map(subjects -> subjects[0])
-        .orElse(method.getDeclaringClass());
+      @NonNull Class<Call> signature) {
+    if (!action.annotationType().isAnnotationPresent(Action.class)) {
+      throw new IllegalArgumentException(String.format("@%s is not an action.",
+          action.annotationType().getSimpleName()));
+    }
+    // Named in full: the record's type parameter Subject hides the attribute
+    Class<?> subject = Optional.ofNullable(method.getAnnotation(cat.tabbie.sdk.meta.attribute.Subject.class))
+        .<Class<?>>map(cat.tabbie.sdk.meta.attribute.Subject::value)
+        .orElseGet(() -> Modifier.isStatic(method.getModifiers()) && method.getParameterCount() > 1
+            ? method.getParameterTypes()[0]
+            : method.getDeclaringClass());
     Closure closure = element(action, "value")
         .filter(Closure.class::isInstance)
         .map(Closure.class::cast)
         .orElse(Closure.ROOT);
-    Optional<String> key = marked.key().isEmpty()
-        ? Optional.empty()
-        : element(action, marked.key()).map(Contributor::keyed);
+    Optional<String> key = Stream.of(action.annotationType().getDeclaredMethods())
+        .filter(element -> element.isAnnotationPresent(Key.class))
+        .findFirst()
+        .flatMap(element -> element(action, element.getName()))
+        .map(Contributor::keyed);
     Conditions conditions = Conditions.of(Stream.iterate((AnnotatedElement) method, Objects::nonNull,
         element -> element instanceof Method declared
             ? declared.getDeclaringClass()
@@ -99,7 +104,7 @@ public record Contributor<Subject, Call>(
         .toList()
         .reversed());
     try {
-      Call call = MethodHandleProxies.asInterfaceInstance(signature, lookup.unreflect(method));
+      Call call = MethodHandleProxies.asInterfaceInstance(signature, MethodHandles.publicLookup().unreflect(method));
       return new Contributor<>(name(method), subject, conditions, closure, key, call);
     } catch (IllegalAccessException exception) {
       throw new Violation(new Reason.Registry.Unreachable(name(method)), exception);
@@ -109,11 +114,8 @@ public record Contributor<Subject, Call>(
   /**
    * Writes the value an action is keyed by as text, as the processors write
    * it: a class by its name, anything else as it prints.
-   *
-   * @param value the value of the action's key element
-   * @return the key
    */
-  public static String keyed(@NonNull Object value) {
+  private static String keyed(Object value) {
     return value instanceof Class<?> type ? type.getName() : String.valueOf(value);
   }
 

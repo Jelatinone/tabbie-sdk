@@ -8,10 +8,14 @@ import java.lang.annotation.Target;
 
 /**
  * Marks a registrable kind: a base contract whose subtypes a module registers
- * with {@link Registered}, such as distributions or content families. The
- * processors and the registry learn what a registered type is from the kind it
- * is a type of, so neither names any kind, and a new kind is only a contract
- * carrying this annotation.
+ * with {@link Registered}, such as distributions or content families, and
+ * says how they register, {@link As#VALUES as values} or
+ * {@link As#TYPES as types}. The processors and the registry learn what a
+ * registered type is from the kind it is a type of, so neither names any kind,
+ * and a new kind is only a contract carrying this annotation. Declaring how
+ * lets the processors fail a module's build on a registered type of the wrong
+ * shape, such as a class of a kind registrable as values, rather than leave it
+ * registered and never read.
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
@@ -23,12 +27,13 @@ public @interface Registrable {
    *
    * @return how they register
    */
-  Kind value();
+  As value();
 
   /**
-   * How the types of a registrable kind register.
+   * How the types of a registrable kind register: what the registry keeps for
+   * each, and what the processors let each be.
    */
-  enum Kind {
+  enum As {
 
     /**
      * As values: each constant of a registered enum of the kind is registered,

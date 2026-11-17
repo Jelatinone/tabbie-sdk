@@ -64,8 +64,9 @@ public sealed interface Contribution<Call> permits Contribution.Concur, Contribu
      * @return message
      */
     public String message() {
-      return String.format("These clash where they meet, none narrower than another nor from a module reading only "
-          + "another's: %s.", contributors.stream()
+      return String.format("""
+          These clash where they meet, none narrower than another nor from a module reading only another's: \
+          %s.""", contributors.stream()
               .map(Contributions.Contributed::describe)
               .sorted(Comparator.naturalOrder())
               .collect(Collectors.joining("; ")));

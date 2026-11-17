@@ -60,13 +60,15 @@ public record Region(
               String.format("%s is not a distribution identifier such as bedrock:vanilla.", id));
         });
     if (!versions.equals(Range.EVERY) && distributions.isEmpty()) {
-      throw new IllegalArgumentException(String.format("A region applying to versions %s names its distributions, "
-          + "since versions read in the edition of the distributions they apply to.", versions));
+      throw new IllegalArgumentException(String.format("""
+          A region applying to versions %s names its distributions, since versions read in the edition of the \
+          distributions they apply to.""", versions));
     }
     if (!versions.equals(Range.EVERY) && editions(distributions).size() > 1) {
-      throw new IllegalArgumentException(String.format("A region applying to versions %s names distributions of "
-          + "one edition, rather than %s, since versions read in the edition of the distributions they apply to.",
-          versions, String.join(", ", distributions.stream().sorted().toList())));
+      throw new IllegalArgumentException(String.format("""
+          A region applying to versions %s names distributions of one edition, rather than %s, since versions \
+          read in the edition of the distributions they apply to.""", versions,
+          String.join(", ", distributions.stream().sorted().toList())));
     }
   }
 
@@ -91,9 +93,9 @@ public record Region(
         || written.high().isEmpty() && enclosing.versions.high().isPresent();
     if (written.to().length > 0 && inheritsBounds
         && !editions(distributions).equals(editions(enclosing.distributions))) {
-      throw new IllegalArgumentException(String.format("A region applying to %s leaves its version bounds out, but "
-          + "the enclosing region's, %s, read in another edition; it gives bounds of its own, or Applies.ANY for "
-          + "none.", distributions.isEmpty()
+      throw new IllegalArgumentException(String.format("""
+          A region applying to %s leaves its version bounds out, but the enclosing region's, %s, read in another \
+          edition; it gives bounds of its own, or Applies.ANY for none.""", distributions.isEmpty()
               ? "every distribution"
               : String.join(", ", distributions.stream().sorted().toList()),
           enclosing.versions));
@@ -164,8 +166,9 @@ public record Region(
     }
     if (named.contains(Applies.ANY)) {
       if (named.size() > 1) {
-        throw new IllegalArgumentException(String.format("Applies.ANY names every distribution, so it stands alone "
-            + "in to(), rather than beside %s.", String.join(", ", named.stream()
+        throw new IllegalArgumentException(String.format(
+            "Applies.ANY names every distribution, so it stands alone in to(), rather than beside %s.",
+            String.join(", ", named.stream()
                 .filter(id -> !id.equals(Applies.ANY))
                 .toList())));
       }
@@ -186,8 +189,8 @@ public record Region(
     }
     return Optional.of(Version.Number.of(written)
         .filter(number -> number.toString().equals(written))
-        .orElseThrow(() -> new IllegalArgumentException(String.format("%s is not a release number such as 1.20.5 "
-            + "or 26.3, nor Applies.ANY.", written))));
+        .orElseThrow(() -> new IllegalArgumentException(
+            String.format("%s is not a release number such as 1.20.5 or 26.3, nor Applies.ANY.", written))));
   }
 
   /**
@@ -328,8 +331,8 @@ public record Region(
       if (low.isPresent() && high.isPresent()) {
         return String.format("%s up to %s", low.get(), high.get());
       }
-      return low.map(bound -> bound + " onwards")
-          .or(() -> high.map(bound -> "below " + bound))
+      return low.map(bound -> "%s onwards".formatted(bound))
+          .or(() -> high.map(bound -> "below %s".formatted(bound)))
           .orElse("every version");
     }
 

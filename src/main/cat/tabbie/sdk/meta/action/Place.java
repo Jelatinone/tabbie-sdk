@@ -29,7 +29,8 @@ import lombok.NonNull;
  * Core places a Cat before any content exists, so a place acts on a type, not
  * on an instance of it: its {@link Signature} takes only its context, and
  * every place is a static method acting on the type declaring it, or on the
- * type it names as its {@link #subject()}. Places are named for the closure,
+ * type its {@link cat.tabbie.sdk.meta.attribute.Subject Subject} names. Places
+ * are named for the closure,
  * and told apart by a qualifier when one type has several:
  * {@code placeRoot}, {@code placeNamespaces}, {@code placeSavesRoot}.
  */
@@ -45,13 +46,6 @@ public @interface Place {
    * @return closure, the Cat's root by default
    */
   Closure value() default Closure.ROOT;
-
-  /**
-   * Returns the type a place declared outside it places.
-   *
-   * @return that type, or empty for the type declaring the method
-   */
-  Class<?>[] subject() default {};
 
   /**
    * Returns the permissions the placed directory holds, tightening those of

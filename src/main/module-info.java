@@ -6,13 +6,39 @@
  * its descriptions belongs to the consumer.
  *
  * <p>
- * Every package is exported to every module but {@code meta.processor}, and
- * the root package, which holds the registry and is exported to core alone. A module
- * declares what it contributes with the {@code meta} actions and attributes,
- * and puts the SDK on its processor path to have those declarations checked,
- * and its registration generated, while it compiles, as the SDK's own are.
- * The compiler the processors run in is needed only then; the registry reads
- * the same annotations at run time.
+ * The packages divide the SDK by concern:
+ * <ul>
+ * <li>{@link cat.tabbie.sdk.meta.action}, {@link cat.tabbie.sdk.meta.attribute}
+ * and {@link cat.tabbie.sdk.meta.registry}: the annotations a module declares
+ * what it contributes with, its registration, and the registry reading every
+ * module's into the distributions, content families and contributions core
+ * chooses between</li>
+ * <li>{@link cat.tabbie.sdk.content}: content, and how it is installed</li>
+ * <li>{@link cat.tabbie.sdk.distribution}: runtime families, and the files
+ * their releases carry</li>
+ * <li>{@link cat.tabbie.sdk.target}: game versions, and the targets content
+ * is installed on</li>
+ * <li>{@link cat.tabbie.sdk.tree}: shapes, their leases and rules,
+ * addresses, namespaces, and the failures of describing and carrying out
+ * changes</li>
+ * <li>{@link cat.tabbie.sdk.revision}: descriptions of change, the deferred
+ * work that carries them out, and the plates it runs on</li>
+ * <li>{@link cat.tabbie.sdk.form}: shapes read in a format</li>
+ * <li>{@link cat.tabbie.sdk.catalog}: providers, their projects, releases and
+ * coordinates</li>
+ * <li>{@link cat.tabbie.sdk.platform}: machines, packages, toolchains,
+ * commands, and the observer</li>
+ * </ul>
+ *
+ * <p>
+ * Every package is exported to every module but {@code meta.processor}, which
+ * runs only in the compiler. A module declares what it contributes with the
+ * {@code meta} actions and attributes, and puts the SDK on its processor path
+ * to have those declarations checked, and its registration index written,
+ * while it compiles, as the SDK's own are. It exports every package holding a
+ * contribution, and declares nothing else for core to find it. The compiler
+ * the processors run in is needed only then; the registry reads the same
+ * annotations at run time.
  *
  * <p>
  * Lombok is a compile-time dependency only; consumers need no Lombok at
@@ -23,7 +49,6 @@ module cat.tabbie.sdk {
   requires static java.compiler;
   requires static lombok;
 
-  exports cat.tabbie.sdk to cat.tabbie.core;
   exports cat.tabbie.sdk.catalog;
   exports cat.tabbie.sdk.content;
   exports cat.tabbie.sdk.distribution;
@@ -35,8 +60,4 @@ module cat.tabbie.sdk {
   exports cat.tabbie.sdk.revision;
   exports cat.tabbie.sdk.target;
   exports cat.tabbie.sdk.tree;
-
-  uses cat.tabbie.sdk.meta.registry.Registration;
-
-  provides cat.tabbie.sdk.meta.registry.Registration with cat.tabbie.sdk.Registrations;
 }

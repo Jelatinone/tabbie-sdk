@@ -9,8 +9,8 @@
  * {@link Cardinality} says how many of its contributors act for one subject at
  * one target. The {@link cat.tabbie.sdk.meta.attribute attributes} on an
  * action's method, or on a type enclosing it, say which targets it applies to,
- * and the {@link cat.tabbie.sdk.Registry registry} chooses one for a subject
- * at a target. Every action's context extends {@link Action.Context}, which
+ * and the {@link cat.tabbie.sdk.meta.registry.Registry registry} chooses one
+ * for a subject at a target. Every action's context extends {@link Action.Context}, which
  * gives the head it starts from. {@link Place} says where what a Cat accepts
  * goes, {@link Base} gives the Cat's root its permissions, and
  * {@link Install} installs content where its family is placed. Places and

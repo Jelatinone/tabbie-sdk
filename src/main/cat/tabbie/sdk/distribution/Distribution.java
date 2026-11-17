@@ -39,7 +39,7 @@ import lombok.NonNull;
  * registered as a group {@link Applies} can name, such as
  * {@code java:launcher}.
  */
-@Registrable(Registrable.Kind.VALUES)
+@Registrable(Registrable.As.VALUES)
 public interface Distribution {
 
   /**

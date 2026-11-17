@@ -31,7 +31,7 @@ import lombok.NonNull;
  * catalog coordinates at any level, matched by
  * {@link Coordinate#includes(Coordinate)}.
  */
-@Registrable(Registrable.Kind.TYPES)
+@Registrable(Registrable.As.TYPES)
 public interface Artifact extends Release.Payload {
 
   /**

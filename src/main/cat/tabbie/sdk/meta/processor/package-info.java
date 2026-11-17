@@ -1,6 +1,6 @@
 /**
  * The annotation processors checking a module's {@code meta} annotations
- * while it compiles, and generating its registration. javac finds them on
+ * while it compiles, and writing its registration index. javac finds them on
  * the processor path, where a module puts the SDK; the SDK compiles itself
  * with them too. They run only in the compiler, so this package is not
  * exported, and nothing outside it sees a compiler type.
@@ -13,6 +13,6 @@
  * reads at run time. Each subject's processor holds only its own rules:
  * {@link ActionProcessor} checks every action and its contributions, each
  * against its action's signature, and {@link RegistrationProcessor} what a
- * module registers, writing the registration listing it.
+ * module registers, writing the registration index listing it.
  */
 package cat.tabbie.sdk.meta.processor;

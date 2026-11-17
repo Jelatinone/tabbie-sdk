@@ -10,7 +10,7 @@ import cat.tabbie.sdk.tree.Namespace;
  * such as {@link Place}, declares one for each, as its annotation's value,
  * and acts in the root unless it says otherwise; an action that declares none
  * always acts in the root. The
- * {@link cat.tabbie.sdk.Registry#check(cat.tabbie.sdk.catalog.Product.Build)
+ * {@link cat.tabbie.sdk.meta.registry.Registry#check(cat.tabbie.sdk.catalog.Product.Build)
  * registry checks} every release places what each closure acts beneath.
  */
 public enum Closure {

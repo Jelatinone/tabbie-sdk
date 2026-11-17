@@ -15,19 +15,15 @@ import java.lang.annotation.Target;
  * type; for a kind registered by types, such as content families, the type
  * itself. Registering is how a module, the SDK included, tells tabbie what it
  * adds. While the module compiles, its registered types, and every type
- * declaring a contribution, are listed in one generated {@link Registration};
- * the registry reads what each type is from this annotation, and from its
- * kind, when it loads the module.
+ * declaring a contribution, are listed in its {@link Registration} index; the
+ * registry reads what each type is from this annotation, and from its kind,
+ * when it loads the module.
  *
  * <p>
  * A group lets a declaration name many values at once, such as
  * {@code @Applies(to = "java:launcher")} for every Java mod loader. Groups
  * nest as their types do: a value of a type belongs to the type's group, and
  * to the group of every registered type it extends.
- *
- * <p>
- * A registered type is public, as is every type enclosing it, since the
- * generated registration names it.
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)

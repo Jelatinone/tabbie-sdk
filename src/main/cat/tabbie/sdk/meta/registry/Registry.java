@@ -1,10 +1,11 @@
-package cat.tabbie.sdk;
+package cat.tabbie.sdk.meta.registry;
 
+import java.io.IOException;
 import java.lang.annotation.Annotation;
-import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -12,7 +13,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -25,11 +25,6 @@ import cat.tabbie.sdk.meta.action.Action;
 import cat.tabbie.sdk.meta.action.Contributor;
 import cat.tabbie.sdk.meta.action.Install;
 import cat.tabbie.sdk.meta.action.Place;
-import cat.tabbie.sdk.meta.registry.Contribution;
-import cat.tabbie.sdk.meta.registry.Contributions;
-import cat.tabbie.sdk.meta.registry.Registered;
-import cat.tabbie.sdk.meta.registry.Registrable;
-import cat.tabbie.sdk.meta.registry.Registration;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Platform;
 import cat.tabbie.sdk.tree.Reason;
@@ -88,8 +83,8 @@ public record Registry(
    *                   {@link Reason.Registry.Unregistered} when a registered
    *                   type is of no registrable kind; and with
    *                   {@link Reason.Registry.Unreachable} when a
-   *                   registration's lookup cannot reach one of its
-   *                   contributors
+   *                   contribution's method cannot be called, its package
+   *                   not exported
    */
   public static Registry of(@NonNull List<Registration> registrations) {
     Map<Class<?>, List<Object>> values = new LinkedHashMap<>();
@@ -103,7 +98,7 @@ public record Registry(
         for (Method method : type.getDeclaredMethods()) {
           for (Annotation annotation : method.getAnnotations()) {
             Optional.ofNullable(annotation.annotationType().getAnnotation(Action.class))
-                .map(action -> contributed(method, annotation, action, registration.lookup()))
+                .map(action -> contributed(method, annotation, action))
                 .ifPresent(found -> contributed.computeIfAbsent(annotation.annotationType(), _ -> new ArrayList<>())
                     .add(found));
           }
@@ -127,30 +122,46 @@ public record Registry(
   }
 
   /**
-   * Loads every registration {@link ServiceLoader} finds where the SDK is
-   * loaded: the SDK's own, and those of the modules beside it.
+   * Loads every registration the SDK's class loader finds: the SDK's own, and
+   * those of the modules and the class path beside it.
    *
    * @return the registry
-   * @throws Violation as {@link #of(List)} does
+   * @throws IOException when an index cannot be read
+   * @throws Violation   as {@link Registration#of(ClassLoader)} and
+   *                     {@link #of(List)} do
    */
-  public static Registry load() {
-    return of(ServiceLoader.load(Registration.class).stream()
-        .map(ServiceLoader.Provider::get)
-        .toList());
+  public static Registry load() throws IOException {
+    return of(Registration.of(Registry.class.getClassLoader()));
   }
 
   /**
    * Loads every registration in a module layer and the layers it builds on,
-   * as core does for the extensions it loads into layers of their own.
+   * as core does for the extensions it loads into layers of their own: the
+   * layer's modules first, then each layer beneath, each module by name
+   * within its layer.
    *
    * @param layer layer to load from
    * @return the registry
-   * @throws Violation as {@link #of(List)} does
+   * @throws IOException when an index cannot be read
+   * @throws Violation   as {@link Registration#of(Module)} and
+   *                     {@link #of(List)} do
    */
-  public static Registry load(@NonNull ModuleLayer layer) {
-    return of(ServiceLoader.load(layer, Registration.class).stream()
-        .map(ServiceLoader.Provider::get)
-        .toList());
+  public static Registry load(@NonNull ModuleLayer layer) throws IOException {
+    Set<ModuleLayer> layers = new LinkedHashSet<>();
+    Deque<ModuleLayer> pending = new ArrayDeque<>(List.of(layer));
+    while (!pending.isEmpty()) {
+      ModuleLayer next = pending.removeFirst();
+      if (layers.add(next)) {
+        pending.addAll(next.parents());
+      }
+    }
+    List<Registration> registrations = new ArrayList<>();
+    for (ModuleLayer loaded : layers) {
+      for (Module module : loaded.modules().stream().sorted(Comparator.comparing(Module::getName)).toList()) {
+        Registration.of(module).ifPresent(registrations::add);
+      }
+    }
+    return of(registrations);
   }
 
   /**
@@ -176,8 +187,9 @@ public record Registry(
    * among those precedence cannot decide between. It serves every action
    * alike: core installs an artifact by
    * {@code choose(Install.class, Install.Signature.class, artifact.getClass(),
-   * label, platform).contributor().call().install(artifact, context)}, and
-   * reads a place's permissions from the chosen contribution's
+   * label, platform)}, then calls the chosen contributor's
+   * {@code call().install(artifact, context)}, and reads a place's
+   * permissions from the chosen contribution's
    * {@link Contributions.Contributed#action(Class) action}.
    *
    * @param <Call>    the action's signature
@@ -188,15 +200,15 @@ public record Registry(
    * @param platform  the target's platform
    * @param preferred {@link Contributions.Contributed#identity() identities}
    *                  of the contributors the user prefers
-   * @return the chosen contribution, its contributor ready to call
+   * @return the chosen contribution, its contributor ready to call, or empty
+   *         when no contributor applies to the subject at the target
    * @throws IllegalArgumentException when the annotation is not an action of
-   *                                  that signature, or no contributor of it
-   *                                  applies to the subject at the target
+   *                                  that signature
    * @throws Violation                with {@link Reason.Registry.Clash} when
    *                                  contributors clash at the target and the
    *                                  user prefers none of them
    */
-  public <Call> Contributions.Contributed<Call> choose(
+  public <Call> Optional<Contributions.Contributed<Call>> choose(
       @NonNull Class<? extends Annotation> action,
       @NonNull Class<Call> signature,
       @NonNull Class<?> subject,
@@ -205,10 +217,7 @@ public record Registry(
       @NonNull Set<String> preferred) {
     return switch (contributions(action, signature).choose(subject, distributions.target(label, platform),
         preferred)) {
-      case Contribution.Concur<Call>(var chosen) when chosen.isEmpty() ->
-          throw new IllegalArgumentException(String.format("No @%s contributor for %s applies to %s.",
-              action.getSimpleName(), subject.getName(), label.canonical()));
-      case Contribution.Concur<Call>(var chosen) -> chosen.getFirst();
+      case Contribution.Concur<Call>(var chosen) -> chosen.stream().findFirst();
       case Contribution.Clash<Call> clash -> throw new Violation(new Reason.Registry.Clash(
           clash.contributors().stream()
               .map(Contributions.Contributed::identity)
@@ -227,11 +236,12 @@ public record Registry(
    * @param subject   the type the contributor acts on, or a subtype of it
    * @param label     the target's label
    * @param platform  the target's platform
-   * @return the chosen contribution, its contributor ready to call
+   * @return the chosen contribution, its contributor ready to call, or empty
+   *         when none applies
    * @throws IllegalArgumentException as the full form throws
    * @throws Violation                as the full form throws
    */
-  public <Call> Contributions.Contributed<Call> choose(
+  public <Call> Optional<Contributions.Contributed<Call>> choose(
       @NonNull Class<? extends Annotation> action,
       @NonNull Class<Call> signature,
       @NonNull Class<?> subject,
@@ -253,8 +263,9 @@ public record Registry(
    * places is chosen is precedence's to say, not this check's.
    *
    * @param build release to check
-   * @throws IllegalArgumentException when something a contributor acts on, or
-   *                                  a distributable, has no applying place
+   * @throws Violation with {@link Reason.Registry.Unplaced} when something a
+   *                   contributor acts on or beneath, or a distributable, has
+   *                   no applying place
    */
   public void check(@NonNull Product.Build build) {
     Set<String> names = distributions.names(build.distribution());
@@ -276,17 +287,16 @@ public record Registry(
             .filter(unplaced)
             .findFirst()
             .ifPresent(type -> {
-              throw new IllegalArgumentException(String.format("%s has @%s act on %s, so a @Place for %s applies to "
-                  + "it.", build.coordinates().canonical(), action.getSimpleName(), contributor.subject().getName(),
-                  type.getName()));
+              throw new Violation(new Reason.Registry.Unplaced(build.coordinates().canonical(), type.getName(),
+                  Optional.of(String.format("@%s %s", action.getSimpleName(), contributor.name()))));
             })));
     build.content().stream()
         .<Class<?>>map(Object::getClass)
         .filter(unplaced)
         .findFirst()
         .ifPresent(type -> {
-          throw new IllegalArgumentException(String.format("%s holds %s, so a @Place for it applies to it.",
-              build.coordinates().canonical(), type.getName()));
+          throw new Violation(new Reason.Registry.Unplaced(build.coordinates().canonical(), type.getName(),
+              Optional.empty()));
         });
   }
 
@@ -339,13 +349,9 @@ public record Registry(
    * it.
    */
   @SuppressWarnings("unchecked")
-  private static Contributions.Contributed<Object> contributed(
-      Method method,
-      Annotation annotation,
-      Action action,
-      MethodHandles.Lookup lookup) {
+  private static Contributions.Contributed<Object> contributed(Method method, Annotation annotation, Action action) {
     return new Contributions.Contributed<>(method.getDeclaringClass().getModule(), annotation,
-        Contributor.of(method, annotation, (Class<Object>) action.value(), lookup));
+        Contributor.of(method, annotation, (Class<Object>) action.value()));
   }
 
   /**

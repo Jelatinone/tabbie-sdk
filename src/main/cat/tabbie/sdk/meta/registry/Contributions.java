@@ -210,16 +210,16 @@ public record Contributions<Call>(
     Contributed<?> first = undetermined.first();
     Contributed<?> second = undetermined.second();
     if (narrower(first, second)) {
-      return Optional.of(new Replacement(first, second, Replacement.Reason.NARROWER));
+      return Optional.of(new Replacement.Narrower(first, second));
     }
     if (narrower(second, first)) {
-      return Optional.of(new Replacement(second, first, Replacement.Reason.NARROWER));
+      return Optional.of(new Replacement.Narrower(second, first));
     }
     if (downstream(first, second)) {
-      return Optional.of(new Replacement(first, second, Replacement.Reason.DOWNSTREAM));
+      return Optional.of(new Replacement.Downstream(first, second));
     }
     if (downstream(second, first)) {
-      return Optional.of(new Replacement(second, first, Replacement.Reason.DOWNSTREAM));
+      return Optional.of(new Replacement.Downstream(second, first));
     }
     return Optional.empty();
   }
@@ -311,44 +311,64 @@ public record Contributions<Call>(
 
   /**
    * One module's contributor chosen over another module's, where both apply: a
-   * meeting precedence decides.
-   *
-   * @param chosen   the contributor chosen where both apply
-   * @param replaced the contributor it is chosen over there
-   * @param reason   why it is chosen
+   * meeting precedence decides, by the rule its kind names.
    */
-  public record Replacement(
-      @NonNull Contributed<?> chosen,
-      @NonNull Contributed<?> replaced,
-      @NonNull Reason reason) {
+  public sealed interface Replacement {
+
+    /**
+     * Returns the contributor chosen where both apply.
+     *
+     * @return the chosen contributor
+     */
+    @NonNull
+    Contributed<?> chosen();
+
+    /**
+     * Returns the contributor it is chosen over there.
+     *
+     * @return the replaced contributor
+     */
+    @NonNull
+    Contributed<?> replaced();
 
     /**
      * Describes the replacement as a complete sentence, as core shows it.
      *
      * @return message
      */
-    public String message() {
-      return String.format("%s, is chosen over %s, where both apply: %s.", chosen.describe(), replaced.describe(),
-          switch (reason) {
-            case NARROWER -> "it is narrower";
-            case DOWNSTREAM -> "its module reads the other's";
-          });
+    @NonNull
+    String message();
+
+    /**
+     * A contributor chosen because it is narrower: it applies to no target, or
+     * type of subject, the other doesn't.
+     *
+     * @param chosen   the contributor chosen where both apply
+     * @param replaced the contributor it is chosen over there
+     */
+    record Narrower(@NonNull Contributed<?> chosen, @NonNull Contributed<?> replaced) implements Replacement {
+
+      @Override
+      public String message() {
+        return String.format("%s, is chosen over %s, where both apply: it is narrower.", chosen.describe(),
+            replaced.describe());
+      }
     }
 
     /**
-     * Why one contributor is chosen over another.
+     * A contributor chosen because it is downstream: it is as wide as the
+     * other, and its module reads the other's.
+     *
+     * @param chosen   the contributor chosen where both apply
+     * @param replaced the contributor it is chosen over there
      */
-    public enum Reason {
+    record Downstream(@NonNull Contributed<?> chosen, @NonNull Contributed<?> replaced) implements Replacement {
 
-      /**
-       * It applies to no target, or type of subject, the other doesn't.
-       */
-      NARROWER,
-
-      /**
-       * It is as wide as the other, and its module reads the other's.
-       */
-      DOWNSTREAM
+      @Override
+      public String message() {
+        return String.format("%s, is chosen over %s, where both apply: its module reads the other's.",
+            chosen.describe(), replaced.describe());
+      }
     }
   }
 

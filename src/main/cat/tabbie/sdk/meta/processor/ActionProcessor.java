@@ -13,9 +13,10 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
+import javax.lang.model.element.ModuleElement;
+import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
-import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
@@ -24,7 +25,9 @@ import cat.tabbie.sdk.meta.action.Action;
 import cat.tabbie.sdk.meta.action.Closure;
 import cat.tabbie.sdk.meta.action.Contributor;
 import cat.tabbie.sdk.meta.action.Coverage;
+import cat.tabbie.sdk.meta.action.Key;
 import cat.tabbie.sdk.meta.attribute.Applies;
+import cat.tabbie.sdk.meta.attribute.Subject;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 
@@ -32,28 +35,31 @@ import lombok.experimental.FieldDefaults;
  * Checks every action, and every contribution to one, a module compiles.
  *
  * <p>
- * An action declares the type a static contribution acts on,
- * {@code Class<?>[] subject()}, and, when its contributions may act in
- * different places, where each acts, {@code Closure value()}; without one,
- * every contribution acts in the root. Its {@link Action} names its signature:
- * a functional interface whose one method takes the subject, then the
- * action's context, or, for an action acting on types, only its context.
+ * An action, when its contributions may act in different places, declares
+ * where each acts, {@code Closure value()}; without one, every contribution
+ * acts in the root. It marks at most one element {@link Key}. Its
+ * {@link Action} names its signature: a functional interface whose one method
+ * takes the subject, then the action's context, or, for an action acting on
+ * types, only its context.
  *
  * <p>
  * Each method carrying an action is public and has its action's signature:
- * an instance method takes the context and acts on the type declaring it,
- * naming no subject; a static one takes the type it acts on, then the
- * context. A contribution to an action acting on types is static and takes
- * only the context, acting on the type declaring it or on the subject it
- * names. Each returns what the signature returns, and throws nothing more.
- * The type it acts on is one the signature takes, and it and the type
- * declaring the method are public, as is every type enclosing them, so the
- * registry reaches the method through the module's lookup. The contributions
- * of each action to each subject within a type are checked together as a
- * {@link Coverage}, by key, each conflict reported on the later of its two
- * methods. An {@link Applies} declaration on a method carrying no action, or
- * on a type with no action within it, is an error, since nothing would read
- * it, as is a malformed one, reported on each method it reaches.
+ * an instance method takes the context and acts on the type declaring it; a
+ * static one takes the type it acts on, then the context. A contribution to
+ * an action acting on types is static and takes only the context, acting on
+ * the type declaring it or on the one its {@link Subject} names; no other
+ * contribution names one. Each returns what the signature returns, and throws
+ * nothing more. The type it acts on is one the signature takes, and it and
+ * the type declaring the method are public, as is every type enclosing them,
+ * and the package declaring the method is exported, so the registry reaches
+ * the method through a public lookup. The contributions of each action to
+ * each subject within a type are checked together as a {@link Coverage}, by
+ * key, each conflict reported on the later of its two methods. An
+ * {@link Applies} or {@link Subject} declaration on a method carrying no
+ * action, an {@link Applies} on a type with no action within it, or a
+ * {@link Key} on an element of anything but an action, is an error, since
+ * nothing would read it, as is a malformed declaration, reported on each
+ * method it reaches.
  */
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public final class ActionProcessor extends Processor {
@@ -79,23 +85,34 @@ public final class ActionProcessor extends Processor {
   private void check(TypeElement type) {
     if (type.getKind() == ElementKind.ANNOTATION_TYPE && mirror(type, Action.class).isPresent()) {
       shape(type);
+    } else {
+      keys(type).forEach(element -> error(element, """
+          %s.%s() is marked @Key, but %s is no action; @Key only marks the element an action's contributors are \
+          keyed by.""", type.getSimpleName(), element.getSimpleName(), type.getSimpleName()));
     }
     if (attributed(type) && nested(List.of(type))
         .flatMap(inner -> ElementFilter.methodsIn(inner.getEnclosedElements()).stream())
         .allMatch(method -> actions(method).isEmpty())) {
-      error(type, "%s declares @Applies but no action within it; @Applies only says which targets an action "
-          + "applies to.", type.getSimpleName());
+      error(type, """
+          %s declares @Applies but no action within it; @Applies only says which targets an action applies \
+          to.""", type.getSimpleName());
     }
     Map<Covered, List<Contributor<TypeElement, ExecutableElement>>> coverages = new LinkedHashMap<>();
+    boolean contributes = false;
     for (ExecutableElement method : ElementFilter.methodsIn(type.getEnclosedElements())) {
       List<? extends AnnotationMirror> actions = actions(method);
       if (actions.isEmpty()) {
         if (attributed(method)) {
-          error(method, "%s declares @Applies but no action; @Applies only says which targets an action applies "
-              + "to.", name(method));
+          error(method, "%s declares @Applies but no action; @Applies only says which targets an action applies to.",
+              name(method));
+        }
+        if (mirror(method, Subject.class).isPresent()) {
+          error(method, "%s declares @Subject but no action; @Subject only names what a contribution acts on.",
+              name(method));
         }
         continue;
       }
+      contributes = true;
       if (!method.getModifiers().contains(Modifier.PUBLIC)) {
         error(method, "%s is a contribution, so it is public: the registry calls it.", name(method));
         continue;
@@ -113,6 +130,12 @@ public final class ActionProcessor extends Processor {
     }
     coverages.forEach((covered, contributions) -> new Coverage<>(covered.action(), contributions).conflicts()
         .forEach(conflict -> error(conflict.later().call(), "%s", conflict.message())));
+    if (contributes && !exported(type)) {
+      error(type, """
+          %s declares contributions, so module %s exports %s to every module: the registry calls them through a \
+          public lookup.""", type.getSimpleName(), elements.getModuleOf(type).getQualifiedName(),
+          elements.getPackageOf(type).getQualifiedName());
+    }
   }
 
   /**
@@ -123,21 +146,21 @@ public final class ActionProcessor extends Processor {
         .collect(Collectors.toMap(element -> element.getSimpleName().toString(), ExecutableElement::getReturnType));
     // An action acting only in the root declares no closure
     if (elements.containsKey("value") && !same(elements.get("value"), Closure.class)) {
-      error(action, "@%s is an action, so its value() is a Closure, where its contributions act; an action acting "
-          + "only in the root declares none.", action.getSimpleName());
+      error(action, """
+          @%s is an action, so its value() is a Closure, where its contributions act; an action acting only in the \
+          root declares none.""", action.getSimpleName());
     }
-    if (!(elements.get("subject") instanceof ArrayType array && assignable(array.getComponentType(), Class.class))) {
-      error(action, "@%s is an action, so it declares Class<?>[] subject() default {}, the type a static "
-          + "contribution acts on.", action.getSimpleName());
+    List<ExecutableElement> keys = keys(action);
+    if (keys.size() > 1) {
+      error(action, "@%s marks %s with @Key; an action's contributors are keyed by one element at most.",
+          action.getSimpleName(), keys.stream()
+              .map(key -> "%s()".formatted(key.getSimpleName()))
+              .collect(Collectors.joining(", ")));
     }
-    keyName(action)
-        .filter(key -> !elements.containsKey(key))
-        .ifPresent(key -> error(action, "@%s is keyed by %s(), so it declares that element.", action.getSimpleName(),
-            key));
     if (signature(action).flatMap(ActionProcessor::method).filter(ActionProcessor::shaped).isEmpty()) {
-      error(action, "@%s is an action, so its signature is a functional interface whose one method takes the "
-          + "subject it acts on, then its context, or only its context for an action acting on types.",
-          action.getSimpleName());
+      error(action, """
+          @%s is an action, so its signature is a functional interface whose one method takes the subject it acts \
+          on, then its context, or only its context for an action acting on types.""", action.getSimpleName());
     }
   }
 
@@ -162,13 +185,19 @@ public final class ActionProcessor extends Processor {
     boolean statical = method.getModifiers().contains(Modifier.STATIC);
     // An action acting on types has a signature taking only its context
     boolean typed = shape.getParameters().size() == 1;
+    boolean named = mirror(method, Subject.class).isPresent();
     List<? extends VariableElement> parameters = method.getParameters();
     if (typed && !statical) {
       error(method, "%s contributes to %s, which acts on types, so it is static and takes only its %s.", name,
           written, name(context));
-    } else if (!statical && action.getElementValues().keySet().stream()
-        .anyMatch(element -> element.getSimpleName().contentEquals("subject"))) {
-      error(method, "%s is an instance method, so it acts on the type declaring it and names no subject.", name);
+    } else if (named && !statical) {
+      error(method, "%s is an instance method, so it acts on the type declaring it and names no @Subject.", name);
+    } else if (named && !typed) {
+      error(method, "%s is static, so it acts on the type of its first parameter and names no @Subject.", name);
+    } else if (!typed && statical
+        && (parameters.size() != 2 || !types.isSameType(parameters.getLast().asType(), context))) {
+      error(method, "%s is static, so it takes the %s it acts on, then its %s, and nothing else.", name,
+          name(takes), name(context));
     } else if (!typed && !types.isAssignable(types.erasure(subject.asType()), types.erasure(takes))) {
       error(method, "%s acts on %s, but %s acts only on %s.", name, subject.getQualifiedName(), written, name(takes));
     } else if (!exposed(declaring) || !exposed(subject)) {
@@ -179,11 +208,6 @@ public final class ActionProcessor extends Processor {
     } else if ((typed || !statical)
         && (parameters.size() != 1 || !types.isSameType(parameters.getFirst().asType(), context))) {
       error(method, "%s takes its %s, and nothing else.", name, name(context));
-    } else if (!typed && statical && (parameters.size() != 2
-        || !types.isSameType(types.erasure(parameters.getFirst().asType()), types.erasure(subject.asType()))
-        || !types.isSameType(parameters.getLast().asType(), context))) {
-      error(method, "%s is static, so it takes the %s it acts on, then its %s, and nothing else.", name,
-          subject.getSimpleName(), name(context));
     } else if (shape.getReturnType().getKind() == TypeKind.VOID
         ? method.getReturnType().getKind() != TypeKind.VOID
         : !types.isAssignable(method.getReturnType(), shape.getReturnType())) {
@@ -222,7 +246,19 @@ public final class ActionProcessor extends Processor {
    * Names an action as written, such as {@code @Install}.
    */
   private static String written(AnnotationMirror action) {
-    return "@" + action.getAnnotationType().asElement().getSimpleName();
+    return "@%s".formatted(action.getAnnotationType().asElement().getSimpleName());
+  }
+
+  /**
+   * Whether the package declaring a type is exported to every module, as it
+   * is on the class path, so a public lookup reaches the type's public
+   * members.
+   */
+  private boolean exported(TypeElement type) {
+    ModuleElement module = elements.getModuleOf(type);
+    PackageElement declaring = elements.getPackageOf(type);
+    return module.isUnnamed() || ElementFilter.exportsIn(module.getDirectives()).stream()
+        .anyMatch(exports -> exports.getPackage().equals(declaring) && exports.getTargetModules() == null);
   }
 
   /**

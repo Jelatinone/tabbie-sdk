@@ -19,20 +19,13 @@ import lombok.NonNull;
  * Cat's nodes report. A base acts on a distribution as a type, not on an
  * instance of it: its {@link Signature} takes only its context, and every
  * base is a static method acting on the distribution type declaring it, or on
- * the type it names as its {@link #subject()}.
+ * the one its {@link cat.tabbie.sdk.meta.attribute.Subject Subject} names.
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 @Action(Base.Signature.class)
 public @interface Base {
-
-  /**
-   * Returns the distribution type a base declared outside it applies to.
-   *
-   * @return that type, or empty for the type declaring the method
-   */
-  Class<?>[] subject() default {};
 
   /**
    * The signature of every base, as the registry calls it.

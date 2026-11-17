@@ -19,7 +19,6 @@ import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.Modifier;
-import javax.lang.model.element.ModuleElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
@@ -34,29 +33,23 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 
 /**
- * Generates a module's {@link Registration}: a class named
- * {@code Registrations} listing the types the module registers and every type
- * declaring a contribution, in the package named after the module, or for a
- * module on the class path, in the package of its first listed type. It also
- * writes the file {@link java.util.ServiceLoader} reads on the class path. A
- * named module provides the registration itself, and the processor fails the
- * build, naming the line, when its {@code module-info} does not.
+ * Writes a module's {@link Registration} index, at
+ * {@link Registration#INDEX}: the SDK's version, then the binary name of every
+ * type the module registers and every type declaring a contribution, one per
+ * line. Core reads it from each module it loads, so the module declares
+ * nothing for it.
  *
  * <p>
- * A registered type is public, as is every type enclosing it, and is a type
- * of a {@link Registrable registrable kind}: of a kind registered by values,
- * an enum of them or an abstract type naming its group; of a kind registered
- * by types, any type of it. Group identifiers are unique within the module. Every
- * type is listed together in the first round with anything to list, so a type
- * another processor generates cannot be registered.
+ * A registered type is a type of a {@link Registrable registrable kind}: of a
+ * kind registrable {@link Registrable.As#VALUES as values}, an enum of them or
+ * an abstract type naming its group; of a kind registrable
+ * {@link Registrable.As#TYPES as types}, any type of it. Group identifiers are
+ * unique within the module. Every type is listed together in the first round
+ * with anything to list, so a type another processor generates cannot be
+ * registered.
  */
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public final class RegistrationProcessor extends Processor {
-
-  /**
-   * Simple name of the class generated in each module.
-   */
-  static String GENERATED = "Registrations";
 
   /**
    * Where the SDK's processors find the SDK's version, written into it when
@@ -65,32 +58,15 @@ public final class RegistrationProcessor extends Processor {
   static String VERSION = "/META-INF/tabbie/sdk.version";
 
   /**
-   * Where the SDK's processors find the template of each module's
-   * registration: Java source with {@code {{package}}}, {@code {{version}}}
-   * and {@code {{types}}} in place of the module's package, the SDK's
-   * version, and the class literals listed. Its class is named
-   * {@link #GENERATED}.
-   */
-  static String TEMPLATE = "/META-INF/tabbie/Registrations.java";
-
-  /**
    * Registered abstract types of distributions, by the group each names.
    */
   Map<String, TypeElement> groups = new HashMap<>();
 
   /**
-   * Whether the module's registration is generated.
+   * Whether the module's index is written.
    */
   @NonFinal
-  boolean generated;
-
-  /**
-   * Name of the named module whose registration was generated, checked for
-   * providing it once processing is over; empty for a module on the class
-   * path, or before the registration is generated.
-   */
-  @NonFinal
-  String provider = "";
+  boolean written;
 
   /**
    * Creates the processor, as javac does when it finds it on the processor
@@ -113,32 +89,15 @@ public final class RegistrationProcessor extends Processor {
     if (listed.isEmpty()) {
       return;
     }
-    if (generated) {
-      listed.forEach(type -> error(type, "%s is listed after this module's %s were generated; a registered type "
-          + "or a contribution cannot be generated.", type.getQualifiedName(), GENERATED));
+    if (written) {
+      listed.forEach(type -> error(type, """
+          %s is listed after this module's index was written; a registered type or a contribution cannot be \
+          generated.""", type.getQualifiedName()));
       return;
     }
     registered.forEach(this::check);
-    generate(listed);
-    generated = true;
-  }
-
-  @Override
-  protected void over() {
-    if (provider.isEmpty()) {
-      return;
-    }
-    // Only once processing is over does the module's provides line name a class that exists
-    ModuleElement module = elements.getModuleElement(provider);
-    String service = Registration.class.getCanonicalName();
-    String name = provider + "." + GENERATED;
-    if (ElementFilter.providesIn(module.getDirectives()).stream()
-        .filter(provides -> provides.getService().getQualifiedName().contentEquals(service))
-        .flatMap(provides -> provides.getImplementations().stream())
-        .noneMatch(implementation -> implementation.getQualifiedName().contentEquals(name))) {
-      error(module, "Module %s registers contributions, so its module-info must declare: provides %s with %s;",
-          provider, service, name);
-    }
+    write(listed);
+    written = true;
   }
 
   /**
@@ -146,46 +105,53 @@ public final class RegistrationProcessor extends Processor {
    */
   private void check(TypeElement type) {
     String group = type.getAnnotation(Registered.class).value();
-    boolean abstracted = type.getKind() == ElementKind.INTERFACE
-        || type.getKind() == ElementKind.CLASS && type.getModifiers().contains(Modifier.ABSTRACT);
-    Optional<Registrable.Kind> kind = kind(type);
-    if (!exposed(type)) {
-      error(type, "%s is registered, so it and every type enclosing it must be public: the generated %s name it.",
-          type.getQualifiedName(), GENERATED);
-    } else if (mirror(type, Registrable.class).isPresent()) {
+    Optional<Registrable.As> registrable = registrable(type);
+    if (mirror(type, Registrable.class).isPresent()) {
       error(type, "%s is a registrable kind, so its own types are registered rather than it.",
           type.getQualifiedName());
-    } else if (kind.isEmpty()) {
+      return;
+    }
+    if (registrable.isEmpty()) {
       error(type, "%s is registered, but is a type of no registrable kind, a type marked @Registrable.",
           type.getQualifiedName());
-    } else if (kind.get() == Registrable.Kind.TYPES) {
-      if (!group.isEmpty()) {
-        error(type, "%s registers itself, so it names no group.", type.getQualifiedName());
+      return;
+    }
+    switch (registrable.get()) {
+      case TYPES -> {
+        if (!group.isEmpty()) {
+          error(type, "%s registers itself, so it names no group.", type.getQualifiedName());
+        }
       }
-    } else if (type.getKind() == ElementKind.ENUM) {
-      if (!group.isEmpty()) {
-        error(type, "%s registers each of its values, so it names no group; register an abstract type of them as "
-            + "the group %s instead.", type.getQualifiedName(), group);
+      case VALUES -> {
+        boolean abstracted = type.getKind() == ElementKind.INTERFACE
+            || type.getKind() == ElementKind.CLASS && type.getModifiers().contains(Modifier.ABSTRACT);
+        if (type.getKind() == ElementKind.ENUM) {
+          if (!group.isEmpty()) {
+            error(type, """
+                %s registers each of its values, so it names no group; register an abstract type of them as the \
+                group %s instead.""", type.getQualifiedName(), group);
+          }
+        } else if (!abstracted) {
+          error(type, """
+              %s is registered as a type of a kind registrable as values, so it is an enum of them or an abstract \
+              type grouping them.""", type.getQualifiedName());
+        } else if (!Applies.IDENTIFIER.matcher(group).matches()) {
+          error(type, """
+              %s is registered as a group, so it names the group's identifier, such as java:launcher, rather than \
+              "%s".""", type.getQualifiedName(), group);
+        } else if (groups.putIfAbsent(group, type) != null) {
+          error(type, "%s and %s are both registered as the group %s.", groups.get(group).getQualifiedName(),
+              type.getQualifiedName(), group);
+        }
       }
-    } else if (abstracted) {
-      if (!Applies.IDENTIFIER.matcher(group).matches()) {
-        error(type, "%s is registered as a group, so it names the group's identifier, such as java:launcher, "
-            + "rather than \"%s\".", type.getQualifiedName(), group);
-      } else if (groups.putIfAbsent(group, type) != null) {
-        error(type, "%s and %s are both registered as the group %s.", groups.get(group).getQualifiedName(),
-            type.getQualifiedName(), group);
-      }
-    } else {
-      error(type, "%s is registered as a type of a kind registered by values, so it is an enum of them or an "
-          + "abstract type grouping them.", type.getQualifiedName());
     }
   }
 
   /**
-   * Finds the registrable kind a type is a type of: the nearest of its
-   * supertypes marked {@link Registrable}.
+   * Finds how a type registers: as the registrable kind it is a type of says,
+   * the nearest of its supertypes marked {@link Registrable}.
    */
-  private Optional<Registrable.Kind> kind(TypeElement type) {
+  private Optional<Registrable.As> registrable(TypeElement type) {
     Deque<TypeMirror> pending = new ArrayDeque<>(types.directSupertypes(type.asType()));
     Set<String> seen = new HashSet<>();
     while (!pending.isEmpty()) {
@@ -204,37 +170,19 @@ public final class RegistrationProcessor extends Processor {
   }
 
   /**
-   * Writes the module's registration, and the file the service loader reads
-   * on the class path.
+   * Writes the module's index: the SDK's version, then each listed type's
+   * binary name.
    */
-  private void generate(List<TypeElement> listed) {
-    Element first = listed.getFirst();
-    ModuleElement module = elements.getModuleOf(first);
-    String pack = module.isUnnamed()
-        ? elements.getPackageOf(first).getQualifiedName().toString()
-        : module.getQualifiedName().toString();
-    String name = pack + "." + GENERATED;
-    provider = module.isUnnamed() ? "" : module.getQualifiedName().toString();
+  private void write(List<TypeElement> listed) {
     Element[] originating = listed.toArray(Element[]::new);
-    String types = listed.stream()
-        .map(type -> String.format("\n        %s.class", type.getQualifiedName()))
-        .collect(Collectors.joining(","));
-    try {
-      String source = read(TEMPLATE)
-          .replace("{{package}}", pack)
-          .replace("{{version}}", version())
-          .replace("{{types}}", types);
-      try (Writer writer = processingEnv.getFiler().createSourceFile(name, originating).openWriter()) {
-        writer.write(source);
-      }
-      try (Writer writer = processingEnv.getFiler()
-          .createResource(StandardLocation.CLASS_OUTPUT, "", "META-INF/services/"
-              + Registration.class.getCanonicalName(), originating)
-          .openWriter()) {
-        writer.write(name + "\n");
-      }
+    try (Writer writer = processingEnv.getFiler()
+        .createResource(StandardLocation.CLASS_OUTPUT, "", Registration.INDEX, originating)
+        .openWriter()) {
+      writer.write(Stream.concat(Stream.of(version()), listed.stream()
+          .map(type -> elements.getBinaryName(type).toString()))
+          .collect(Collectors.joining("\n", "", "\n")));
     } catch (IOException exception) {
-      error(first, "Could not generate %s: %s", name, exception.getMessage());
+      error(listed.getFirst(), "Could not write %s: %s", Registration.INDEX, exception.getMessage());
     }
   }
 
@@ -242,22 +190,15 @@ public final class RegistrationProcessor extends Processor {
    * Reads the version of the SDK these processors belong to.
    */
   private static String version() throws IOException {
-    String version = read(VERSION).strip();
-    if (version.isEmpty()) {
-      throw new IOException(String.format("The SDK's version in %s is empty.", VERSION));
-    }
-    return version;
-  }
-
-  /**
-   * Reads one of the SDK's resources as text.
-   */
-  private static String read(String resource) throws IOException {
-    try (InputStream stream = RegistrationProcessor.class.getResourceAsStream(resource)) {
+    try (InputStream stream = RegistrationProcessor.class.getResourceAsStream(VERSION)) {
       if (stream == null) {
-        throw new IOException(String.format("The SDK's %s is missing.", resource));
+        throw new IOException(String.format("The SDK's %s is missing.", VERSION));
       }
-      return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+      String version = new String(stream.readAllBytes(), StandardCharsets.UTF_8).strip();
+      if (version.isEmpty()) {
+        throw new IOException(String.format("The SDK's version in %s is empty.", VERSION));
+      }
+      return version;
     }
   }
 }

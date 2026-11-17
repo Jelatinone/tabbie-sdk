@@ -154,7 +154,7 @@ public record Coverage<Subject, Call>(
     @Override
     public String toString() {
       String named = Stream.of(distribution, environment.map(Enum::name),
-          platform.map(machine -> machine.kernel() + "/" + machine.architecture()))
+          platform.map(machine -> "%s/%s".formatted(machine.kernel(), machine.architecture())))
           .flatMap(Optional::stream)
           .collect(Collectors.joining(", "));
       return named.isEmpty() ? "every target" : named;
@@ -251,16 +251,16 @@ public record Coverage<Subject, Call>(
        */
       public Gap {
         if (begins.compareTo(ends) <= 0) {
-          throw new IllegalArgumentException("A gap lies between where one contribution's versions end and the "
-              + "next's begin.");
+          throw new IllegalArgumentException(
+              "A gap lies between where one contribution's versions end and the next's begin.");
         }
       }
 
       @Override
       public String message() {
-        return String.format("%s contributions leave the versions from %s up to %s uncovered for %s: %s ends at "
-            + "%s, but %s begins at %s.", action, ends, begins, target, earlier.name(), ends,
-            later.name(), begins);
+        return String.format("""
+            %s contributions leave the versions from %s up to %s uncovered for %s: %s ends at %s, but %s begins \
+            at %s.""", action, ends, begins, target, earlier.name(), ends, later.name(), begins);
       }
     }
   }

@@ -13,7 +13,7 @@ public enum Cardinality {
   ONE,
 
   /**
-   * Every winner, one for each value of the action's {@link Action#key() key},
+   * Every winner, one for each value of the action's {@link Key key},
    * as the activations of an artifact are, one for each file they edit.
    * Contributors keyed by different values never meet, so precedence only
    * chooses between those sharing a key.

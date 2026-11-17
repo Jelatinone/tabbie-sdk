@@ -5,6 +5,7 @@ import java.util.Set;
 import cat.tabbie.sdk.meta.action.Base;
 import cat.tabbie.sdk.meta.action.Place;
 import cat.tabbie.sdk.meta.attribute.Applies;
+import cat.tabbie.sdk.meta.attribute.Subject;
 import cat.tabbie.sdk.meta.registry.Registered;
 import cat.tabbie.sdk.target.Environment;
 import cat.tabbie.sdk.target.Version;
@@ -53,7 +54,8 @@ public interface Java extends Distribution {
    * @param context the Cat's root
    * @return the directory accepting namespaces
    */
-  @Place(subject = Namespace.class)
+  @Place
+  @Subject(Namespace.class)
   @Applies(to = "java:base", environments = Environment.CLIENT)
   static Node.Directory placeSavesRoot(@NonNull Place.Context context) {
     return context.head().directory("saves");
@@ -66,7 +68,8 @@ public interface Java extends Distribution {
    * @param context the Cat's root
    * @return the root, accepting namespaces
    */
-  @Place(subject = Namespace.class)
+  @Place
+  @Subject(Namespace.class)
   @Applies(to = "java:base", environments = Environment.SERVER)
   static Node.Directory placeLevelsRoot(@NonNull Place.Context context) {
     return context.head();
@@ -79,7 +82,8 @@ public interface Java extends Distribution {
    * @param context the Cat's root
    * @return the directory accepting distributables
    */
-  @Place(subject = Distributable.class)
+  @Place
+  @Subject(Distributable.class)
   @Applies(to = "java:base", environments = Environment.CLIENT)
   static Node.Directory placeVersionsRoot(@NonNull Place.Context context) {
     return context.head().directory("versions");
@@ -92,7 +96,8 @@ public interface Java extends Distribution {
    * @param context the Cat's root
    * @return the root, accepting distributables
    */
-  @Place(subject = Distributable.class)
+  @Place
+  @Subject(Distributable.class)
   @Applies(to = "java:base", environments = Environment.SERVER)
   static Node.Directory placeServerRoot(@NonNull Place.Context context) {
     return context.head();

@@ -115,8 +115,9 @@ public interface Product {
    * own. Where its content goes is not the release's to say: the
    * {@link cat.tabbie.sdk.meta.action.Place places} applying to its targets
    * say it, by version, and the
-   * {@link cat.tabbie.sdk.Registry#check(Product.Build) registry checks} they
-   * place everything the release holds and its contributors act on.
+   * {@link cat.tabbie.sdk.meta.registry.Registry#check(Product.Build)
+   * registry checks} they place everything the release holds and its
+   * contributors act on.
    *
    * @param coordinates   exact release coordinates
    * @param releaseName   non-blank display name

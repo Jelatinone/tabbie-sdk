@@ -2,6 +2,7 @@ package cat.tabbie.sdk.tree;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -512,16 +513,42 @@ public sealed interface Reason {
     }
 
     /**
-     * A contribution cannot be reached through its module's registration: its
-     * method cannot be called, or its action's elements cannot be read.
+     * Something a module's registration lists cannot be reached: a type its
+     * index names is not in the module, a contribution's method cannot be
+     * called because its package is not exported, or its action's elements
+     * cannot be read.
      *
-     * @param name the method or element that cannot be reached
+     * @param name the type, method or element that cannot be reached
      */
     record Unreachable(@NonNull String name) implements Registry {
 
       @Override
       public String message() {
         return String.format("%s cannot be reached through its module's registration.", name);
+      }
+    }
+
+    /**
+     * A release has no place for something it holds, or that one of the
+     * contributors applying to it acts on or beneath, so core would have
+     * nowhere to put it.
+     *
+     * @param release     the release, by its canonical coordinates
+     * @param type        the type no place applies to, by name
+     * @param contributor the contributor acting on or beneath it, such as
+     *                    {@code @Install Mod.install(Install.Context)}, or
+     *                    empty when the release holds it
+     */
+    record Unplaced(
+        @NonNull String release,
+        @NonNull String type,
+        @NonNull Optional<String> contributor) implements Registry {
+
+      @Override
+      public String message() {
+        return contributor
+            .map(acting -> String.format("%s places no %s, which %s acts on or beneath.", release, type, acting))
+            .orElseGet(() -> String.format("%s places no %s, which it holds.", release, type));
       }
     }
 

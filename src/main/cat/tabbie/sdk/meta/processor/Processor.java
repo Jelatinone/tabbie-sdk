@@ -32,8 +32,10 @@ import javax.tools.Diagnostic;
 import cat.tabbie.sdk.meta.action.Action;
 import cat.tabbie.sdk.meta.action.Closure;
 import cat.tabbie.sdk.meta.action.Contributor;
+import cat.tabbie.sdk.meta.action.Key;
 import cat.tabbie.sdk.meta.attribute.Applies;
 import cat.tabbie.sdk.meta.attribute.Conditions;
+import cat.tabbie.sdk.meta.attribute.Subject;
 import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
@@ -44,7 +46,7 @@ import lombok.experimental.NonFinal;
  * reads, the source versions it supports, the compiler's utilities,
  * reporting errors, and reading elements into the records the registry reads
  * at run time. Each subject's processor extends it and holds only its own
- * rules, run once each round, and once more when processing is over.
+ * rules, run once each round.
  *
  * <p>
  * Reading a method here builds the same {@link Contributor} and
@@ -105,9 +107,7 @@ public abstract sealed class Processor extends AbstractProcessor
 
   @Override
   public final boolean process(Set<? extends TypeElement> annotations, RoundEnvironment round) {
-    if (round.processingOver()) {
-      over();
-    } else {
+    if (!round.processingOver()) {
       round(round);
     }
     return false;
@@ -119,13 +119,6 @@ public abstract sealed class Processor extends AbstractProcessor
    * @param round the round
    */
   protected abstract void round(@NonNull RoundEnvironment round);
-
-  /**
-   * Applies the rules that can only run once processing is over; none by
-   * default.
-   */
-  protected void over() {
-  }
 
   /**
    * Reads a method contributing an action, as the registry reads it at run
@@ -141,8 +134,7 @@ public abstract sealed class Processor extends AbstractProcessor
   protected Contributor<TypeElement, ExecutableElement> contributor(
       @NonNull ExecutableElement method,
       @NonNull AnnotationMirror action) {
-    return new Contributor<>(name(method), subject(method, action), conditions(method), closure(action), key(action),
-        method);
+    return new Contributor<>(name(method), subject(method), conditions(method), closure(action), key(action), method);
   }
 
   /**
@@ -164,9 +156,9 @@ public abstract sealed class Processor extends AbstractProcessor
   }
 
   /**
-   * Returns the value a contribution is keyed by: that of the element its
-   * action's {@link Action#key() key} names, written as the registry writes
-   * it, a class by its binary name.
+   * Returns the value a contribution is keyed by: that of its action's element
+   * marked {@link Key}, written as the registry writes it, a class by its
+   * binary name.
    *
    * @param action the action, as a method carries it
    * @return the key, or empty when the action is keyed by nothing
@@ -183,18 +175,28 @@ public abstract sealed class Processor extends AbstractProcessor
   }
 
   /**
-   * Returns the name of the element an action is keyed by, as its
-   * {@link Action} names it.
+   * Returns the name of the element an action is keyed by: the first of its
+   * elements marked {@link Key}.
    *
    * @param action an action's annotation type
    * @return the element's name, or empty when the action is keyed by nothing
    */
-  protected Optional<String> keyName(@NonNull TypeElement action) {
-    return mirror(action, Action.class)
-        .flatMap(marked -> element(marked, "key"))
-        .map(AnnotationValue::getValue)
-        .map(String.class::cast)
-        .filter(name -> !name.isEmpty());
+  protected static Optional<String> keyName(@NonNull TypeElement action) {
+    return keys(action).stream()
+        .map(element -> element.getSimpleName().toString())
+        .findFirst();
+  }
+
+  /**
+   * Returns the elements of an annotation type marked {@link Key}.
+   *
+   * @param action an annotation type
+   * @return its keyed elements, empty when none is marked
+   */
+  protected static List<ExecutableElement> keys(@NonNull TypeElement action) {
+    return ElementFilter.methodsIn(action.getEnclosedElements()).stream()
+        .filter(element -> mirror(element, Key.class).isPresent())
+        .toList();
   }
 
   /**
@@ -218,30 +220,33 @@ public abstract sealed class Processor extends AbstractProcessor
         .map(constant -> ((VariableElement) constant).getSimpleName().toString())
         .filter(name -> Stream.of(Closure.values()).anyMatch(closure -> closure.name().equals(name)))
         .map(Closure::valueOf)
-        .orElseThrow(() -> new IllegalArgumentException(String.format("@%s is an action, so its value() is a "
-            + "Closure, where its contributions act.", action.getAnnotationType().asElement().getSimpleName())));
+        .orElseThrow(() -> new IllegalArgumentException(String.format(
+            "@%s is an action, so its value() is a Closure, where its contributions act.",
+            action.getAnnotationType().asElement().getSimpleName())));
   }
 
   /**
-   * Returns the type an action acts on: the type its {@code subject} element
-   * names, or else the type declaring the method. A {@code Class} element is
-   * the one value the compiler cannot hand over as an annotation instance, so
-   * it is read from the mirror.
+   * Returns the type a contribution acts on, as the registry reads it at run
+   * time: the type its {@link Subject} names; or, for a static method taking
+   * more than its context, its first parameter's type; or else the type
+   * declaring it. A {@code Class} element is the one value the compiler
+   * cannot hand over as an annotation instance, so it is read from the
+   * mirror.
    *
-   * @param method method carrying the action
-   * @param action the action, as the method carries it
+   * @param method method carrying an action
    * @return the type it acts on
    */
-  protected TypeElement subject(@NonNull ExecutableElement method, @NonNull AnnotationMirror action) {
-    return element(action, "subject")
+  protected TypeElement subject(@NonNull ExecutableElement method) {
+    return mirror(method, Subject.class)
+        .flatMap(subject -> element(subject, "value"))
         .map(AnnotationValue::getValue)
-        .stream()
-        .flatMap(value -> value instanceof List<?> values
-            ? values.stream().map(held -> ((AnnotationValue) held).getValue())
-            : Stream.of(value))
         .filter(TypeMirror.class::isInstance)
-        .map(type -> (TypeElement) types.asElement((TypeMirror) type))
-        .findFirst()
+        .map(type -> types.asElement((TypeMirror) type))
+        .or(() -> Optional.of(method)
+            .filter(taking -> taking.getModifiers().contains(Modifier.STATIC) && taking.getParameters().size() > 1)
+            .map(taking -> types.asElement(types.erasure(taking.getParameters().getFirst().asType()))))
+        .filter(TypeElement.class::isInstance)
+        .map(TypeElement.class::cast)
         .orElse((TypeElement) method.getEnclosingElement());
   }
 
@@ -397,14 +402,16 @@ public abstract sealed class Processor extends AbstractProcessor
     return switch (type) {
       case DeclaredType declared when declared.getTypeArguments().isEmpty() ->
           name((TypeElement) declared.asElement());
-      case DeclaredType declared -> name((TypeElement) declared.asElement()) + declared.getTypeArguments().stream()
-          .map(Processor::name)
-          .collect(Collectors.joining(", ", "<", ">"));
+      case DeclaredType declared -> "%s<%s>".formatted(name((TypeElement) declared.asElement()),
+          declared.getTypeArguments().stream()
+              .map(Processor::name)
+              .collect(Collectors.joining(", ")));
       case WildcardType wildcard when wildcard.getExtendsBound() != null ->
-          "? extends " + name(wildcard.getExtendsBound());
-      case WildcardType wildcard when wildcard.getSuperBound() != null -> "? super " + name(wildcard.getSuperBound());
+          "? extends %s".formatted(name(wildcard.getExtendsBound()));
+      case WildcardType wildcard when wildcard.getSuperBound() != null ->
+          "? super %s".formatted(name(wildcard.getSuperBound()));
       case WildcardType _ -> "?";
-      case ArrayType array -> name(array.getComponentType()) + "[]";
+      case ArrayType array -> "%s[]".formatted(name(array.getComponentType()));
       case PrimitiveType primitive -> primitive.getKind().name().toLowerCase(Locale.ROOT);
       default -> type.toString();
     };
