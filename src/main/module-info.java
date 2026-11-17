@@ -19,8 +19,9 @@
  * <li>{@link cat.tabbie.sdk.target}: game versions, and the targets content
  * is installed on</li>
  * <li>{@link cat.tabbie.sdk.tree}: shapes, their leases and rules,
- * addresses, namespaces, and the failures of describing and carrying out
- * changes</li>
+ * addresses and namespaces</li>
+ * <li>{@link cat.tabbie.sdk.failure}: why work fails, and the violations and
+ * refusals carrying the reason</li>
  * <li>{@link cat.tabbie.sdk.revision}: descriptions of change, the deferred
  * work that carries them out, and the plates it runs on</li>
  * <li>{@link cat.tabbie.sdk.form}: shapes read in a format</li>
@@ -52,6 +53,7 @@ module cat.tabbie.sdk {
   exports cat.tabbie.sdk.catalog;
   exports cat.tabbie.sdk.content;
   exports cat.tabbie.sdk.distribution;
+  exports cat.tabbie.sdk.failure;
   exports cat.tabbie.sdk.form;
   exports cat.tabbie.sdk.meta.action;
   exports cat.tabbie.sdk.meta.attribute;

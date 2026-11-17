@@ -1,7 +1,7 @@
 package cat.tabbie.sdk.revision;
 
-import cat.tabbie.sdk.tree.Reason;
-import cat.tabbie.sdk.tree.Refusal;
+import cat.tabbie.sdk.failure.Reason;
+import cat.tabbie.sdk.failure.Refusal;
 import lombok.NonNull;
 
 /**

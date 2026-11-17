@@ -11,16 +11,16 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import cat.tabbie.sdk.failure.Reason;
+import cat.tabbie.sdk.failure.Refusal;
+import cat.tabbie.sdk.failure.Violation;
 import cat.tabbie.sdk.tree.Address;
 import cat.tabbie.sdk.tree.Describe;
 import cat.tabbie.sdk.tree.Lease;
 import cat.tabbie.sdk.tree.Node;
-import cat.tabbie.sdk.tree.Reason;
-import cat.tabbie.sdk.tree.Refusal;
 import cat.tabbie.sdk.tree.Shape;
 import cat.tabbie.sdk.tree.Source;
 import cat.tabbie.sdk.tree.State;
-import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
 /**

@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
+import cat.tabbie.sdk.failure.Reason;
+import cat.tabbie.sdk.failure.Violation;
 import lombok.NonNull;
 
 /**
@@ -14,8 +16,8 @@ import lombok.NonNull;
  * validation are identical on every platform. What it is relative to depends
  * on where it is used: an image's address lies beneath the Cat, a source's
  * path beneath its source, and an archive entry's path beneath its archive.
- * Work that needs a path in a particular directory {@link #require(Address)
- * requires} it there.
+ * Whether a path lies beneath a directory is {@link #within(Address)}, and
+ * {@link #relativeTo(Address)} takes it back out of one.
  *
  * <p>
  * Every component is a portable filename, valid on every platform tabbie
@@ -42,7 +44,11 @@ public record Address(@NonNull List<String> components) {
    */
   public Address {
     components = List.copyOf(components);
-    components.forEach(Address::validateFilename);
+    for (String component : components) {
+      if (!portable(component)) {
+        throw new IllegalArgumentException(String.format("\"%s\" is not a portable single filename.", component));
+      }
+    }
   }
 
   /**
@@ -83,26 +89,21 @@ public record Address(@NonNull List<String> components) {
   }
 
   /**
-   * Checks a single filename is portable, without reading the filesystem: not
-   * blank, not a dot segment, with no control character or character Windows
-   * reserves, not one of Windows' device names ({@code CON}, {@code PRN},
-   * {@code AUX}, {@code NUL}, {@code COM1} to {@code COM9}, {@code LPT1} to
-   * {@code LPT9}, in any case, with or without an extension), and not ending
-   * in a dot or a space. These lexical checks do not establish whether a target
-   * filesystem has room for the name.
-   *
-   * @param fileName filename to check
-   * @throws IllegalArgumentException when the name is not a portable single
-   *                                  filename
+   * Whether a single filename is portable, judged without reading the
+   * filesystem: not blank, not a dot segment, with no control character or
+   * character Windows reserves, not one of Windows' device names ({@code CON},
+   * {@code PRN}, {@code AUX}, {@code NUL}, {@code COM1} to {@code COM9},
+   * {@code LPT1} to {@code LPT9}, in any case, with or without an extension),
+   * and not ending in a dot or a space. Whether a target filesystem has room
+   * for the name is not judged. Every name in this package that a shape or its
+   * bytes are known by is checked by it.
    */
-  public static void validateFilename(@NonNull String fileName) {
-    String stem = fileName.contains(".") ? fileName.substring(0, fileName.indexOf('.')) : fileName;
-    if (fileName.isBlank() || fileName.equals(".") || fileName.equals("..")
-        || fileName.chars().anyMatch(character -> character < 32 || "<>:\"/\\|?*".indexOf(character) >= 0)
-        || fileName.endsWith(".") || fileName.endsWith(" ")
-        || DEVICE_NAME.matcher(stem).matches()) {
-      throw new IllegalArgumentException("Expected a portable single filename.");
-    }
+  static boolean portable(String name) {
+    String stem = name.contains(".") ? name.substring(0, name.indexOf('.')) : name;
+    return !name.isBlank() && !name.equals(".") && !name.equals("..")
+        && name.chars().noneMatch(character -> character < 32 || "<>:\"/\\|?*".indexOf(character) >= 0)
+        && !name.endsWith(".") && !name.endsWith(" ")
+        && !DEVICE_NAME.matcher(stem).matches();
   }
 
   /**
@@ -143,25 +144,9 @@ public record Address(@NonNull List<String> components) {
   }
 
   /**
-   * Requires this address to lie in a directory: to be the directory itself,
-   * or anywhere beneath it. It is the check that matches
-   * {@link #resolve(String...) resolve}, which goes down from a directory.
-   *
-   * @param directory directory this address must lie in
-   * @return this address
-   * @throws Violation with {@link Reason.Place.Outside} when this address lies
-   *                   elsewhere
-   */
-  public Address require(@NonNull Address directory) {
-    if (!equals(directory) && !within(directory)) {
-      throw new Violation(new Reason.Place.Outside(this, directory));
-    }
-    return this;
-  }
-
-  /**
    * Returns this address relative to a directory it lies in, undoing
-   * {@link #resolve(Address) resolve} from that directory.
+   * {@link #resolve(Address) resolve} from that directory: this address is the
+   * directory itself, or {@link #within(Address) within} it.
    *
    * @param directory directory this address lies in
    * @return address beneath the directory, the root address for the
@@ -170,7 +155,9 @@ public record Address(@NonNull List<String> components) {
    *                   elsewhere
    */
   public Address relativeTo(@NonNull Address directory) {
-    require(directory);
+    if (!equals(directory) && !within(directory)) {
+      throw new Violation(new Reason.Place.Outside(this, directory));
+    }
     return new Address(components.subList(directory.components().size(), components.size()));
   }
 

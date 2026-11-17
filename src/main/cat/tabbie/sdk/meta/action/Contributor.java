@@ -13,10 +13,10 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import cat.tabbie.sdk.failure.Reason;
+import cat.tabbie.sdk.failure.Violation;
 import cat.tabbie.sdk.meta.attribute.Applies;
 import cat.tabbie.sdk.meta.attribute.Conditions;
-import cat.tabbie.sdk.tree.Reason;
-import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
 /**

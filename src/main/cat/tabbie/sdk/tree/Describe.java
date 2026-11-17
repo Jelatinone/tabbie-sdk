@@ -48,7 +48,9 @@ public record Describe(
    *                                  algorithm's length
    */
   public Describe {
-    Address.validateFilename(name);
+    if (!Address.portable(name)) {
+      throw new IllegalArgumentException(String.format("\"%s\" is not a portable single filename.", name));
+    }
     digests = Map.copyOf(digests);
     if (size < 0) {
       throw new IllegalArgumentException("A file's size is never negative.");

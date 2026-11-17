@@ -2,8 +2,8 @@ package cat.tabbie.sdk.form;
 
 import java.io.IOException;
 
-import cat.tabbie.sdk.tree.Reason;
-import cat.tabbie.sdk.tree.Refusal;
+import cat.tabbie.sdk.failure.Reason;
+import cat.tabbie.sdk.failure.Refusal;
 import cat.tabbie.sdk.tree.Shape;
 import lombok.AccessLevel;
 import lombok.NonNull;

@@ -21,14 +21,14 @@ import java.util.stream.Stream;
 import cat.tabbie.sdk.catalog.Product;
 import cat.tabbie.sdk.content.Artifact;
 import cat.tabbie.sdk.distribution.Distribution;
+import cat.tabbie.sdk.failure.Reason;
+import cat.tabbie.sdk.failure.Violation;
 import cat.tabbie.sdk.meta.action.Action;
 import cat.tabbie.sdk.meta.action.Contributor;
 import cat.tabbie.sdk.meta.action.Install;
 import cat.tabbie.sdk.meta.action.Place;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Platform;
-import cat.tabbie.sdk.tree.Reason;
-import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
 /**
@@ -263,7 +263,7 @@ public record Registry(
    * places is chosen is precedence's to say, not this check's.
    *
    * @param build release to check
-   * @throws Violation with {@link Reason.Registry.Unplaced} when something a
+   * @throws Violation with {@link Reason.Registry.Incomplete} when something a
    *                   contributor acts on or beneath, or a distributable, has
    *                   no applying place
    */
@@ -287,7 +287,7 @@ public record Registry(
             .filter(unplaced)
             .findFirst()
             .ifPresent(type -> {
-              throw new Violation(new Reason.Registry.Unplaced(build.coordinates().canonical(), type.getName(),
+              throw new Violation(new Reason.Registry.Incomplete(build.coordinates().canonical(), type.getName(),
                   Optional.of(String.format("@%s %s", action.getSimpleName(), contributor.name()))));
             })));
     build.content().stream()
@@ -295,7 +295,7 @@ public record Registry(
         .filter(unplaced)
         .findFirst()
         .ifPresent(type -> {
-          throw new Violation(new Reason.Registry.Unplaced(build.coordinates().canonical(), type.getName(),
+          throw new Violation(new Reason.Registry.Incomplete(build.coordinates().canonical(), type.getName(),
               Optional.empty()));
         });
   }

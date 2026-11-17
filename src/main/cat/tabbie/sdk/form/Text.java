@@ -7,8 +7,8 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
-import cat.tabbie.sdk.tree.Reason;
-import cat.tabbie.sdk.tree.Refusal;
+import cat.tabbie.sdk.failure.Reason;
+import cat.tabbie.sdk.failure.Refusal;
 import cat.tabbie.sdk.tree.Shape;
 import cat.tabbie.sdk.tree.Source;
 import lombok.AccessLevel;

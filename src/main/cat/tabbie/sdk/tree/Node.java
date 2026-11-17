@@ -8,6 +8,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import cat.tabbie.sdk.failure.Reason;
+import cat.tabbie.sdk.failure.Refusal;
+import cat.tabbie.sdk.failure.Violation;
 import cat.tabbie.sdk.revision.Hunk;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.revision.Revision;
@@ -78,19 +81,6 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
   }
 
   /**
-   * Requires a permission to hold at this place, before a change needing it
-   * is described here.
-   *
-   * @param permission permission the change needs
-   * @throws Violation with {@link Reason.Place.Denied} when it does not hold
-   */
-  default void require(@NonNull Rule.Permission permission) {
-    if (!permits(permission)) {
-      throw new Violation(new Reason.Place.Denied(address(), permission));
-    }
-  }
-
-  /**
    * Returns the directory standing for the root of this node's tree, by
    * following {@link #parent()} up as far as it goes.
    *
@@ -128,7 +118,9 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      */
     @NonNull
     default <Side extends Image.Alteration> Image<Side> configure(@NonNull Revision<Side> revision) {
-      require(Rule.Permission.EDITABLE);
+      if (!permits(Rule.Permission.EDITABLE)) {
+        throw new Violation(new Reason.Place.Denied(address(), Rule.Permission.EDITABLE));
+      }
       return new Image.Configuration<>(address(), revision);
     }
 
@@ -185,7 +177,9 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      */
     @NonNull
     default Image<Image.File.Present> replace(@NonNull Shape.File after) throws IOException {
-      require(Rule.Permission.EDITABLE);
+      if (!permits(Rule.Permission.EDITABLE)) {
+        throw new Violation(new Reason.Place.Denied(address(), Rule.Permission.EDITABLE));
+      }
       Image.File.Present before = new Image.File.Present(Source.of(name(), bytes()).describe());
       Image.File.Present replaced = new Image.File.Present(after.describe());
       if (before.same(replaced)) {
@@ -207,7 +201,9 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      */
     @NonNull
     default Image<Image.File> delete() throws IOException {
-      require(Rule.Permission.DELETABLE);
+      if (!permits(Rule.Permission.DELETABLE)) {
+        throw new Violation(new Reason.Place.Denied(address(), Rule.Permission.DELETABLE));
+      }
       return new Image.Installation(new Image.File.Present(Source.of(name(), bytes()).describe()),
           new Image.File.Absent(), address());
     }
@@ -326,7 +322,9 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
       return switch (shape) {
         case Shape.File file -> {
           Node.File landing = file(name);
-          landing.require(Rule.Permission.CREATABLE);
+          if (!landing.permits(Rule.Permission.CREATABLE)) {
+            throw new Violation(new Reason.Place.Denied(landing.address(), Rule.Permission.CREATABLE));
+          }
           yield Set.of(new Image.Installation(new Image.File.Absent(), new Image.File.Present(file.describe()),
               landing.address()));
         }

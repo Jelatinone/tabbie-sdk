@@ -6,9 +6,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 
+import cat.tabbie.sdk.failure.Reason;
+import cat.tabbie.sdk.failure.Violation;
 import cat.tabbie.sdk.revision.Intermediate.Step.Effect;
-import cat.tabbie.sdk.tree.Reason;
-import cat.tabbie.sdk.tree.Violation;
 import lombok.NonNull;
 
 /**

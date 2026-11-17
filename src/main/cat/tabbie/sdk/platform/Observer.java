@@ -3,7 +3,7 @@ package cat.tabbie.sdk.platform;
 import java.util.Locale;
 import java.util.OptionalLong;
 
-import cat.tabbie.sdk.tree.Reason;
+import cat.tabbie.sdk.failure.Reason;
 import lombok.NonNull;
 
 /**

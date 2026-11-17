@@ -6,8 +6,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 
+import cat.tabbie.sdk.failure.Refusal;
 import cat.tabbie.sdk.form.Text;
-import cat.tabbie.sdk.tree.Refusal;
 import cat.tabbie.sdk.tree.Shape;
 import lombok.NonNull;
 
@@ -61,7 +61,7 @@ public sealed interface Revision<Side extends Image.Alteration> permits Revision
    * @param current the file as it is
    * @return the file's revised content, or empty when its content is not what
    *         this revision changes from
-   * @throws Refusal     with a {@link cat.tabbie.sdk.tree.Reason.Content} when
+   * @throws Refusal     with a {@link cat.tabbie.sdk.failure.Reason.Content} when
    *                     the content cannot be read as this revision reads it
    * @throws IOException when the file cannot be read
    */

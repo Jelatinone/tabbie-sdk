@@ -5,6 +5,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.Set;
 
+import cat.tabbie.sdk.failure.Reason;
+import cat.tabbie.sdk.failure.Refusal;
 import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
@@ -70,7 +72,9 @@ public sealed interface Source extends Shape permits Source.File {
      *                                  filename
      */
     public File {
-      Address.validateFilename(name);
+      if (!Address.portable(name)) {
+        throw new IllegalArgumentException(String.format("\"%s\" is not a portable single filename.", name));
+      }
       content = content.clone();
     }
 

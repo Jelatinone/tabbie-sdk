@@ -10,8 +10,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 
-import cat.tabbie.sdk.tree.Reason;
-import cat.tabbie.sdk.tree.Violation;
+import cat.tabbie.sdk.failure.Reason;
+import cat.tabbie.sdk.failure.Violation;
 import lombok.NonNull;
 
 /**

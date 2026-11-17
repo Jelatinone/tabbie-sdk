@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.tree;
+package cat.tabbie.sdk.failure;
 
 import java.io.IOException;
 import java.io.Serial;

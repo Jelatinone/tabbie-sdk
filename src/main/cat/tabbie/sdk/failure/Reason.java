@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.tree;
+package cat.tabbie.sdk.failure;
 
 import java.util.List;
 import java.util.Locale;
@@ -7,6 +7,11 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.form.Form;
+import cat.tabbie.sdk.tree.Address;
+import cat.tabbie.sdk.tree.Describe;
+import cat.tabbie.sdk.tree.Rule;
+import cat.tabbie.sdk.tree.Shape;
+import cat.tabbie.sdk.tree.State;
 import lombok.NonNull;
 
 /**
@@ -529,9 +534,11 @@ public sealed interface Reason {
     }
 
     /**
-     * A release has no place for something it holds, or that one of the
-     * contributors applying to it acts on or beneath, so core would have
-     * nowhere to put it.
+     * A release is incomplete: it has no place for something it holds, or
+     * that one of the contributors applying to it acts on or beneath, so core
+     * would have nowhere to put it. Placing finds the same lack later, as
+     * {@link Placement.Unplaced}; the registry finds it when it checks the
+     * release.
      *
      * @param release     the release, by its canonical coordinates
      * @param type        the type no place applies to, by name
@@ -539,7 +546,7 @@ public sealed interface Reason {
      *                    {@code @Install Mod.install(Install.Context)}, or
      *                    empty when the release holds it
      */
-    record Unplaced(
+    record Incomplete(
         @NonNull String release,
         @NonNull String type,
         @NonNull Optional<String> contributor) implements Registry {
@@ -547,8 +554,9 @@ public sealed interface Reason {
       @Override
       public String message() {
         return contributor
-            .map(acting -> String.format("%s places no %s, which %s acts on or beneath.", release, type, acting))
-            .orElseGet(() -> String.format("%s places no %s, which it holds.", release, type));
+            .map(acting -> String.format("%s is incomplete: it places no %s, which %s acts on or beneath.", release,
+                type, acting))
+            .orElseGet(() -> String.format("%s is incomplete: it places no %s, which it holds.", release, type));
       }
     }
 

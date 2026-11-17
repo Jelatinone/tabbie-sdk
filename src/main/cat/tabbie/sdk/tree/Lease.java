@@ -6,6 +6,9 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Optional;
 
+import cat.tabbie.sdk.failure.Reason;
+import cat.tabbie.sdk.failure.Refusal;
+import cat.tabbie.sdk.failure.Violation;
 import lombok.NonNull;
 
 /**
