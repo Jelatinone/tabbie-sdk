@@ -22,14 +22,17 @@ import cat.tabbie.sdk.tree.Shape;
 import lombok.NonNull;
 
 /**
- * Provider-described content. How it is placed is contributed for its family
- * by {@link cat.tabbie.sdk.meta.action.Install} methods, which receive the
- * artifact's source at their head and describe changes without writing to the
- * Cat's files; a {@link Registry} chooses the install that applies to a
- * target, and what a distribution supports follows from them. File
- * coordinates identify the exact provider-scoped payload; relations name
- * catalog coordinates at any level, matched by
- * {@link Coordinate#includes(Coordinate)}.
+ * Provider-described content of a family: a type of it a module registers.
+ * Where a family's content goes is contributed for it by
+ * {@link cat.tabbie.sdk.meta.action.Place Place} methods, and how it is
+ * installed there by {@link cat.tabbie.sdk.meta.action.Install Install}
+ * methods, which receive the artifact's source at their head and describe
+ * changes without writing to the Cat's files. The
+ * {@link cat.tabbie.sdk.meta.registry.Registry registry} chooses between them
+ * for a target, and an artifact {@link Registry Registry} is the typed view
+ * saying what a distribution supports. File coordinates identify the exact
+ * provider-scoped payload; relations name catalog coordinates at any level,
+ * matched by {@link Coordinate#includes(Coordinate)}.
  */
 @Registrable(Registrable.As.TYPES)
 public interface Artifact extends Release.Payload {
@@ -46,10 +49,10 @@ public interface Artifact extends Release.Payload {
   Details details();
 
   /**
-   * Stable artifact identity derived from the file coordinates, so equal
-   * coordinates always yield the same identity across processes.
+   * Returns the artifact's stable identity, derived from its file coordinates,
+   * so equal coordinates give the same identity in every process.
    *
-   * @return artifact identity
+   * @return the artifact's identity
    */
   default Identity<Artifact> artifactId() {
     return Identity.create(coordinates().canonical());
@@ -61,9 +64,9 @@ public interface Artifact extends Release.Payload {
   }
 
   /**
-   * Human-readable canonical artifact name
+   * Returns the artifact's human-readable name.
    *
-   * @return artifact name
+   * @return the artifact's name
    */
   @NonNull
   default String artifactName() {
@@ -81,7 +84,7 @@ public interface Artifact extends Release.Payload {
   }
 
   /**
-   * Declares support for the entire artifact.
+   * Returns the targets the whole artifact declares it supports.
    *
    * @return immutable, nonempty supported targets
    */
@@ -91,8 +94,8 @@ public interface Artifact extends Release.Payload {
   }
 
   /**
-   * Declares which multiplayer sides this artifact runs on and what it
-   * requires of the other side.
+   * Returns which multiplayer sides the artifact runs on, and what it requires
+   * of the other side.
    *
    * @return side parity, {@link Parity#UNKNOWN} without evidence
    */
@@ -102,7 +105,8 @@ public interface Artifact extends Release.Payload {
   }
 
   /**
-   * Catalog relationships with other content, at most one per coordinate.
+   * Returns the artifact's catalog relationships with other content, at most
+   * one for each coordinate.
    *
    * @return immutable relations
    */
@@ -112,33 +116,32 @@ public interface Artifact extends Release.Payload {
   }
 
   /**
-   * Catalog content that must be installed alongside this artifact. A project
-   * coordinate is satisfied by any file of that project, a build coordinate by
-   * any file of that release, and a file coordinate only by that exact file.
+   * Returns the catalog content that must be installed alongside the artifact.
+   * A project coordinate is satisfied by any file of that project, a build
+   * coordinate by any file of that release, and a file coordinate only by that
+   * exact file.
    *
-   * @return required coordinates
+   * @return immutable required coordinates
    */
   default Set<Coordinate> depends() {
     return coordinates(Relation.Required.class);
   }
 
   /**
-   * Catalog content that may not be installed alongside this artifact, matched
-   * the same way as {@link #depends()}.
+   * Returns the catalog content that may not be installed alongside the
+   * artifact, matched as {@link #depends()} matches.
    *
-   * @return conflicting coordinates
+   * @return immutable conflicting coordinates
    */
   default Set<Coordinate> conflicts() {
     return coordinates(Relation.Incompatible.class);
   }
 
   /**
-   * Selects the coordinates of one kind of relation.
-   *
-   * @param kind relation kind, such as {@code Relation.Required.class}
-   * @return immutable coordinates of that kind
+   * Selects the coordinates of one kind of relation, such as
+   * {@code Relation.Required.class}.
    */
-  default Set<Coordinate> coordinates(@NonNull Class<? extends Relation> kind) {
+  private Set<Coordinate> coordinates(Class<? extends Relation> kind) {
     return relations().stream()
         .filter(relation -> relation.getClass() == kind)
         .map(Relation::coordinate)
@@ -246,7 +249,6 @@ public interface Artifact extends Release.Payload {
      */
     record Embedded(@NonNull Coordinate coordinate) implements Relation {
     }
-
   }
 
   /**
