@@ -9,7 +9,13 @@
  *
  * <p>
  * Installing a distributable captures only its own content: it never downloads
- * runtimes, runs other installers, or starts processes. How it starts and
- * stops is a description, and carrying it out belongs to the consumer.
+ * runtimes, runs other installers, or starts processes. How a Cat starts,
+ * stops and holds its saving is contributed for its distribution by the
+ * {@link cat.tabbie.sdk.meta.action.Start Start},
+ * {@link cat.tabbie.sdk.meta.action.Stop Stop},
+ * {@link cat.tabbie.sdk.meta.action.Restart Restart},
+ * {@link cat.tabbie.sdk.meta.action.Hold Hold} and
+ * {@link cat.tabbie.sdk.meta.action.Resume Resume} actions, as descriptions;
+ * carrying them out belongs to core.
  */
 package cat.tabbie.sdk.distribution;

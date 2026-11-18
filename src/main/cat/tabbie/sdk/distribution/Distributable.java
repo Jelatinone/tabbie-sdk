@@ -1,16 +1,11 @@
 package cat.tabbie.sdk.distribution;
 
 import java.io.IOException;
-import java.time.Duration;
-import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 import cat.tabbie.sdk.catalog.Identity;
 import cat.tabbie.sdk.catalog.Release;
 import cat.tabbie.sdk.meta.action.Action;
-import cat.tabbie.sdk.platform.Execution;
-import cat.tabbie.sdk.platform.Toolchain;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Platform;
@@ -19,18 +14,21 @@ import lombok.NonNull;
 
 /**
  * One file of an exact distribution release, such as a server jar or a loader
- * profile. {@link #install} captures its source and describes the images that
- * place it; an {@link Executable} distributable also describes how an executor
- * starts and stops it, while a {@link Nonexecutable} one is only placed.
- * Installing a distributable captures only its own content: it never downloads
- * runtimes, runs other installers, or starts processes; carrying out its
- * descriptions belongs to Core.
+ * profile. {@link #install} describes the images that place it, where the
+ * {@link cat.tabbie.sdk.meta.action.Place place} for its type says. Installing
+ * a distributable captures only its own content: it never downloads runtimes,
+ * runs other installers, or starts processes. How a Cat running the release
+ * starts, stops and holds its saving is its distribution's
+ * {@link cat.tabbie.sdk.meta.action.Start Start},
+ * {@link cat.tabbie.sdk.meta.action.Stop Stop} and
+ * {@link cat.tabbie.sdk.meta.action.Hold Hold} to say, and carrying any of it
+ * out belongs to core.
  *
  * <p>
  * Implementations are records whose compact constructors copy their
  * collections and call {@link #validate(String, Set)}.
  */
-public sealed interface Distributable extends Release.Payload {
+public interface Distributable extends Release.Payload {
 
   /**
    * Stable distributable identity derived from the file coordinates, so equal
@@ -122,186 +120,5 @@ public sealed interface Distributable extends Release.Payload {
     if (labels.stream().map(Label::distribution).distinct().count() != 1) {
       throw new IllegalArgumentException("A distributable serves exactly one distribution.");
     }
-  }
-
-  /**
-   * A distributable an executor runs, such as a server jar or a native server
-   * binary. Its start and stop arrangements are descriptions; nothing runs
-   * until an executor carries them out.
-   */
-  non-sealed interface Executable extends Distributable {
-
-    /**
-     * Returns the toolchain the started program needs, which the executor
-     * provisions and binds through {@link Execution.Argument.Binary}.
-     *
-     * @return required toolchain, or empty for a native program
-     */
-    @NonNull
-    default Optional<Toolchain> toolchain() {
-      return Optional.empty();
-    }
-
-    /**
-     * Describes how to start this distributable in a context, without starting
-     * it. Addresses in the arrangement are bound to physical paths by the
-     * executor.
-     *
-     * @param context selected target, the distributable's head and runtime
-     *                settings
-     * @return start arrangement
-     */
-    @NonNull
-    Allocate allocate(@NonNull Context context);
-
-    /**
-     * Describes how to stop this distributable in a context, without stopping
-     * it. The arrangement must suit the one {@link #allocate} returns for the
-     * same context; see {@link Deallocate} for valid pairings.
-     *
-     * @param context selected target, the distributable's head and runtime
-     *                settings
-     * @return stop arrangement
-     */
-    @NonNull
-    Deallocate deallocate(@NonNull Context context);
-
-    /**
-     * A declarative start arrangement an executor carries out.
-     */
-    sealed interface Allocate {
-
-      /**
-       * Returns the command the executor runs to start the distributable.
-       *
-       * @return start command
-       */
-      @NonNull
-      Execution command();
-
-      /**
-       * A process the executor starts and owns until it exits, so it can write
-       * to its input, signal it, and observe its exit. The execution names its
-       * working directory and the variables it adds.
-       *
-       * @param command start command
-       */
-      record Managed(@NonNull Execution command) implements Allocate {
-      }
-
-      /**
-       * A command that hands the distributable to something else, such as a
-       * service manager or an external launcher, and then exits. The executor
-       * does not own the resulting process, so it can only be stopped with
-       * {@link Deallocate.Invoke}.
-       *
-       * @param command start command, run in its working directory
-       */
-      record Unmanaged(@NonNull Execution command) implements Allocate {
-      }
-    }
-
-    /**
-     * A declarative stop arrangement an executor carries out. {@link Input} and
-     * {@link Signal} need a process the executor owns, so they pair only with
-     * {@link Allocate.Managed Managed}; {@link Invoke} pairs with either.
-     * Executors reject other pairings.
-     */
-    sealed interface Deallocate {
-
-      /**
-       * Returns how long the executor waits for the distributable to stop. A
-       * managed process still running afterwards is forcibly destroyed; an
-       * unmanaged stop command still running afterwards fails the stop.
-       *
-       * @return grace period
-       */
-      @NonNull
-      Duration grace();
-
-      /**
-       * Writes a line to a managed process's standard input, such as
-       * {@code stop} for a Minecraft server.
-       *
-       * @param line  line to write, without a line terminator
-       * @param grace time allowed for the process to exit
-       */
-      record Input(@NonNull String line, @NonNull Duration grace) implements Deallocate {
-      }
-
-      /**
-       * Asks a managed process to terminate gracefully, as with {@code
-       * SIGTERM}.
-       *
-       * @param grace time allowed for the process to exit
-       */
-      record Signal(@NonNull Duration grace) implements Deallocate {
-      }
-
-      /**
-       * Runs a separate stop command, such as a service manager's stop action.
-       * For a managed distributable the executor then waits for its process to
-       * exit; for an unmanaged one, for the stop command to exit.
-       *
-       * @param command stop command, run in its working directory
-       * @param grace   time allowed for the distributable to stop
-       */
-      record Invoke(@NonNull Execution command, @NonNull Duration grace) implements Deallocate {
-      }
-    }
-  }
-
-  /**
-   * A distributable that is placed but never run itself, such as a loader
-   * library or a launcher profile that another program reads.
-   */
-  non-sealed interface Nonexecutable extends Distributable {
-  }
-
-  /**
-   * The target an executable distributable is started for, its head, and the
-   * runtime settings it is started with. The head is the directory the
-   * distributable was installed in, so its file is
-   * {@code head().file(source().name())}. Describing a start reads no file:
-   * the executor binds the arrangement's addresses to paths. Core implements
-   * it.
-   */
-  interface Context extends Action.Context {
-
-    /**
-     * Returns the explicitly selected target.
-     *
-     * @return selected target
-     */
-    @NonNull
-    Label label();
-
-    /**
-     * Returns the platform of the machine the distributable runs on, for
-     * selecting a native command.
-     *
-     * @return target platform
-     */
-    @NonNull
-    Platform platform();
-
-    /**
-     * Returns the memory bound the started process is given, interpreted by the
-     * distributable's {@link Executable#allocate(Context) allocation}, such as
-     * a JVM's maximum heap.
-     *
-     * @return maximum memory in bytes, or empty for the program's default
-     */
-    @NonNull
-    Optional<Long> maximumMemory();
-
-    /**
-     * Returns caller-supplied runtime options the distributable may apply when
-     * it describes its start arrangement.
-     *
-     * @return immutable runtime options, possibly empty
-     */
-    @NonNull
-    Map<String, String> runtimeOptions();
   }
 }

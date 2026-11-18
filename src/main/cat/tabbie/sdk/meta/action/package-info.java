@@ -13,8 +13,11 @@
  * for a subject at a target. Every action's context extends {@link Action.Context}, which
  * gives the head it starts from. {@link Place} says where what a Cat accepts
  * goes, {@link Base} gives the Cat's root its permissions, and
- * {@link Install} installs content where its family is placed. Places and
- * bases act on types, so their contributions are static and take only their
+ * {@link Install} installs content where its family is placed.
+ * {@link Start}, {@link Stop}, {@link Restart}, {@link Hold} and
+ * {@link Resume} describe how a Cat's distribution runs, stops, restarts in
+ * place, and pauses and resumes its saving. Places, bases and the running
+ * actions act on types, so their contributions are static and take only their
  * context.
  *
  * <p>
