@@ -303,14 +303,29 @@ public sealed interface Image<Side extends Image.Alteration> extends Intermediat
   record Text(@NonNull List<Hunk.Fragment> fragments) implements Alteration {
 
     /**
-     * Copies the fragments and checks their order.
+     * Copies the fragments, and checks they are in order, apart, and that
+     * nothing follows an unterminated line. Empty boundaries at an
+     * unterminated end are allowed.
      *
-     * @throws IllegalArgumentException when the fragments overlap or follow an
-     *                                  unterminated line
+     * @throws IllegalArgumentException when the fragments overlap or go back,
+     *                                  or lines follow an unterminated line
      */
     public Text {
       fragments = List.copyOf(fragments);
-      Hunk.validateFragments(fragments);
+      int end = 0;
+      boolean unterminated = false;
+      for (Hunk.Fragment fragment : fragments) {
+        if (fragment.range().start() < end) {
+          throw new IllegalArgumentException("A text's fragments are in order and apart.");
+        }
+        if (unterminated && (fragment.range().start() > end || !fragment.lines().isEmpty())) {
+          throw new IllegalArgumentException("Nothing follows a text's unterminated last line.");
+        }
+        end = fragment.range().end();
+        if (!fragment.lines().isEmpty()) {
+          unterminated = fragment.lines().getLast().ending() == Hunk.Change.Sequence.NONE;
+        }
+      }
     }
 
     @Override

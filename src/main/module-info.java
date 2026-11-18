@@ -23,12 +23,13 @@
  * <li>{@link cat.tabbie.sdk.failure}: why work fails, and the violations and
  * refusals carrying the reason</li>
  * <li>{@link cat.tabbie.sdk.revision}: descriptions of change, the deferred
- * work that carries them out, and the plates it runs on</li>
+ * work that carries them out, the plates it runs on, and the observer of what
+ * happens</li>
  * <li>{@link cat.tabbie.sdk.form}: shapes read in a format</li>
  * <li>{@link cat.tabbie.sdk.catalog}: providers, their projects, releases and
  * coordinates</li>
- * <li>{@link cat.tabbie.sdk.platform}: machines, packages, toolchains,
- * commands, and the observer</li>
+ * <li>{@link cat.tabbie.sdk.platform}: machines, packages, toolchains and
+ * commands</li>
  * </ul>
  *
  * <p>

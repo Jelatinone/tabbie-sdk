@@ -11,7 +11,6 @@ import java.util.stream.Collectors;
 import cat.tabbie.sdk.failure.Reason;
 import cat.tabbie.sdk.failure.Refusal;
 import cat.tabbie.sdk.failure.Violation;
-import cat.tabbie.sdk.revision.Hunk;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.revision.Revision;
 import lombok.NonNull;
@@ -148,16 +147,18 @@ public sealed interface Node extends Shape permits Node.File, Node.Directory {
      * @param after        text after
      * @param contextLines number of context lines to keep
      * @return image configuring the file
-     * @throws Violation with {@link Reason.Change.Unchanged} when the texts are
-     *                   equal, or {@link Reason.Place.Denied} when the file is
-     *                   not {@link Rule.Permission#EDITABLE editable}
+     * @throws Violation                with {@link Reason.Change.Unchanged}
+     *                                  when the texts are equal, or
+     *                                  {@link Reason.Place.Denied} when the
+     *                                  file is not
+     *                                  {@link Rule.Permission#EDITABLE
+     *                                  editable}
+     * @throws IllegalArgumentException when the context is negative
      */
     @NonNull
     default Image<Image.Text> configure(@NonNull String before, @NonNull String after, int contextLines) {
-      if (before.equals(after)) {
-        throw new Violation(new Reason.Change.Unchanged(address()));
-      }
-      return configure(new Revision.Diff(Hunk.diff(before, after, contextLines)));
+      return configure(Revision.Diff.between(before, after, contextLines)
+          .orElseThrow(() -> new Violation(new Reason.Change.Unchanged(address()))));
     }
 
     /**

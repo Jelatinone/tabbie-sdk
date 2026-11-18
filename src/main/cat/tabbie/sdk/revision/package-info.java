@@ -13,11 +13,8 @@
  * through the same plate. Both report a {@link Scrutiny}: a pass, or a failure
  * with the reason a check gave. Whether that work rehearses or acts depends
  * only on the plate: a rehearsal's plate lays an overlay over its root, and an
- * acting plate reaches the root itself.
- *
- * <p>
- * Revision history describes files, not the machine. What a Cat needs from
- * its machine is recorded in its lockfile, a text file images edit like any
- * other.
+ * acting plate reaches the root itself. What happens meanwhile, such as a
+ * transfer's progress, is reported to the plate's {@link Observer}. Revisions
+ * describe files, not the machine.
  */
 package cat.tabbie.sdk.revision;

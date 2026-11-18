@@ -39,98 +39,100 @@ public sealed interface Intermediate<Result> {
   /**
    * Describes an already available value.
    *
-   * @param <T>   result type
-   * @param value available result
+   * @param <Result> result type
+   * @param value    available result
    * @return constant intermediate
    */
-  static <T> Intermediate<T> of(T value) {
+  static <Result> Intermediate<Result> of(Result value) {
     return new Value<>(value);
   }
 
   /**
    * Describes one effect performed only during collapse.
    *
-   * @param <T>    result type
-   * @param action effect using the collapsing plate
+   * @param <Result> result type
+   * @param action   effect using the collapsing plate
    * @return effect-ful intermediate
    */
-  static <T> Intermediate<T> of(@NonNull Action<T> action) {
+  static <Result> Intermediate<Result> of(@NonNull Action<Result> action) {
     return new Effect<>(action);
   }
 
   /**
    * Describes a pure transformation of this result.
    *
-   * @param <R>    result type
-   * @param mapper transformation invoked during collapse
+   * @param <Mapped> result type
+   * @param mapper   transformation invoked during collapse
    * @return mapped intermediate
    */
-  default <R> Intermediate<R> map(@NonNull Function<? super Result, ? extends R> mapper) {
+  default <Mapped> Intermediate<Mapped> map(@NonNull Function<? super Result, ? extends Mapped> mapper) {
     return new Transform<>(this, mapper);
   }
 
   /**
    * Describes dependent work constructed from this result.
    *
-   * @param <R>    result type
-   * @param mapper intermediate factory invoked during collapse
+   * @param <Mapped> result type
+   * @param mapper   intermediate factory invoked during collapse
    * @return dependent intermediate
    */
-  default <R> Intermediate<R> flatMap(@NonNull Function<? super Result, ? extends Intermediate<R>> mapper) {
+  default <Mapped> Intermediate<Mapped> flatMap(
+      @NonNull Function<? super Result, ? extends Intermediate<Mapped>> mapper) {
     return new Compress<>(this, mapper);
   }
 
   /**
    * Describes an effect performed only after this intermediate passes.
    *
-   * @param <R>    result type
+   * @param <Next> result type
    * @param action effect using the collapsing plate
    * @return chained intermediate producing the effect's result
    */
-  default <R> Intermediate<R> then(@NonNull Action<R> action) {
+  default <Next> Intermediate<Next> then(@NonNull Action<Next> action) {
     return flatMap(ignored -> of(action));
   }
 
   /**
    * Describes work performed only after this intermediate passes.
    *
-   * @param <R>  result type
-   * @param next subsequent work
+   * @param <Next> result type
+   * @param next   subsequent work
    * @return chained intermediate producing the subsequent result
    */
-  default <R> Intermediate<R> then(@NonNull Intermediate<R> next) {
+  default <Next> Intermediate<Next> then(@NonNull Intermediate<Next> next) {
     return flatMap(ignored -> next);
   }
 
   /**
    * Combines intermediates into an ordered result.
    *
-   * @param <T>      element type
-   * @param elements ordered intermediates
+   * @param <Element> element type
+   * @param elements  ordered intermediates
    * @return intermediate producing an immutable result list
    */
-  static <T> Intermediate<List<T>> group(@NonNull List<? extends Intermediate<? extends T>> elements) {
+  static <Element> Intermediate<List<Element>> group(
+      @NonNull List<? extends Intermediate<? extends Element>> elements) {
     return new Cluster<>(elements);
   }
 
   /**
    * Combines alternatives of which one must pass, such as mirrors.
    *
-   * @param <T>          result type
+   * @param <Result>     result type
    * @param alternatives nonempty alternatives in preference order
    * @return intermediate producing the first passing result
    */
-  static <T> Intermediate<T> any(@NonNull List<? extends Intermediate<? extends T>> alternatives) {
+  static <Result> Intermediate<Result> any(@NonNull List<? extends Intermediate<? extends Result>> alternatives) {
     return new Any<>(alternatives);
   }
 
   /**
    * An effect performed with the collapsing plate.
    *
-   * @param <T> result type
+   * @param <Result> result type
    */
   @FunctionalInterface
-  interface Action<T> {
+  interface Action<Result> {
 
     /**
      * Performs the effect.
@@ -139,19 +141,19 @@ public sealed interface Intermediate<Result> {
      * @return effect result
      * @throws IOException when the effect fails
      */
-    T run(@NonNull Plate plate) throws IOException;
+    Result run(@NonNull Plate plate) throws IOException;
   }
 
   /**
    * An already available value, which always passes.
    *
-   * @param <T>   result type
-   * @param value result
+   * @param <Result> result type
+   * @param value    result
    */
-  record Value<T>(T value) implements Intermediate<T> {
+  record Value<Result>(Result value) implements Intermediate<Result> {
 
     @Override
-    public Scrutiny<T> collapse(@NonNull Plate plate) {
+    public Scrutiny<Result> collapse(@NonNull Plate plate) {
       return new Scrutiny.Pass<>(value);
     }
   }
@@ -162,20 +164,20 @@ public sealed interface Intermediate<Result> {
    * {@code Map} so implementations of {@link Step} that also need
    * {@code java.util.Map} are not shadowed by this member type.
    *
-   * @param <S>    input type
-   * @param <T>    result type
-   * @param source prerequisite
-   * @param mapper transformation
+   * @param <Source> input type
+   * @param <Mapped> result type
+   * @param source   prerequisite
+   * @param mapper   transformation
    */
-  record Transform<S, T>(
-      @NonNull Intermediate<S> source,
-      @NonNull Function<? super S, ? extends T> mapper) implements Intermediate<T> {
+  record Transform<Source, Mapped>(
+      @NonNull Intermediate<Source> source,
+      @NonNull Function<? super Source, ? extends Mapped> mapper) implements Intermediate<Mapped> {
 
     @Override
-    public Scrutiny<T> collapse(@NonNull Plate plate) throws IOException {
+    public Scrutiny<Mapped> collapse(@NonNull Plate plate) throws IOException {
       return switch (source.collapse(plate)) {
-        case Scrutiny.Pass<S> pass -> new Scrutiny.Pass<>(mapper.apply(pass.result()));
-        case Scrutiny.Fail<S> fail -> new Scrutiny.Fail<>(fail.reason());
+        case Scrutiny.Pass<Source> pass -> new Scrutiny.Pass<>(mapper.apply(pass.result()));
+        case Scrutiny.Fail<Source> fail -> new Scrutiny.Fail<>(fail.reason());
       };
     }
   }
@@ -184,20 +186,21 @@ public sealed interface Intermediate<Result> {
    * Dependent work whose next intermediate is built from the source's passing
    * result; a failure passes through with its reason, without building it.
    *
-   * @param <S>    input type
-   * @param <T>    result type
-   * @param source prerequisite
-   * @param mapper dependent intermediate factory
+   * @param <Source> input type
+   * @param <Mapped> result type
+   * @param source   prerequisite
+   * @param mapper   dependent intermediate factory
    */
-  record Compress<S, T>(@NonNull Intermediate<S> source,
-      @NonNull Function<? super S, ? extends Intermediate<T>> mapper) implements Intermediate<T> {
+  record Compress<Source, Mapped>(
+      @NonNull Intermediate<Source> source,
+      @NonNull Function<? super Source, ? extends Intermediate<Mapped>> mapper) implements Intermediate<Mapped> {
 
     @Override
-    public Scrutiny<T> collapse(@NonNull Plate plate) throws IOException {
+    public Scrutiny<Mapped> collapse(@NonNull Plate plate) throws IOException {
       return switch (source.collapse(plate)) {
-        case Scrutiny.Pass<S> pass -> mapper.apply(pass.result()).collapse(plate);
+        case Scrutiny.Pass<Source> pass -> mapper.apply(pass.result()).collapse(plate);
         // Dependent work cannot be built without the source's result
-        case Scrutiny.Fail<S> fail -> new Scrutiny.Fail<>(fail.reason());
+        case Scrutiny.Fail<Source> fail -> new Scrutiny.Fail<>(fail.reason());
       };
     }
   }
@@ -206,11 +209,11 @@ public sealed interface Intermediate<Result> {
    * Ordered intermediates producing an immutable list. Collapsing stops at the
    * first element that fails, and fails with its reason.
    *
-   * @param <T>      element type
-   * @param elements ordered intermediates
+   * @param <Element> element type
+   * @param elements  ordered intermediates
    */
-  record Cluster<T>(@NonNull List<? extends Intermediate<? extends T>> elements)
-      implements Intermediate<List<T>> {
+  record Cluster<Element>(@NonNull List<? extends Intermediate<? extends Element>> elements)
+      implements Intermediate<List<Element>> {
 
     /**
      * Copies intermediates without evaluating them.
@@ -220,12 +223,12 @@ public sealed interface Intermediate<Result> {
     }
 
     @Override
-    public Scrutiny<List<T>> collapse(@NonNull Plate plate) throws IOException {
-      List<T> results = new ArrayList<>(elements.size());
-      for (Intermediate<? extends T> element : elements) {
+    public Scrutiny<List<Element>> collapse(@NonNull Plate plate) throws IOException {
+      List<Element> results = new ArrayList<>(elements.size());
+      for (Intermediate<? extends Element> element : elements) {
         switch (element.collapse(plate)) {
-          case Scrutiny.Pass<? extends T> pass -> results.add(pass.result());
-          case Scrutiny.Fail<? extends T> fail -> {
+          case Scrutiny.Pass<? extends Element> pass -> results.add(pass.result());
+          case Scrutiny.Fail<? extends Element> fail -> {
             return new Scrutiny.Fail<>(fail.reason());
           }
         }
@@ -240,10 +243,11 @@ public sealed interface Intermediate<Result> {
    * passes, it fails if any alternative failed without throwing; when every
    * alternative threw, the first failure is thrown with the others suppressed.
    *
-   * @param <T>          result type
+   * @param <Result>     result type
    * @param alternatives nonempty alternatives in preference order
    */
-  record Any<T>(@NonNull List<? extends Intermediate<? extends T>> alternatives) implements Intermediate<T> {
+  record Any<Result>(@NonNull List<? extends Intermediate<? extends Result>> alternatives)
+      implements Intermediate<Result> {
 
     /**
      * Copies alternatives without evaluating them.
@@ -258,16 +262,16 @@ public sealed interface Intermediate<Result> {
     }
 
     @Override
-    public Scrutiny<T> collapse(@NonNull Plate plate) throws IOException {
+    public Scrutiny<Result> collapse(@NonNull Plate plate) throws IOException {
       IOException failure = null;
       Reason refused = null;
-      for (Intermediate<? extends T> alternative : alternatives) {
+      for (Intermediate<? extends Result> alternative : alternatives) {
         try {
           switch (alternative.collapse(plate)) {
-            case Scrutiny.Pass<? extends T> pass -> {
+            case Scrutiny.Pass<? extends Result> pass -> {
               return new Scrutiny.Pass<>(pass.result());
             }
-            case Scrutiny.Fail<? extends T> fail -> refused = fail.reason();
+            case Scrutiny.Fail<? extends Result> fail -> refused = fail.reason();
           }
         } catch (IOException attempt) {
           if (failure == null) {
@@ -294,9 +298,9 @@ public sealed interface Intermediate<Result> {
    * reads back, such as starting a process, are not performed by the step: it
    * returns a description of them, which whoever acts carries out.
    *
-   * @param <T> result type
+   * @param <Result> result type
    */
-  non-sealed interface Step<T> extends Intermediate<T> {
+  non-sealed interface Step<Result> extends Intermediate<Result> {
 
     /**
      * Describes this step for display, such as while it is rehearsed or acted
@@ -319,13 +323,13 @@ public sealed interface Intermediate<Result> {
      * where the tree forbids it, fails with the tree's violation rather than
      * throwing it.
      *
-     * @param <T>    result type
-     * @param action effect
+     * @param <Result> result type
+     * @param action   effect
      */
-    record Effect<T>(@NonNull Action<T> action) implements Step<T> {
+    record Effect<Result>(@NonNull Action<Result> action) implements Step<Result> {
 
       @Override
-      public Scrutiny<T> collapse(@NonNull Plate plate) throws IOException {
+      public Scrutiny<Result> collapse(@NonNull Plate plate) throws IOException {
         try {
           return new Scrutiny.Pass<>(action.run(plate));
         } catch (Violation violation) {

@@ -1,171 +1,86 @@
 package cat.tabbie.sdk.revision;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.function.Function;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
-import cat.tabbie.sdk.revision.Hunk.Change.Line;
-import cat.tabbie.sdk.revision.Hunk.Change.Operation;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NonNull;
+import lombok.experimental.FieldDefaults;
 
 /**
- * One contiguous region of a text change, including its unchanged context. Each
- * ordered change consumes one before line unless it is an insertion, and one
- * after line unless it is a deletion. Context consumes a line on both sides.
- * Starting at the two ranges therefore determines every change's positions;
- * the consumed counts must equal the respective range counts.
- *
- * Each side projects to exactly one fragment, including zero-length fragments
- * at insertion/deletion boundaries. Manually authored hunks may be empty or
- * context-only. Across a file, hunks must be ordered and non-overlapping on
- * both sides, with equal lengths of omitted unchanged gaps.
- *
- * Ranges start at zero and end exclusively. Line equality includes the exact
- * ending (LF, CRLF, CR, or none); line text excludes newline characters.
- * An unterminated line can only end its described file side. Collections are
- * immutable defensive copies.
+ * One contiguous region of a text change, with its unchanged context. Each
+ * change, in order, consumes one line before unless it is an insertion, and
+ * one line after unless it is a deletion; context consumes a line on both
+ * sides. Starting at the two ranges therefore fixes every change's position,
+ * and the lines each side consumes number its range's count.
  *
  * <p>
- * A hunk applies only at the lines its ranges name, so describing one reads
- * the text it changes.
+ * Each side projects to exactly one {@link Fragment}, which is empty at an
+ * insertion or deletion boundary. A hunk written by hand may be empty or hold
+ * only context. Across a file, a {@link Revision.Diff diff} keeps its hunks in
+ * order and apart on both sides, with unchanged gaps of equal length between
+ * them, and it is the diff that finds, matches, applies and composes hunks.
  *
- * @param changes     ordered context and edits
- * @param beforeRange original line range
- * @param afterRange  resulting line range
+ * <p>
+ * Ranges start at zero and end exclusively. Lines are equal only with the same
+ * ending (LF, CRLF, CR, or none), and a line's text holds no newline character.
+ * An unterminated line can only end its side. A hunk applies only at the lines
+ * its ranges name, so describing one reads the text it changes.
+ *
+ * @param changes     context and edits, in order
+ * @param beforeRange the lines it spans before
+ * @param afterRange  the lines it spans after
  */
 public record Hunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @NonNull Range afterRange) {
 
-  private static final Pattern LINE_PATTERN = Pattern.compile("([^\\r\\n]*)(\\r\\n|\\r|\\n|\\z)");
-  private static final Integer CONTEXT_LINES = 3;
-
   /**
-   * Copies changes and checks consumed counts and terminal lines on both
-   * sides.
+   * Copies the changes, and checks the lines each side consumes against its
+   * range.
    *
-   * @throws IllegalArgumentException when changes disagree with either range
+   * @throws IllegalArgumentException when a side consumes more or fewer lines
+   *                                  than its range counts, or a line other
+   *                                  than its last is unterminated
    */
   public Hunk {
     changes = List.copyOf(changes);
-    validateFragment(beforeRange, changes, Operation.INSERTION);
-    validateFragment(afterRange, changes, Operation.DELETION);
+    Fragment.validate(side(changes, Change.Role.INSERTION), beforeRange);
+    Fragment.validate(side(changes, Change.Role.DELETION), afterRange);
   }
 
   /**
-
-  /**
-
-  /**
-   * Contiguous original text, excluding any inserted lines
+   * Returns the lines before, every change's but the inserted ones.
    *
-   * @return original text
+   * @return the side before, at its range
    */
   public Fragment before() {
-    return fragment(beforeRange, changes, Operation.INSERTION);
+    return new Fragment(side(changes, Change.Role.INSERTION), beforeRange);
   }
 
   /**
-   * Contiguous resulting text, excluding deleted lines
+   * Returns the lines after, every change's but the deleted ones.
    *
-   * @return resulting text
+   * @return the side after, at its range
    */
   public Fragment after() {
-    return fragment(afterRange, changes, Operation.DELETION);
+    return new Fragment(side(changes, Change.Role.DELETION), afterRange);
   }
 
   /**
-   * Swaps the ranges and edit roles, retaining change order and exact lines.
+   * Returns the hunk that undoes this one: its ranges exchanged and each
+   * change's role inverted, keeping the changes' order and exact lines.
    *
-   * @return reversed hunk
+   * @return the inverse hunk
    */
   public Hunk invert() {
     return new Hunk(
         changes.stream()
-            .map(change -> new Change(change.line(), change.operation().invert()))
+            .map(change -> new Change(change.line(), change.role().invert()))
             .toList(),
         afterRange,
         beforeRange);
   }
-
-  /**
-   * Splits exact LF, CRLF, and CR endings without inventing a trailing empty
-   * line. Empty text has no lines; a final unterminated line uses {@code NONE}.
-   *
-   * @param text text
-   * @return changes
-   */
-  public static List<Change.Line> linesOf(@NonNull String text) {
-    return LINE_PATTERN.matcher(text)
-        .results()
-        .filter(match -> match.start() != match.end())
-        .map(match -> new Change.Line(
-            match.group(1),
-            switch (match.group(2)) {
-              case "\r\n" -> Change.Sequence.CRLF;
-              case "\r" -> Change.Sequence.CR;
-              case "\n" -> Change.Sequence.LF;
-              default -> Change.Sequence.NONE;
-            }))
-        .toList();
-  }
-
-  /**
-   * Describes complete text as fragments from line zero; empty text has none.
-   *
-   * @param text complete text
-   * @return immutable fragments, empty for empty text
-   */
-  public static List<Fragment> fragmentsOf(@NonNull String text) {
-    List<Line> lines = linesOf(text);
-    return lines.isEmpty() ? List.of() : List.of(new Fragment(lines, new Range(0, lines.size())));
-  }
-
-  /**
-   * Checks whether hunks apply to complete text: each hunk's before fragment
-   * matches the text's lines at its range, exact endings included. Lines
-   * outside every hunk are not compared.
-   *
-   * @param hunks hunks in file order
-   * @param text   complete text
-   * @return whether every before fragment matches the text
-   */
-  public static boolean matches(@NonNull List<Hunk> hunks, @NonNull String text) {
-    List<Line> lines = linesOf(text);
-    return hunks.stream()
-        .map(Hunk::before)
-        .allMatch(fragment -> fragment.range().end() <= lines.size()
-            && lines.subList(fragment.range().start(), fragment.range().end()).equals(fragment.lines()));
-  }
-
-  /**
-   * Applies hunks to complete text: each hunk's before fragment is replaced
-   * by its after fragment at its range, and lines outside every hunk
-   * are unchanged.
-   *
-   * @param hunks hunks in file order
-   * @param text   complete text the hunks {@link #matches(List, String) match}
-   * @return complete resulting text
-   * @throws IllegalArgumentException when the hunks are invalid or do not
-   *                                  match the text
-   */
-  public static String apply(@NonNull List<Hunk> hunks, @NonNull String text) {
-    validateHunks(hunks);
-    if (!matches(hunks, text)) {
-      throw new IllegalArgumentException("Every hunk's before lines must match the text it applies to.");
-    }
-    List<Line> lines = linesOf(text);
-    return project(lines.toArray(Line[]::new), 0, hunks, Hunk::before, Hunk::after).stream()
-        .map(line -> line.text() + line.ending().getValue())
-        .collect(Collectors.joining());
-  }
-
-  /**
 
   /**
    * Whether this hunk edits its text: it inserts or deletes at least one line,
@@ -174,504 +89,165 @@ public record Hunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @N
    * @return true when the hunk changes something
    */
   public boolean edits() {
-    return changes.stream().anyMatch(change -> change.operation() != Operation.CONTEXT);
+    return changes.stream().anyMatch(change -> change.role() != Change.Role.CONTEXT);
   }
 
   /**
-   * Composes two hunk sequences applied one after the other into one sequence
-   * from the first's original text to the second's resulting text. Regions are
-   * compared on the intermediate text: the first's after ranges and the
-   * second's before ranges. A region changed by only one side is kept with its
-   * other range shifted by the other side's preceding net line changes.
-   * Overlapping or touching regions are merged into one hunk spanning both,
-   * which requires both sides to describe identical intermediate lines where
-   * they overlap. Merged regions with no remaining edits are omitted. Changes
-   * that cancel only through lines outside every hunk, such as a block moved
-   * away and back again, are kept, because those lines are not described.
-   *
-   *
-   * @param first  earlier hunks in file order
-   * @param second later hunks in file order
-   * @return immutable composed hunks in file order, empty when nothing changes
-   * @throws IllegalArgumentException when either sequence is invalid, or the
-   *                                  two disagree about the intermediate text
+   * Lists the lines one side consumes: every change's line but those of the
+   * role the side skips.
    */
-  public static List<Hunk> compose(
-      @NonNull List<Hunk> first,
-      @NonNull List<Hunk> second) {
-    validateHunks(first);
-    validateHunks(second);
-    List<Hunk> result = new ArrayList<>();
-    int earlier = 0;
-    int later = 0;
-    // Intermediate-to-original and intermediate-to-resulting line offsets
-    int originalOffset = 0;
-    int resultingOffset = 0;
-    while (earlier < first.size() || later < second.size()) {
-      List<Hunk> firsts = new ArrayList<>();
-      List<Hunk> seconds = new ArrayList<>();
-      Range seed;
-      if (later >= second.size()
-          || (earlier < first.size()
-              && first.get(earlier).afterRange().start() <= second.get(later).beforeRange().start())) {
-        Hunk hunk = first.get(earlier++);
-        firsts.add(hunk);
-        seed = hunk.afterRange();
-      } else {
-        Hunk hunk = second.get(later++);
-        seconds.add(hunk);
-        seed = hunk.beforeRange();
-      }
-      int start = seed.start();
-      int end = seed.end();
-      while (true) {
-        if (earlier < first.size() && first.get(earlier).afterRange().start() <= end) {
-          Hunk hunk = first.get(earlier++);
-          firsts.add(hunk);
-          end = Math.max(end, hunk.afterRange().end());
-        } else if (later < second.size() && second.get(later).beforeRange().start() <= end) {
-          Hunk hunk = second.get(later++);
-          seconds.add(hunk);
-          end = Math.max(end, hunk.beforeRange().end());
-        } else {
-          break;
-        }
-      }
-
-      if (seconds.isEmpty()) {
-        for (Hunk hunk : firsts) {
-          result.add(new Hunk(hunk.changes(), hunk.beforeRange(),
-              new Range(hunk.afterRange().start() + resultingOffset, hunk.afterRange().count())));
-        }
-      } else if (firsts.isEmpty()) {
-        for (Hunk hunk : seconds) {
-          result.add(new Hunk(hunk.changes(),
-              new Range(hunk.beforeRange().start() + originalOffset, hunk.beforeRange().count()),
-              hunk.afterRange()));
-        }
-      } else {
-        Hunk merged = merge(firsts, seconds, start, end, originalOffset, resultingOffset);
-        if (merged.changes().stream().anyMatch(change -> change.operation() != Operation.CONTEXT)) {
-          result.add(merged);
-        }
-      }
-
-      for (Hunk hunk : firsts) {
-        originalOffset += hunk.beforeRange().count() - hunk.afterRange().count();
-      }
-      for (Hunk hunk : seconds) {
-        resultingOffset += hunk.afterRange().count() - hunk.beforeRange().count();
-      }
-    }
-    validateHunks(result);
-    return List.copyOf(result);
-  }
-
-  /**
-
-  /**
-   * Merges one connected region of intermediate text described by both sides.
-   *
-   * @param firsts          earlier hunks whose after ranges lie in the region
-   * @param seconds         later hunks whose before ranges lie in the region
-   * @param start           region start in the intermediate text
-   * @param end             exclusive region end in the intermediate text
-   * @param originalOffset  intermediate-to-original offset before the region
-   * @param resultingOffset intermediate-to-resulting offset before the region
-   * @return one hunk from original to resulting text over the region
-   */
-  private static Hunk merge(List<Hunk> firsts, List<Hunk> seconds, int start, int end,
-      int originalOffset, int resultingOffset) {
-    Line[] intermediate = new Line[end - start];
-    for (Hunk hunk : firsts) {
-      describe(intermediate, start, hunk.after());
-    }
-    for (Hunk hunk : seconds) {
-      describe(intermediate, start, hunk.before());
-    }
-    List<Line> original = project(intermediate, start, firsts, Hunk::after, Hunk::before);
-    List<Line> resulting = project(intermediate, start, seconds, Hunk::before, Hunk::after);
-    return between(
-        new Fragment(original, new Range(start + originalOffset, original.size())),
-        new Fragment(resulting, new Range(start + resultingOffset, resulting.size())));
-  }
-
-  /**
-   * Records one side's description of intermediate lines, rejecting
-   * disagreement with lines already described.
-   */
-  private static void describe(Line[] intermediate, int start, Fragment fragment) {
-    for (int index = 0; index < fragment.lines().size(); index++) {
-      int position = fragment.range().start() + index - start;
-      Line line = fragment.lines().get(index);
-      if (intermediate[position] != null && !intermediate[position].equals(line)) {
-        throw new IllegalArgumentException("Composed changes disagree about the intermediate text.");
-      }
-      intermediate[position] = line;
-    }
-  }
-
-  /**
-   * Rewrites a region of intermediate text through one side's hunks: lines
-   * those hunks describe are replaced by their other side, and lines they do
-   * not describe are unchanged.
-   */
-  private static List<Line> project(Line[] intermediate, int start, List<Hunk> hunks,
-      Function<Hunk, Fragment> matched,
-      Function<Hunk, Fragment> replacement) {
-    List<Line> lines = new ArrayList<>();
-    int cursor = start;
-    for (Hunk hunk : hunks) {
-      Range range = matched.apply(hunk).range();
-      for (; cursor < range.start(); cursor++) {
-        lines.add(intermediate[cursor - start]);
-      }
-      lines.addAll(replacement.apply(hunk).lines());
-      cursor = range.end();
-    }
-    for (; cursor < start + intermediate.length; cursor++) {
-      lines.add(intermediate[cursor - start]);
-    }
-    return lines;
-  }
-
-  /**
-   * Finds a deterministic shortest insertion/deletion script with three unchanged
-   * context lines on each side. Touching context windows merge.
-   *
-   * Exact line endings participate in equality. Trace-based Myers search uses
-   * O(N + M + D squared) space; extensive rewrites can consume substantial
-   * memory, with no arbitrary cutoff or fallback.
-   *
-   * @param before original complete text
-   * @param after  resulting complete text
-   * @return immutable edited hunks, empty for identical input
-   */
-  public static List<Hunk> diff(@NonNull String before, @NonNull String after) {
-    return diff(before, after, CONTEXT_LINES);
-  }
-
-  /**
-   * Finds a deterministic shortest insertion/deletion script with the requested
-   * unchanged context on each side. Touching context windows merge. Adjacent
-   * edits merge even at zero
-   * context.
-   *
-   * Exact line endings participate in equality. Trace-based Myers search uses
-   * O(N + M + D squared) space; extensive rewrites can consume substantial
-   * memory, with no arbitrary cutoff or fallback.
-   *
-   * @param before       original complete text
-   * @param after        resulting complete text
-   * @param contextLines nonnegative surrounding unchanged line count
-   * @return immutable ordered edited hunks; empty if unchanged
-   * @throws IllegalArgumentException when context is negative
-   */
-  public static List<Hunk> diff(@NonNull String before, @NonNull String after, int contextLines) {
-    if (contextLines < 0) {
-      throw new IllegalArgumentException("Context line count must be non-negative.");
-    }
-    return before.equals(after) ? List.of() : new Diff(linesOf(before), linesOf(after), contextLines).hunks();
-  }
-
-  /**
-   * Pairs an original fragment with its resulting fragment. The complete script
-   * is kept, so unchanged lines between edits, or an unchanged pair, become
-   * context.
-   *
-   * @param before original fragment
-   * @param after  resulting fragment
-   * @return hunk spanning both fragments' ranges
-   */
-  public static Hunk between(@NonNull Fragment before, @NonNull Fragment after) {
-    return new Hunk(new Diff(before.lines(), after.lines(), 0).changes(), before.range(), after.range());
-  }
-
-  /**
-   * Pairs corresponding fragments by index, one hunk for each pair.
-   *
-   * @param before original fragments in file order
-   * @param after  resulting fragments in file order
-   * @return immutable hunks in file order
-   * @throws IllegalArgumentException when fragments overlap or unchanged gaps
-   *                                  differ
-   */
-  public static List<Hunk> between(@NonNull List<Fragment> before, @NonNull List<Fragment> after) {
-    validateFragments(before, after);
-    return IntStream.range(0, before.size())
-        .mapToObj(index -> between(before.get(index), after.get(index)))
+  private static List<Change.Line> side(List<Change> changes, Change.Role skipped) {
+    return changes.stream()
+        .filter(change -> change.role() != skipped)
+        .map(Change::line)
         .toList();
   }
 
   /**
-   * Describes creating complete text from nothing. Every hunk inserts at the
-   * empty original side's only boundary, line zero.
+   * One exact line and its role. Its position follows from its hunk's ranges
+   * and the changes before it, rather than being held on each change.
    *
-   * @param after complete resulting text in file order
-   * @return immutable insertion-only hunks, one for each fragment
-   * @throws IllegalArgumentException when fragments leave a gap
+   * @param line the exact text and ending
+   * @param role what the line does in the change
    */
-  public static List<Hunk> create(@NonNull List<Fragment> after) {
-    validateComplete(after);
-    return after.stream()
-        .map(fragment -> new Hunk(
-            fragment.lines().stream()
-                .map(line -> new Change(line, Operation.INSERTION))
-                .toList(),
-            new Range(0, 0),
-            fragment.range()))
-        .toList();
-  }
-
-  /**
-   * Checks one file side for ordered, non-overlapping ranges and valid
-   * termination.
-   * Empty boundaries at an unterminated end are allowed; later text or gaps are
-   * not.
-   *
-   * @param fragments fragments in file order
-   * @throws IllegalArgumentException when ranges overlap, regress, or follow an
-   *                                  unterminated line
-   */
-  public static void validateFragments(@NonNull List<Hunk.Fragment> fragments) {
-    int end = 0;
-    boolean unterminated = false;
-    for (Hunk.Fragment fragment : fragments) {
-      if (fragment.range().start() < end) {
-        throw new IllegalArgumentException("Text fragments must be ordered and non-overlapping.");
-      }
-      if (unterminated && (fragment.range().start() > end || !fragment.lines().isEmpty())) {
-        throw new IllegalArgumentException("Text cannot follow an unterminated final line.");
-      }
-      end = fragment.range().end();
-      if (!fragment.lines().isEmpty()) {
-        unterminated = fragment.lines().getLast().ending() == Change.Sequence.NONE;
-      }
-    }
-  }
-
-  /**
-   * Checks one file side for ordered, non-overlapping ranges and valid
-   * termination.
-   * Empty boundaries at an unterminated end are allowed; later text or gaps are
-   * not.
-   *
-   * @param before fragments before in file order
-   * @param after  fragments after in file order
-   * @throws IllegalArgumentException when ranges overlap, regress, or follow an
-   *                                  unterminated line
-   */
-  public static void validateFragments(@NonNull List<Fragment> before, @NonNull List<Fragment> after) {
-    validateFragments(before);
-    validateFragments(after);
-    if (before.size() != after.size()) {
-      throw new IllegalArgumentException("Text fragments must correspond by index.");
-    }
-    int beforeEnd = 0;
-    int afterEnd = 0;
-    for (int index = 0; index < before.size(); index++) {
-      Range beforeRange = before.get(index).range();
-      Range afterRange = after.get(index).range();
-      int beforeGap = beforeRange.start() - beforeEnd;
-      int afterGap = afterRange.start() - afterEnd;
-      if (afterGap < 0 || beforeGap != afterGap) {
-        throw new IllegalArgumentException("Fragments must be ordered with matching unchanged gaps.");
-      }
-      beforeEnd = beforeRange.end();
-      afterEnd = afterRange.end();
-    }
-  }
-
-  /**
-   * Validates both projected sides of an authored hunk sequence.
-   *
-   * @param hunks hunks in file order
-   * @throws IllegalArgumentException when ranges overlap, or unchanged gaps
-   *                                  differ
-   */
-  public static void validateHunks(@NonNull List<Hunk> hunks) {
-    validateFragments(
-        hunks.stream()
-            .map(Hunk::before)
-            .toList(),
-        hunks.stream()
-            .map(Hunk::after)
-            .toList());
-  }
-
-  /**
-   * Checks that one file side describes complete text from line zero without
-   * gaps, as creating a whole file requires.
-   *
-   * @param fragments fragments in file order
-   * @throws IllegalArgumentException when a fragment leaves a gap
-   */
-  public static void validateComplete(@NonNull List<Fragment> fragments) {
-    int end = 0;
-    for (Fragment fragment : fragments) {
-      if (fragment.range().start() != end) {
-        throw new IllegalArgumentException("File creation must describe complete text without gaps.");
-      }
-      end = fragment.range().end();
-    }
-  }
-
-  /**
-   * Validates the lines consumed by one projected side.
-   *
-   * @param range    that side's declared range
-   * @param changes  ordered script
-   * @param excluded role that consumes no lines on this side
-   */
-  private static void validateFragment(@NonNull Range range, @NonNull List<Change> changes,
-      @NonNull Change.Operation excluded) {
-    Fragment.validate(
-        changes.stream()
-            .filter(entry -> entry.operation() != excluded)
-            .map(Change::line)
-            .toList(),
-        range);
-  }
-
-  /**
-   * Projects one side while retaining exact line objects.
-   *
-   * @param range    that side's declared range
-   * @param changes  ordered script
-   * @param excluded role to omit
-   * @return one contiguous fragment
-   */
-  private static Fragment fragment(@NonNull Range range, @NonNull List<Change> changes,
-      @NonNull Change.Operation excluded) {
-    return new Fragment(
-        changes.stream()
-            .filter(entry -> entry.operation() != excluded)
-            .map(Change::line)
-            .toList(),
-        range);
-  }
-
-  /**
-   * One exact line and its role. Positions follow from hunk ranges and
-   * preceding changes, rather than being duplicated on each change.
-   *
-   * @param line     exact text and ending
-   * @param operation consumption role
-   */
-  public record Change(@NonNull Line line, @NonNull Operation operation) {
+  public record Change(@NonNull Line line, @NonNull Role role) {
 
     /**
-     * Exact characters terminating a line, including no ending.
+     * The exact characters ending a line, or none.
      */
+    @Getter
     @AllArgsConstructor
+    @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
     public enum Sequence {
 
       /**
-       * Line feed
+       * A line feed.
        */
       LF("\n"),
 
       /**
-       * Carriage return followed by line feed
+       * A carriage return followed by a line feed.
        */
       CRLF("\r\n"),
 
       /**
-       * Carriage return
+       * A carriage return.
        */
       CR("\r"),
 
       /**
-       * No terminator; this must end the described file side
+       * No ending, which only the last line of a side may have.
        */
       NONE("");
 
       /**
-       * Exact terminator characters.
+       * The ending's exact characters.
        *
-       * @return exact terminator characters, possibly empty
+       * @return the characters, empty for no ending
        */
-      @Getter
-      private final String value;
+      String value;
     }
 
     /**
-     * A line's role within a text change.
+     * What a line does in a change, and so which sides consume it.
      */
-    public enum Operation {
+    public enum Role {
 
       /**
-       * Consumes no original line and one resulting line
+       * Inserted: consumes no line before and one line after.
        */
-      INSERTION,
+      INSERTION {
+        @Override
+        public Role invert() {
+          return DELETION;
+        }
+      },
 
       /**
-       * Consumes one line on both sides
+       * Unchanged context: consumes one line on both sides.
        */
-      CONTEXT,
+      CONTEXT {
+        @Override
+        public Role invert() {
+          return CONTEXT;
+        }
+      },
 
       /**
-       * Consumes one original line and no resulting line
+       * Deleted: consumes one line before and no line after.
        */
-      DELETION;
+      DELETION {
+        @Override
+        public Role invert() {
+          return INSERTION;
+        }
+      };
 
       /**
-       * Exchanges insertion and deletion, preserving context.
+       * Returns the role a line takes when its change is undone: insertion
+       * and deletion exchange, and context stays.
        *
-       * @return inverse consumption role
+       * @return the inverse role
        */
-      public Operation invert() {
-        return switch (this) {
-          case CONTEXT -> CONTEXT;
-          case DELETION -> INSERTION;
-          case INSERTION -> DELETION;
-        };
-      }
+      public abstract Role invert();
     }
 
     /**
-     * Text excluding newline characters, paired with its exact ending.
+     * A line's text without its ending, and its exact ending.
      *
-     * @param text   line characters without CR or LF
-     * @param ending original terminator, or none
+     * @param text   the line's characters, without CR or LF
+     * @param ending its exact ending, or none
      */
     public record Line(@NonNull String text, @NonNull Sequence ending) {
+
       /**
-       * Checks that line content excludes terminators.
+       * Checks the text holds no ending.
+       *
+       * @throws IllegalArgumentException when the text holds CR or LF
        */
       public Line {
         if (text.indexOf('\r') >= 0 || text.indexOf('\n') >= 0) {
-          throw new IllegalArgumentException("Line text must not contain newline characters.");
+          throw new IllegalArgumentException("A line's text holds no newline characters.");
         }
+      }
+
+      /**
+       * Returns the line's exact characters, its text and then its ending.
+       *
+       * @return the exact characters
+       */
+      public String exact() {
+        return text.concat(ending.getValue());
       }
     }
   }
 
   /**
-   * A zero-based, half-open line range. A zero count describes an
-   * insertion/deletion boundary.
+   * A zero-based, half-open range of lines. A count of zero is a boundary,
+   * where lines are inserted or were deleted.
    *
-   * @param start zero-based first line or boundary
-   * @param count number of lines
+   * @param start the first line, or the boundary
+   * @param count how many lines
    */
   public record Range(int start, int count) {
 
     /**
-     * Checks that the range has a valid non-negative end.
+     * Checks the range has a non-negative start and count, and an end that
+     * fits.
      *
      * @throws IllegalArgumentException when the start or count is negative, or
      *                                  the end overflows
      */
     public Range {
       if (start < 0 || count < 0 || (long) start + count > Integer.MAX_VALUE) {
-        throw new IllegalArgumentException("Line range must have a valid non-negative end.");
+        throw new IllegalArgumentException("A line range has a non-negative start and count, and an end that fits.");
       }
     }
 
     /**
-     * Computes the exclusive end.
+     * Returns the range's exclusive end.
      *
-     * @return start plus count
+     * @return the start plus the count
      */
     public int end() {
       return start + count;
@@ -679,18 +255,20 @@ public record Hunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @N
   }
 
   /**
-   * One contiguous projection of a hunk's file side, including an empty
-   * boundary.
+   * One side of a hunk: its lines, contiguous, at their range, which may be an
+   * empty boundary.
    *
-   * @param lines exact lines in file order
-   * @param range described line range
+   * @param lines the exact lines, in order
+   * @param range the lines' range
    */
   public record Fragment(@NonNull List<Change.Line> lines, @NonNull Range range) {
 
     /**
-     * Copies lines and checks the range count and line termination.
+     * Copies the lines, and checks them against the range.
      *
-     * @throws IllegalArgumentException when count or termination is invalid
+     * @throws IllegalArgumentException when the lines number other than the
+     *                                  range's count, or a line other than the
+     *                                  last is unterminated
      */
     public Fragment {
       lines = List.copyOf(lines);
@@ -698,233 +276,30 @@ public record Hunk(@NonNull List<Change> changes, @NonNull Range beforeRange, @N
     }
 
     /**
-     * Checks local fragment shape without inspecting a complete file.
+     * Returns the fragment's exact characters, every line's text and ending,
+     * neither normalized nor added to.
      *
-     * @param lines exact lines in file order
-     * @param range described range
-     * @throws IllegalArgumentException when counts differ or a non-terminal line is
-     *                                  unterminated
-     */
-    public static void validate(@NonNull List<Change.Line> lines, @NonNull Range range) {
-      if (lines.size() != range.count()) {
-        throw new IllegalArgumentException("Fragment line count must match its range.");
-      }
-      if (lines.stream().limit(Math.max(0, lines.size() - 1)).anyMatch(line -> line.ending() == Change.Sequence.NONE)) {
-        throw new IllegalArgumentException("Only a terminal line may be unterminated.");
-      }
-    }
-
-    /**
-     * Reconstructs exact characters without normalizing or adding line endings.
-     *
-     * @return concatenated line text and terminators
+     * @return the exact characters
      */
     public String text() {
-      return lines().stream()
-          .map((line) -> line.text() + line.ending().getValue())
+      return lines.stream()
+          .map(Change.Line::exact)
           .collect(Collectors.joining());
     }
-  }
-
-  /**
-   * Finds a deterministic shortest insertion/deletion script and groups edits
-   * with up to {@code contextLines} unchanged lines on either side. Touching or
-   * overlapping windows merge; adjacent edits merge even with zero context.
-   * With three context lines, six unchanged lines between edits merge, while
-   * seven leave separate hunks. Equality includes each line's exact ending.
-   *
-   * Results are immutable, ordered, and contain edits; equal inputs return an
-   * empty list. Trace-based Myers search uses O((N + M)(D + 1)) worst-case time
-   * and O(N + M + D squared) space, where D is the number of inserted/deleted
-   * lines. Extensive rewrites can require substantial trace memory; there is no
-   * cutoff or alternative algorithm.
-   *
-   * @param before       original lines
-   * @param after        resulting lines
-   * @param contextLines requested unchanged context
-   */
-  private record Diff(List<Line> before, List<Line> after, int contextLines) {
 
     /**
-     * Groups the complete edit script into contextual ranges.
-     *
-     * @return immutable generated hunks
+     * Checks lines against the range they are at, for this constructor and
+     * for a hunk checking each side.
      */
-    private List<Hunk> hunks() {
-      return group(changes());
-    }
-
-    /**
-     * Trims matching ends for the search and restores them as context.
-     *
-     * @return complete ordered script
-     */
-    private List<Change> changes() {
-      int commonSize = Math.min(before.size(), after.size());
-      int prefix = (int) IntStream.range(0, commonSize)
-          .takeWhile(index -> before.get(index).equals(after.get(index)))
-          .count();
-      int suffix = (int) IntStream.range(0, commonSize - prefix)
-          .takeWhile(index -> before.get(before.size() - index - 1).equals(after.get(after.size() - index - 1)))
-          .count();
-      int beforeEnd = before.size() - suffix;
-      int afterEnd = after.size() - suffix;
-      return Stream.of(
-          changes(before.subList(0, prefix), Operation.CONTEXT),
-          shorten(before.subList(prefix, beforeEnd), after.subList(prefix, afterEnd)).stream(),
-          changes(before.subList(beforeEnd, before.size()), Operation.CONTEXT))
-          .flatMap(stream -> stream)
-          .toList();
-    }
-
-    /**
-     * Finds a shortest script, retaining reachable diagonals for reconstruction.
-     *
-     * @param before original lines after trimming common ends
-     * @param after  resulting lines after trimming common ends
-     * @return shortest list of changes for complete reconstruction
-     */
-    private static List<Change> shorten(List<Line> before, List<Line> after) {
-      if (before.isEmpty()) {
-        return changes(after, Operation.INSERTION).toList();
+    private static void validate(List<Change.Line> lines, Range range) {
+      if (lines.size() != range.count()) {
+        throw new IllegalArgumentException("A fragment's lines number its range's count.");
       }
-      if (after.isEmpty()) {
-        return changes(before, Operation.DELETION).toList();
+      if (lines.stream()
+          .limit(Math.max(0, lines.size() - 1))
+          .anyMatch(line -> line.ending() == Change.Sequence.NONE)) {
+        throw new IllegalArgumentException("Only a fragment's last line may be unterminated.");
       }
-      int limit = Math.addExact(before.size(), after.size());
-      List<int[]> trace = new ArrayList<>();
-      for (int depth = 0; depth <= limit; depth++) {
-        int[] frontier = new int[Math.addExact(depth, 1)];
-        int[] previous = depth == 0 ? null : trace.get(depth - 1);
-        for (int index = 0; index <= depth; index++) {
-          int diagonal = (int) (2L * index - depth);
-          int x = depth == 0 ? 0 : insertion(previous, depth, index) ? previous[index] : previous[index - 1] + 1;
-          int y = x - diagonal;
-          while (x < before.size() && y < after.size() && before.get(x).equals(after.get(y))) {
-            x++;
-            y++;
-          }
-          frontier[index] = x;
-          if (x >= before.size() && y >= after.size()) {
-            trace.add(frontier);
-            return backtrack(before, after, trace);
-          }
-        }
-        trace.add(frontier);
-      }
-      throw new IllegalStateException("No edit path found.");
-    }
-
-    /**
-     * Deterministic predecessor choice for search and backtracking.
-     *
-     * @param previous furthest original positions at the preceding edit depth
-     * @param depth    current number of inserted/deleted lines
-     * @param index    current reachable diagonal index
-     *
-     * @return whether insertion is the deterministic predecessor
-     */
-    private static boolean insertion(int[] previous, int depth, int index) {
-      return index == 0 || (index < depth && previous[index - 1] < previous[index]);
-    }
-
-    /**
-     * Reconstructs the deterministic shortest path from saved frontiers.
-     *
-     * @param before trimmed original lines
-     * @param after  trimmed resulting lines
-     * @param trace  frontiers by search depth
-     * @return shortest ordered script
-     */
-    private static List<Change> backtrack(List<Line> before, List<Line> after, List<int[]> trace) {
-      List<Change> result = new ArrayList<>();
-      int x = before.size();
-      int y = after.size();
-      for (int depth = trace.size() - 1; depth > 0; depth--) {
-        int diagonal = x - y;
-        int index = (int) (((long) diagonal + depth) / 2);
-        int[] previous = trace.get(depth - 1);
-        boolean inserted = insertion(previous, depth, index);
-        int previousDiagonal = inserted ? diagonal + 1 : diagonal - 1;
-        int previousX = previous[inserted ? index : index - 1];
-        int previousY = previousX - previousDiagonal;
-        while (x > previousX && y > previousY) {
-          result.add(new Change(before.get(--x), Operation.CONTEXT));
-          y--;
-        }
-        result.add(inserted
-            ? new Change(after.get(--y), Operation.INSERTION)
-            : new Change(before.get(--x), Operation.DELETION));
-      }
-      while (x > 0 && y > 0) {
-        result.add(new Change(before.get(--x), Operation.CONTEXT));
-        y--;
-      }
-      Collections.reverse(result);
-      return result;
-    }
-
-    /**
-     * Omitted script entries are unchanged, so they advance both file positions
-     * equally.
-     *
-     * @param script script of changes
-     * @return changes grouped into hunks
-     */
-    private List<Hunk> group(List<Change> script) {
-      int[] edits = IntStream.range(0, script.size())
-          .filter(index -> script.get(index).operation() != Operation.CONTEXT)
-          .toArray();
-      List<Hunk> hunks = new ArrayList<>();
-      int cursor = 0;
-      int beforePosition = 0;
-      int afterPosition = 0;
-      for (int edit = 0; edit < edits.length;) {
-        int start = Math.max(0, edits[edit] - contextLines);
-        int end = window(edits[edit++], script.size());
-        while (edit < edits.length && (long) edits[edit] - contextLines <= end) {
-          end = window(edits[edit++], script.size());
-        }
-        beforePosition += start - cursor;
-        afterPosition += start - cursor;
-        int beforeStart = beforePosition;
-        int afterStart = afterPosition;
-        for (cursor = start; cursor < end; cursor++) {
-          Operation operation = script.get(cursor).operation();
-          if (operation != Operation.INSERTION) {
-            beforePosition++;
-          }
-          if (operation != Operation.DELETION) {
-            afterPosition++;
-          }
-        }
-        hunks.add(new Hunk(script.subList(start, end),
-            new Range(beforeStart, beforePosition - beforeStart),
-            new Range(afterStart, afterPosition - afterStart)));
-      }
-      return List.copyOf(hunks);
-    }
-
-    /**
-     * Clamps a context window without overflowing its end calculation.
-     *
-     * @param edit script edit index
-     * @param size complete script length
-     * @return exclusive window end
-     */
-    private int window(int edit, int size) {
-      return (int) Math.min(size, (long) edit + contextLines + 1);
-    }
-
-    /**
-     * Assigns one edit role to each supplied line.
-     *
-     * @param lines    exact lines
-     * @param operation common edit role
-     * @return projected changes
-     */
-    private static Stream<Change> changes(List<Line> lines, Operation operation) {
-      return lines.stream().map(line -> new Change(line, operation));
     }
   }
 }

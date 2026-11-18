@@ -1,4 +1,4 @@
-package cat.tabbie.sdk.platform;
+package cat.tabbie.sdk.revision;
 
 import java.util.Locale;
 import java.util.OptionalLong;

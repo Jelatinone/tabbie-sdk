@@ -1,6 +1,5 @@
 package cat.tabbie.sdk.revision;
 
-import cat.tabbie.sdk.platform.Observer;
 import cat.tabbie.sdk.tree.Node;
 import lombok.NonNull;
 
