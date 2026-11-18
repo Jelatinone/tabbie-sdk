@@ -9,7 +9,7 @@ import java.util.Set;
 import cat.tabbie.sdk.catalog.Identity;
 import cat.tabbie.sdk.catalog.Release;
 import cat.tabbie.sdk.meta.action.Action;
-import cat.tabbie.sdk.platform.Command;
+import cat.tabbie.sdk.platform.Execution;
 import cat.tabbie.sdk.platform.Toolchain;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.target.Label;
@@ -134,7 +134,7 @@ public sealed interface Distributable extends Release.Payload {
 
     /**
      * Returns the toolchain the started program needs, which the executor
-     * provisions and binds through {@link Command.Argument.Binary}.
+     * provisions and binds through {@link Execution.Argument.Binary}.
      *
      * @return required toolchain, or empty for a native program
      */
@@ -178,7 +178,7 @@ public sealed interface Distributable extends Release.Payload {
        * @return start command
        */
       @NonNull
-      Command command();
+      Execution command();
 
       /**
        * A process the executor starts and owns until it exits, so it can write
@@ -189,7 +189,7 @@ public sealed interface Distributable extends Release.Payload {
        * @param environment additional environment variables
        */
       record Managed(
-          @NonNull Command command,
+          @NonNull Execution command,
           @NonNull Address pwd,
           @NonNull Map<String, String> environment) implements Allocate {
 
@@ -209,7 +209,7 @@ public sealed interface Distributable extends Release.Payload {
        *
        * @param command start command, run in the root the executor binds
        */
-      record Unmanaged(@NonNull Command command) implements Allocate {
+      record Unmanaged(@NonNull Execution command) implements Allocate {
       }
     }
 
@@ -258,7 +258,7 @@ public sealed interface Distributable extends Release.Payload {
        * @param command stop command, run in the root the executor binds
        * @param grace   time allowed for the distributable to stop
        */
-      record Invoke(@NonNull Command command, @NonNull Duration grace) implements Deallocate {
+      record Invoke(@NonNull Execution command, @NonNull Duration grace) implements Deallocate {
       }
     }
   }

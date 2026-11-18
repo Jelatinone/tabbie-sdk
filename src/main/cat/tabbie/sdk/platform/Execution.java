@@ -9,25 +9,25 @@ import cat.tabbie.sdk.tree.Address;
 import lombok.NonNull;
 
 /**
- * A declarative program invocation: an executable followed by ordered tokens.
+ * A declarative run of a program: the program followed by ordered tokens.
  * Describing a command runs nothing. Executors render it into an argument
  * vector, binding addresses and toolchain programs to their physical
  * locations, and run it without a shell, so no token is ever reinterpreted.
  *
- * @param executable program to run
+ * @param program program to run
  * @param tokens     ordered arguments and options
  */
-public record Command(@NonNull Argument executable, @NonNull List<Token> tokens) {
+public record Execution(@NonNull Argument program, @NonNull List<Token> tokens) {
 
   /**
    * Copies the tokens and rejects a blank literal program.
    *
-   * @throws IllegalArgumentException when the executable is a blank literal
+   * @throws IllegalArgumentException when the program is a blank literal
    */
-  public Command {
+  public Execution {
     tokens = List.copyOf(tokens);
-    if (executable instanceof Argument.Literal(String value) && value.isBlank()) {
-      throw new IllegalArgumentException("A command needs a program to run.");
+    if (program instanceof Argument.Literal(String value) && value.isBlank()) {
+      throw new IllegalArgumentException("An execution needs a program to run.");
     }
   }
 
@@ -40,7 +40,7 @@ public record Command(@NonNull Argument executable, @NonNull List<Token> tokens)
    * @param trailing fixed trailing arguments
    * @return literal command
    */
-  public static Command of(String program, List<String> leading, List<String> options, List<String> trailing) {
+  public static Execution of(String program, List<String> leading, List<String> options, List<String> trailing) {
     List<String> arguments = new ArrayList<>(leading);
     arguments.addAll(options);
     arguments.addAll(trailing);
@@ -51,25 +51,25 @@ public record Command(@NonNull Argument executable, @NonNull List<Token> tokens)
    * Describes a program found by name, such as on the executor's search path,
    * with literal arguments.
    *
-   * @param executable program name or path
+   * @param program program name or path
    * @param arguments  literal arguments
    * @return literal command
    * @throws IllegalArgumentException when the program name is blank
    */
-  public static Command of(@NonNull String executable, @NonNull String... arguments) {
-    return of(executable, List.of(arguments));
+  public static Execution of(@NonNull String program, @NonNull String... arguments) {
+    return of(program, List.of(arguments));
   }
 
   /**
    * Describes a program found by name with literal arguments.
    *
-   * @param executable program name or path
+   * @param program program name or path
    * @param arguments  literal arguments
    * @return literal command
    * @throws IllegalArgumentException when the program name is blank
    */
-  public static Command of(@NonNull String executable, @NonNull List<String> arguments) {
-    return new Command(new Argument.Literal(executable), Argument.literals(arguments));
+  public static Execution of(@NonNull String program, @NonNull List<String> arguments) {
+    return new Execution(new Argument.Literal(program), Argument.literals(arguments));
   }
 
   /**
@@ -78,21 +78,21 @@ public record Command(@NonNull Argument executable, @NonNull List<Token> tokens)
    * @param more tokens to append
    * @return extended command
    */
-  public Command with(@NonNull List<? extends Token> more) {
+  public Execution with(@NonNull List<? extends Token> more) {
     List<Token> joined = new ArrayList<>(tokens);
     joined.addAll(more);
-    return new Command(executable, joined);
+    return new Execution(program, joined);
   }
 
   /**
-   * Renders the argument vector, executable first.
+   * Renders the argument vector, program first.
    *
    * @param resolver executor bindings for addresses and toolchains
    * @return immutable argument vector
    */
   public List<String> render(@NonNull Resolver resolver) {
     List<String> line = new ArrayList<>();
-    line.add(executable.render(resolver));
+    line.add(program.render(resolver));
     tokens.forEach(token -> line.addAll(token.expand(resolver)));
     return List.copyOf(line);
   }
@@ -178,7 +178,7 @@ public record Command(@NonNull Argument executable, @NonNull List<Token> tokens)
 
     /**
      * Text passed unchanged. An empty literal is a legitimate empty argument;
-     * an executable literal must name a program.
+     * a program literal must name one.
      *
      * @param value argument text
      */

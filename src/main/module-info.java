@@ -29,7 +29,7 @@
  * <li>{@link cat.tabbie.sdk.catalog}: providers, their projects, releases and
  * coordinates</li>
  * <li>{@link cat.tabbie.sdk.platform}: machines, packages, toolchains and
- * commands</li>
+ * executions</li>
  * </ul>
  *
  * <p>

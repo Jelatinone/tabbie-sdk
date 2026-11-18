@@ -64,7 +64,7 @@ public record Package(@NonNull String canonicalName, @NonNull Map<Manager, Speci
    * @return install command; see {@link Manager#install(Specification, List)}
    * @throws IllegalStateException when no manager on the host carries it
    */
-  public Command install(@NonNull Host host, @NonNull List<String> options) {
+  public Execution install(@NonNull Host host, @NonNull List<String> options) {
     Resolved resolved = resolve(host).orElseThrow(() -> new IllegalStateException(
         String.format("No package manager on this host carries %s.", canonicalName)));
     return resolved.manager().install(resolved.specification(), options);
@@ -78,8 +78,8 @@ public record Package(@NonNull String canonicalName, @NonNull Map<Manager, Speci
    * @param host target machine
    * @return verify commands by manager; see {@link Manager#verify(Specification)}
    */
-  public Map<Manager, Command> verify(@NonNull Host host) {
-    Map<Manager, Command> checks = new LinkedHashMap<>();
+  public Map<Manager, Execution> verify(@NonNull Host host) {
+    Map<Manager, Execution> checks = new LinkedHashMap<>();
     for (Manager manager : host.managers()) {
       Specification specification = specifications.get(manager);
       if (specification != null) {
@@ -99,7 +99,7 @@ public record Package(@NonNull String canonicalName, @NonNull Map<Manager, Speci
    * @return uninstall command; see {@link Manager#uninstall(Specification, List)}
    * @throws IllegalArgumentException when the manager does not carry it
    */
-  public Command uninstall(@NonNull Manager manager, @NonNull List<String> options) {
+  public Execution uninstall(@NonNull Manager manager, @NonNull List<String> options) {
     Specification specification = specifications.get(manager);
     if (specification == null) {
       throw new IllegalArgumentException(
@@ -188,22 +188,22 @@ public record Package(@NonNull String canonicalName, @NonNull Map<Manager, Speci
     WINGET("winget", "winget", false) {
 
       @Override
-      public Command verify(@NonNull Specification specification) {
-        return Command.of("winget", "list", "--id", specification.identifier(), "--exact",
+      public Execution verify(@NonNull Specification specification) {
+        return Execution.of("winget", "list", "--id", specification.identifier(), "--exact",
             "--accept-source-agreements");
       }
 
       @Override
-      public Command install(@NonNull Specification specification, @NonNull List<String> options) {
+      public Execution install(@NonNull Specification specification, @NonNull List<String> options) {
         List<String> trailing = new ArrayList<>(List.of("--id", specification.identifier(), "--exact"));
         specification.version().ifPresent(version -> trailing.addAll(List.of("--version", version)));
-        return Command.of(program(), List.of("install", "--silent", "--disable-interactivity",
+        return Execution.of(program(), List.of("install", "--silent", "--disable-interactivity",
             "--accept-package-agreements", "--accept-source-agreements"), options, trailing);
       }
 
       @Override
-      public Command uninstall(@NonNull Specification specification, @NonNull List<String> options) {
-        return Command.of(program(), List.of("uninstall", "--silent", "--disable-interactivity",
+      public Execution uninstall(@NonNull Specification specification, @NonNull List<String> options) {
+        return Execution.of(program(), List.of("uninstall", "--silent", "--disable-interactivity",
             "--accept-source-agreements"), options,
             List.of("--id", specification.identifier(), "--exact"));
       }
@@ -215,21 +215,21 @@ public record Package(@NonNull String canonicalName, @NonNull Map<Manager, Speci
     APT("apt", "apt-get", true) {
 
       @Override
-      public Command verify(@NonNull Specification specification) {
-        return Command.of("dpkg-query", "--show", specification.identifier());
+      public Execution verify(@NonNull Specification specification) {
+        return Execution.of("dpkg-query", "--show", specification.identifier());
       }
 
       @Override
-      public Command install(@NonNull Specification specification, @NonNull List<String> options) {
+      public Execution install(@NonNull Specification specification, @NonNull List<String> options) {
         String target = specification.version()
             .map(version -> specification.identifier() + "=" + version)
             .orElse(specification.identifier());
-        return Command.of(program(), List.of("install", "--yes", "--quiet"), options, List.of(target));
+        return Execution.of(program(), List.of("install", "--yes", "--quiet"), options, List.of(target));
       }
 
       @Override
-      public Command uninstall(@NonNull Specification specification, @NonNull List<String> options) {
-        return Command.of(program(), List.of("remove", "--yes", "--quiet"), options,
+      public Execution uninstall(@NonNull Specification specification, @NonNull List<String> options) {
+        return Execution.of(program(), List.of("remove", "--yes", "--quiet"), options,
             List.of(specification.identifier()));
       }
     },
@@ -240,21 +240,21 @@ public record Package(@NonNull String canonicalName, @NonNull Map<Manager, Speci
     DNF("dnf", "dnf", true) {
 
       @Override
-      public Command verify(@NonNull Specification specification) {
-        return Command.of("rpm", "--query", specification.identifier());
+      public Execution verify(@NonNull Specification specification) {
+        return Execution.of("rpm", "--query", specification.identifier());
       }
 
       @Override
-      public Command install(@NonNull Specification specification, @NonNull List<String> options) {
+      public Execution install(@NonNull Specification specification, @NonNull List<String> options) {
         String target = specification.version()
             .map(version -> specification.identifier() + "-" + version)
             .orElse(specification.identifier());
-        return Command.of(program(), List.of("install", "--assumeyes", "--quiet"), options, List.of(target));
+        return Execution.of(program(), List.of("install", "--assumeyes", "--quiet"), options, List.of(target));
       }
 
       @Override
-      public Command uninstall(@NonNull Specification specification, @NonNull List<String> options) {
-        return Command.of(
+      public Execution uninstall(@NonNull Specification specification, @NonNull List<String> options) {
+        return Execution.of(
             program(), List.of("remove", "--assumeyes", "--quiet"), options,
             List.of(specification.identifier()));
       }
@@ -267,20 +267,21 @@ public record Package(@NonNull String canonicalName, @NonNull Map<Manager, Speci
     PACMAN("pacman", "pacman", true) {
 
       @Override
-      public Command verify(@NonNull Specification specification) {
-        return Command.of(program(), "--query", specification.identifier());
+      public Execution verify(@NonNull Specification specification) {
+        return Execution.of(program(), "--query", specification.identifier());
       }
 
       @Override
-      public Command install(@NonNull Specification specification, @NonNull List<String> options) {
-        return Command.of(
+      public Execution install(@NonNull Specification specification, @NonNull List<String> options) {
+        return Execution.of(
             program(), List.of("--sync", "--needed", "--noconfirm"), options,
             List.of(specification.identifier()));
       }
 
       @Override
-      public Command uninstall(@NonNull Specification specification, @NonNull List<String> options) {
-        return Command.of(program(), List.of("--remove", "--noconfirm"), options, List.of(specification.identifier()));
+      public Execution uninstall(@NonNull Specification specification, @NonNull List<String> options) {
+        return Execution.of(program(), List.of("--remove", "--noconfirm"), options,
+            List.of(specification.identifier()));
       }
     },
 
@@ -291,18 +292,18 @@ public record Package(@NonNull String canonicalName, @NonNull Map<Manager, Speci
     HOMEBREW("brew", "brew", false) {
 
       @Override
-      public Command verify(@NonNull Specification specification) {
-        return Command.of(program(), "list", "--versions", specification.identifier());
+      public Execution verify(@NonNull Specification specification) {
+        return Execution.of(program(), "list", "--versions", specification.identifier());
       }
 
       @Override
-      public Command install(@NonNull Specification specification, @NonNull List<String> options) {
-        return Command.of(program(), List.of("install", "--quiet"), options, List.of(specification.identifier()));
+      public Execution install(@NonNull Specification specification, @NonNull List<String> options) {
+        return Execution.of(program(), List.of("install", "--quiet"), options, List.of(specification.identifier()));
       }
 
       @Override
-      public Command uninstall(@NonNull Specification specification, @NonNull List<String> options) {
-        return Command.of(program(), List.of("uninstall", "--quiet"), options, List.of(specification.identifier()));
+      public Execution uninstall(@NonNull Specification specification, @NonNull List<String> options) {
+        return Execution.of(program(), List.of("uninstall", "--quiet"), options, List.of(specification.identifier()));
       }
     };
 
@@ -360,8 +361,8 @@ public record Package(@NonNull String canonicalName, @NonNull Map<Manager, Speci
      *
      * @return availability command
      */
-    public Command probe() {
-      return Command.of(program, "--version");
+    public Execution probe() {
+      return Execution.of(program, "--version");
     }
 
     /**
@@ -371,7 +372,7 @@ public record Package(@NonNull String canonicalName, @NonNull Map<Manager, Speci
      * @param specification package spelling
      * @return verification command
      */
-    public abstract Command verify(@NonNull Specification specification);
+    public abstract Execution verify(@NonNull Specification specification);
 
     /**
      * Describes non-interactive installation. Exit status 0 means installed.
@@ -381,7 +382,7 @@ public record Package(@NonNull String canonicalName, @NonNull Map<Manager, Speci
      * @param options       extra manager options, placed before the package
      * @return install command
      */
-    public abstract Command install(@NonNull Specification specification, @NonNull List<String> options);
+    public abstract Execution install(@NonNull Specification specification, @NonNull List<String> options);
 
     /**
      * Describes non-interactive removal. Exit status 0 means removed.
@@ -390,6 +391,6 @@ public record Package(@NonNull String canonicalName, @NonNull Map<Manager, Speci
      * @param options       extra manager options, placed before the package
      * @return uninstall command
      */
-    public abstract Command uninstall(@NonNull Specification specification, @NonNull List<String> options);
+    public abstract Execution uninstall(@NonNull Specification specification, @NonNull List<String> options);
   }
 }
