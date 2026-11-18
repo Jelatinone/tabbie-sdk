@@ -3,32 +3,62 @@ package cat.tabbie.sdk.platform;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import cat.tabbie.sdk.tree.Address;
 import lombok.NonNull;
 
 /**
- * A declarative run of a program: the program followed by ordered tokens.
- * Describing a command runs nothing. Executors render it into an argument
- * vector, binding addresses and toolchain programs to their physical
+ * A declarative run of a program: the program followed by ordered tokens, run
+ * in a working directory with environment variables added. Describing an
+ * execution runs nothing. Executors render it into an argument vector and
+ * variables, binding addresses and toolchain programs to their physical
  * locations, and run it without a shell, so no token is ever reinterpreted.
  *
- * @param program program to run
- * @param tokens     ordered arguments and options
+ * @param program     program to run
+ * @param tokens      ordered arguments and options
+ * @param directory   working directory beneath the executor's root, the root
+ *                    itself by default
+ * @param environment environment variables added for the run, each value an
+ *                    argument the executor renders
  */
-public record Execution(@NonNull Argument program, @NonNull List<Token> tokens) {
+public record Execution(
+    @NonNull Argument program,
+    @NonNull List<Token> tokens,
+    @NonNull Address directory,
+    @NonNull Map<String, Argument> environment) {
 
   /**
-   * Copies the tokens and rejects a blank literal program.
+   * Copies the tokens and the environment, and checks the program and each
+   * variable's name.
    *
-   * @throws IllegalArgumentException when the program is a blank literal
+   * @throws IllegalArgumentException when the program is a blank literal, or a
+   *                                  variable's name is blank or holds
+   *                                  {@code =}
    */
   public Execution {
     tokens = List.copyOf(tokens);
+    environment = Map.copyOf(environment);
     if (program instanceof Argument.Literal(String value) && value.isBlank()) {
       throw new IllegalArgumentException("An execution needs a program to run.");
     }
+    if (environment.keySet().stream().anyMatch(name -> name.isBlank() || name.indexOf('=') >= 0)) {
+      throw new IllegalArgumentException("An environment variable's name is not blank and holds no '='.");
+    }
+  }
+
+  /**
+   * Describes a program with tokens, run at the root with no variables added.
+   *
+   * @param program program to run
+   * @param tokens  ordered arguments and options
+   * @throws IllegalArgumentException when the program is a blank literal
+   */
+  public Execution(@NonNull Argument program, @NonNull List<Token> tokens) {
+    this(program, tokens, Address.root(), Map.of());
   }
 
   /**
@@ -38,9 +68,14 @@ public record Execution(@NonNull Argument program, @NonNull List<Token> tokens) 
    * @param leading  fixed leading arguments
    * @param options  caller options
    * @param trailing fixed trailing arguments
-   * @return literal command
+   * @return literal execution, run at the root
+   * @throws IllegalArgumentException when the program name is blank
    */
-  public static Execution of(String program, List<String> leading, List<String> options, List<String> trailing) {
+  public static Execution of(
+      @NonNull String program,
+      @NonNull List<String> leading,
+      @NonNull List<String> options,
+      @NonNull List<String> trailing) {
     List<String> arguments = new ArrayList<>(leading);
     arguments.addAll(options);
     arguments.addAll(trailing);
@@ -51,9 +86,9 @@ public record Execution(@NonNull Argument program, @NonNull List<Token> tokens) 
    * Describes a program found by name, such as on the executor's search path,
    * with literal arguments.
    *
-   * @param program program name or path
-   * @param arguments  literal arguments
-   * @return literal command
+   * @param program   program name or path
+   * @param arguments literal arguments
+   * @return literal execution, run at the root
    * @throws IllegalArgumentException when the program name is blank
    */
   public static Execution of(@NonNull String program, @NonNull String... arguments) {
@@ -63,9 +98,9 @@ public record Execution(@NonNull Argument program, @NonNull List<Token> tokens) 
   /**
    * Describes a program found by name with literal arguments.
    *
-   * @param program program name or path
-   * @param arguments  literal arguments
-   * @return literal command
+   * @param program   program name or path
+   * @param arguments literal arguments
+   * @return literal execution, run at the root
    * @throws IllegalArgumentException when the program name is blank
    */
   public static Execution of(@NonNull String program, @NonNull List<String> arguments) {
@@ -73,15 +108,41 @@ public record Execution(@NonNull Argument program, @NonNull List<Token> tokens) 
   }
 
   /**
-   * Returns this command with further tokens appended.
+   * Returns this execution with further tokens appended.
    *
    * @param more tokens to append
-   * @return extended command
+   * @return extended execution
    */
   public Execution with(@NonNull List<? extends Token> more) {
     List<Token> joined = new ArrayList<>(tokens);
     joined.addAll(more);
-    return new Execution(program, joined);
+    return new Execution(program, joined, directory, environment);
+  }
+
+  /**
+   * Returns this execution run in another working directory.
+   *
+   * @param directory working directory beneath the executor's root
+   * @return the execution, run there
+   */
+  public Execution withDirectory(@NonNull Address directory) {
+    return new Execution(program, tokens, directory, environment);
+  }
+
+  /**
+   * Returns this execution with an environment variable added, or replaced
+   * when it is already set.
+   *
+   * @param name  the variable's name
+   * @param value the variable's value
+   * @return the execution, with the variable set
+   * @throws IllegalArgumentException when the name is blank or holds
+   *                                  {@code =}
+   */
+  public Execution withEnvironment(@NonNull String name, @NonNull Argument value) {
+    Map<String, Argument> variables = new HashMap<>(environment);
+    variables.put(name, value);
+    return new Execution(program, tokens, directory, variables);
   }
 
   /**
@@ -98,7 +159,19 @@ public record Execution(@NonNull Argument program, @NonNull List<Token> tokens) 
   }
 
   /**
-   * Executor bindings used while rendering.
+   * Renders the environment variables added for the run.
+   *
+   * @param resolver executor bindings for addresses and toolchains
+   * @return immutable variables, by name
+   */
+  public Map<String, String> environment(@NonNull Resolver resolver) {
+    return environment.entrySet().stream()
+        .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, variable -> variable.getValue().render(resolver)));
+  }
+
+  /**
+   * Executor bindings used while rendering, for the machine the execution
+   * runs on.
    */
   public interface Resolver {
 
@@ -120,6 +193,16 @@ public record Execution(@NonNull Argument program, @NonNull List<Token> tokens) 
      */
     @NonNull
     Path toolchain(@NonNull Toolchain toolchain);
+
+    /**
+     * Returns what separates the entries of a path list on the machine the
+     * execution runs on, such as {@code :} on Linux and macOS and {@code ;} on
+     * Windows.
+     *
+     * @return the separator
+     */
+    @NonNull
+    String separator();
   }
 
   /**
@@ -216,59 +299,185 @@ public record Execution(@NonNull Argument program, @NonNull List<Token> tokens) 
         return resolver.toolchain(toolchain).toString();
       }
     }
-  }
-
-  /**
-   * A named option with a value, rendered in one of the common styles.
-   *
-   * @param name  option name including its prefix, such as {@code --port} or
-   *              {@code -Xmx}
-   * @param value option value
-   * @param style how name and value are joined
-   */
-  public record Option(@NonNull String name, @NonNull Argument value, @NonNull Style style) implements Token {
 
     /**
-     * Rejects a blank name.
+     * Arguments rendered and joined into one, such as a system property whose
+     * value is a location: {@code -Djava.library.path=} followed by a
+     * directory.
      *
-     * @throws IllegalArgumentException when the name is blank
+     * @param parts the arguments joined, in order, at least one
      */
-    public Option {
-      if (name.isBlank()) {
-        throw new IllegalArgumentException("An option needs a name");
+    record Concat(@NonNull List<Argument> parts) implements Argument {
+
+      /**
+       * Copies the parts, and checks there is one.
+       *
+       * @throws IllegalArgumentException when there are no parts
+       */
+      public Concat {
+        parts = List.copyOf(parts);
+        if (parts.isEmpty()) {
+          throw new IllegalArgumentException("A joined argument has at least one part.");
+        }
+      }
+
+      /**
+       * Joins arguments into one.
+       *
+       * @param parts the arguments joined, in order, at least one
+       * @return the joined argument
+       * @throws IllegalArgumentException when there are no parts
+       */
+      public static Concat of(@NonNull Argument... parts) {
+        return new Concat(List.of(parts));
+      }
+
+      @Override
+      public String render(@NonNull Resolver resolver) {
+        return parts.stream()
+            .map(part -> part.render(resolver))
+            .collect(Collectors.joining());
       }
     }
 
     /**
-     * How an option's name and value are rendered.
+     * Arguments rendered and joined by the separator of the machine the
+     * execution runs on, such as a classpath of locations.
+     *
+     * @param entries the entries, in order, at least one
      */
-    public enum Style {
+    record PathList(@NonNull List<Argument> entries) implements Argument {
 
       /**
-       * Two arguments, such as {@code --port 25565}.
+       * Copies the entries, and checks there is one.
+       *
+       * @throws IllegalArgumentException when there are no entries
        */
-      SEPARATE,
+      public PathList {
+        entries = List.copyOf(entries);
+        if (entries.isEmpty()) {
+          throw new IllegalArgumentException("A path list has at least one entry.");
+        }
+      }
 
       /**
-       * One argument joined by {@code =}, such as {@code --port=25565} or
-       * {@code -Dkey=value}.
+       * Lists entries.
+       *
+       * @param entries the entries, in order, at least one
+       * @return the path list
+       * @throws IllegalArgumentException when there are no entries
        */
-      EQUALS,
+      public static PathList of(@NonNull Argument... entries) {
+        return new PathList(List.of(entries));
+      }
+
+      @Override
+      public String render(@NonNull Resolver resolver) {
+        return entries.stream()
+            .map(entry -> entry.render(resolver))
+            .collect(Collectors.joining(resolver.separator()));
+      }
+    }
+  }
+
+  /**
+   * A named option with a value, each kind rendering the two in its own style.
+   */
+  public sealed interface Option extends Token {
+
+    /**
+     * Returns the option's name, its prefix included, such as {@code --port}
+     * or {@code -Xmx}.
+     *
+     * @return the name
+     */
+    @NonNull
+    String name();
+
+    /**
+     * Returns the option's value.
+     *
+     * @return the value
+     */
+    @NonNull
+    Argument value();
+
+    /**
+     * The name and the value as two arguments, such as
+     * {@code --port 25565}.
+     *
+     * @param name  the option's name, its prefix included
+     * @param value the option's value
+     */
+    record Separate(@NonNull String name, @NonNull Argument value) implements Option {
 
       /**
-       * One argument with no separator, such as {@code -Xmx4G}.
+       * Checks the name.
+       *
+       * @throws IllegalArgumentException when the name is blank
        */
-      JOINED
+      public Separate {
+        if (name.isBlank()) {
+          throw new IllegalArgumentException("An option has a name.");
+        }
+      }
+
+      @Override
+      public List<String> expand(@NonNull Resolver resolver) {
+        return List.of(name, value.render(resolver));
+      }
     }
 
-    @Override
-    public List<String> expand(@NonNull Resolver resolver) {
-      String rendered = value.render(resolver);
-      return switch (style) {
-        case SEPARATE -> List.of(name, rendered);
-        case EQUALS -> List.of(name + "=" + rendered);
-        case JOINED -> List.of(name + rendered);
-      };
+    /**
+     * The name and the value joined by {@code =} into one argument, such as
+     * {@code --port=25565} or {@code -Dkey=value}.
+     *
+     * @param name  the option's name, its prefix included
+     * @param value the option's value
+     */
+    record Assigned(@NonNull String name, @NonNull Argument value) implements Option {
+
+      /**
+       * Checks the name.
+       *
+       * @throws IllegalArgumentException when the name is blank
+       */
+      public Assigned {
+        if (name.isBlank()) {
+          throw new IllegalArgumentException("An option has a name.");
+        }
+      }
+
+      @Override
+      public List<String> expand(@NonNull Resolver resolver) {
+        return List.of(String.format("%s=%s", name, value.render(resolver)));
+      }
+    }
+
+    /**
+     * The name and the value with nothing between them, as one argument, such
+     * as {@code -Xmx4G}.
+     *
+     * @param name  the option's name, its prefix included
+     * @param value the option's value
+     */
+    record Attached(@NonNull String name, @NonNull Argument value) implements Option {
+
+      /**
+       * Checks the name.
+       *
+       * @throws IllegalArgumentException when the name is blank
+       */
+      public Attached {
+        if (name.isBlank()) {
+          throw new IllegalArgumentException("An option has a name.");
+        }
+      }
+
+      @Override
+      public List<String> expand(@NonNull Resolver resolver) {
+        return List.of(name.concat(value.render(resolver)));
+      }
     }
   }
 }

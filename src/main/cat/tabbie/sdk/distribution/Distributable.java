@@ -14,7 +14,6 @@ import cat.tabbie.sdk.platform.Toolchain;
 import cat.tabbie.sdk.revision.Image;
 import cat.tabbie.sdk.target.Label;
 import cat.tabbie.sdk.target.Platform;
-import cat.tabbie.sdk.tree.Address;
 import cat.tabbie.sdk.tree.Shape;
 import lombok.NonNull;
 
@@ -182,23 +181,12 @@ public sealed interface Distributable extends Release.Payload {
 
       /**
        * A process the executor starts and owns until it exits, so it can write
-       * to its input, signal it, and observe its exit.
+       * to its input, signal it, and observe its exit. The execution names its
+       * working directory and the variables it adds.
        *
-       * @param command     start command
-       * @param pwd         working directory of the process
-       * @param environment additional environment variables
+       * @param command start command
        */
-      record Managed(
-          @NonNull Execution command,
-          @NonNull Address pwd,
-          @NonNull Map<String, String> environment) implements Allocate {
-
-        /**
-         * Copies the environment.
-         */
-        public Managed {
-          environment = Map.copyOf(environment);
-        }
+      record Managed(@NonNull Execution command) implements Allocate {
       }
 
       /**
@@ -207,7 +195,7 @@ public sealed interface Distributable extends Release.Payload {
        * does not own the resulting process, so it can only be stopped with
        * {@link Deallocate.Invoke}.
        *
-       * @param command start command, run in the root the executor binds
+       * @param command start command, run in its working directory
        */
       record Unmanaged(@NonNull Execution command) implements Allocate {
       }
@@ -255,7 +243,7 @@ public sealed interface Distributable extends Release.Payload {
        * For a managed distributable the executor then waits for its process to
        * exit; for an unmanaged one, for the stop command to exit.
        *
-       * @param command stop command, run in the root the executor binds
+       * @param command stop command, run in its working directory
        * @param grace   time allowed for the distributable to stop
        */
       record Invoke(@NonNull Execution command, @NonNull Duration grace) implements Deallocate {
